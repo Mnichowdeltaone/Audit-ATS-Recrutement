@@ -1,0 +1,6 @@
+{
+  "name": "CV Move Personnel",
+  "description": "Analyseur intelligent d'adéquation entre CV et offre d'emploi avec Streamlit et l'API Google Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

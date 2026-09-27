@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-09-26T15:05:36.125Z",
+  "profile": {
+    "id": "user_profile",
+    "firstName": "François",
+    "lastName": "Delrieu",
+    "email": "delrieu.f@gmail.com",
+    "phone": "0695751529",
+    "location": "Montrouge",
+    "currentTitle": "Responsable Trésorerie",
+    "bio": "Expert en gestion de trésorerie avec plus de 15 ans d'expérience dans l'optimisation des flux financiers, le cash pooling et le déploiement de Treasury Management Systems (TMS). Alliant une forte maîtrise métier à des compétences techniques (implémentation de SaaS, développement d'outils sur mesure), j'accompagne les directions financières dans l'automatisation de leurs processus, la fiabilité des prévisions (forecast) et la sécurité des transactions (SEPA, EBICS).",
+    "linkedinUrl": "",
+    "githubUrl": "https://github.com/alex-martin",
+    "portfolioUrl": "https://alex-martin.dev",
+    "targetRoles": [
+      "Gestion de trésorerie",
+      "Cash manager",
+      "Consultant produit TMS"
+    ],
+    "skills": [
+      "• Trésorerie & Finance : Gestion de trésorerie quotidienne",
+      "Cash pooling",
+      "Analyse des positions",
+      "Prévisions et modélisations budgétaires (forecast)",
+      "Rapprochement bancaire",
+      "Lettrage",
+      "Credit Management",
+      "Reporting financier.     • Protocoles & Normes : Échanges bancaires télématiques",
+      "Normes EBICS T / TS",
+      "Échanges SEPA",
+      "Sécurité des paiements.     • Outils Métiers (TMS",
+      "ERP & SaaS) : AGICAP",
+      "Pennylane",
+      "Kyriba",
+      "Sage FRP Treasury",
+      "Sage X3 Adonix",
+      "Visual Rappro",
+      "JD Edwards",
+      "Anael Comptabilité.     • Systèmes d'Information & Développement : MS Excel (VBA avancé)",
+      "Python (Flask",
+      "SQLAlchemy",
+      "Streamlit)",
+      "React",
+      "conception d'applications web de gestion de trésorerie.     • Langues : Anglais professionnel.Agile / Scrum",
+      "Jira / Confluence",
+      "Roadmapping produit",
+      "Product Discovery",
+      "KPIs & Data Analytics",
+      "Figma / UX basics",
+      "API REST & Webhooks",
+      "TypeScript / React notions"
+    ],
+    "updatedAt": "2026-09-25T11:32:31.159Z"
+  },
+  "cvs": [
+    {
+      "id": "cv-1790336162186",
+      "title": "CV FD Actuel",
+      "targetRole": "Poste visé",
+      "fileName": "CV FD Actuel.docx",
+      "fileType": "docx",
+      "rawText": "François DELRIEU 61 avenue de la Marne, 92120 MONTROUGE 06 72 42 88 93 | delrieu.fra@gmail.com Permis B / Permis A\n\n\n\nTRÉSORIER OPÉRATIONNEL / CHEF DE PROJET SI TRÉSORERIE\n\nRÉSUMÉ Expert en gestion de trésorerie avec plus de 15 ans d'expérience dans l'optimisation des flux financiers, le cash pooling et le déploiement de Treasury Management Systems (TMS). Alliant une forte maîtrise métier à des compétences techniques (implémentation de SaaS, développement d'outils sur mesure), j'accompagne les directions financières dans l'automatisation de leurs processus, la fiabilité des prévisions (forecast) et la sécurité des transactions (SEPA, EBICS).\n\nCOMPÉTENCES CLÉS\n\nTrésorerie & Finance : Gestion de trésorerie quotidienne, Cash pooling, Analyse des positions, Prévisions et modélisations budgétaires (forecast), Rapprochement bancaire, Lettrage, Credit Management, Reporting financier.\n\nProtocoles & Normes : Échanges bancaires télématiques, Normes EBICS T / TS, Échanges SEPA, Sécurité des paiements.\n\nOutils Métiers (TMS, ERP & SaaS) : AGICAP, Pennylane, Kyriba, Sage FRP Treasury, Sage X3 Adonix, Visual Rappro, JD Edwards, Anael Comptabilité.\n\nSystèmes d'Information & Développement : MS Excel (VBA avancé), Python (Flask, SQLAlchemy, Streamlit), React, conception d'applications web de gestion de trésorerie.\n\nLangues : Anglais professionnel.\n\nEXPÉRIENCES PROFESSIONNELLES\n\nConcepteur / Développeur d'Outils de Gestion Financière (Indépendant) Projet Valoria Vision | Montrouge | Décembre 2024 – Présent\n\nConception et développement de \"Valoria Vision\", une plateforme web dédiée à la gestion de projets et à la gestion financière.\n\nAutomatisation des processus de collecte et de traitement des données de trésorerie.\n\nCréation de tableaux de bord interactifs et de reportings budgétaires sur mesure via Python (Streamlit) et React.\n\nDéveloppement de bases de données relationnelles pour fiabiliser le stockage des informations.\n\nTrésorier KEN GROUP devenu MASADA (Clubs de sport premium) | Île-de-France | Octobre 2022 – Novembre 2024\n\nGestion de la trésorerie opérationnelle et élaboration des prévisions (forecast) à l'échelle du groupe.\n\nDéploiement, paramétrage et optimisation du Treasury Management System (TMS) AGICAP en tant que client pilote.\n\nMise en place et intégration de la plateforme PENNYLANE pour la gestion de la partie comptable et financière.\n\nComptable Trésorier ECF Groupe | Grigny | Octobre 2021 – Avril 2022\n\nPilotage de la trésorerie opérationnelle quotidienne (cash pool) pour le groupe et ses filiales.\n\nProduction du reporting et analyse quotidienne des positions bancaires.\n\nGestion et exécution des campagnes de paiement fournisseurs, incluant les émissions de paiements en devises.\n\nConsultant Trésorerie EMOVA Group | Boulogne-Billancourt | Avril 2019 – Novembre 2020\n\nGestion opérationnelle de la trésorerie au quotidien (suivi des flux Cash In / Cash Out).\n\nAnalyse des écarts et élaboration du besoin prévisionnel de trésorerie à court et moyen terme.\n\nAssistant du Gestionnaire Trésorerie LADAPT (Secteur Associatif) | Pantin | Mars 2017 – Février 2019\n\nAdministration de la trésorerie à l'échelle nationale.\n\nÉlaboration, rédaction et mise en place des procédures fonctionnelles dans le cadre de la restructuration du département.\n\nCréation et automatisation d'un reporting budgétaire consolidé.\n\nCredit Manager (Mission de transition) Du Pareil au Même / Sergent Major / Natalys | Montreuil | Mars 2016 – Novembre 2016\n\nGestion de la trésorerie et des reportings opérationnels et budgétaires.\n\nPilotage du Credit Management pour les clients à l'export (périmètre de 15 pays).\n\nEncadrement et formation d'un trésorier junior sur les tâches opérationnelles.\n\nAssistant Trésorerie Groupe Kering (Yves Saint Laurent SAS) | Paris | Janvier 2013 – Décembre 2015\n\nGestion de la trésorerie en cash pool en étroite collaboration avec la société mère (Kering).\n\nÉtablissement de la trésorerie quotidienne, prévisionnelle et des reportings.\n\nAssistant Trésorier Groupe Narbonne Accessoires | Narbonne | Janvier 2006 – Janvier 2013\n\nÉlaboration des prévisions de trésorerie du groupe et exécution des arbitrages.\n\nParticipation active à la migration du Treasury Management System (TMS).\n\nConsultant Déploiement Sage France | Saint-Ouen | Janvier 1993 – Décembre 2005\n\nPilotage, paramétrage et coordination du déploiement des progiciels de la gamme SAGE Trésorerie FRP chez les clients.\n\nGestion de projets d'intégration des systèmes d'information financiers.\n\nFORMATION\n\nFormation Assistant Contrôle de Gestion & Management de la Performance École Normale Supérieure (ENS) | Saclay | 2020\n\nSpécialisation : Contrôle de gestion informatisé, analyse financière et diagnostic d'entreprise.\n\nBaccalauréat Comptabilité et Gestion Lycée Emmanuel Mounier | Châtenay-Malabry | 1981",
+      "isDefault": false,
+      "fileSize": 4965,
+      "createdAt": "2026-09-25T11:36:02.186Z",
+      "updatedAt": "2026-09-25T11:36:03.123Z"
+    },
+    {
+      "id": "cv-default-1",
+      "title": "CV Principal - Product Owner & Lead Agile",
+      "targetRole": "Product Owner Senior",
+      "fileName": "CV_Alex_Martin_ProductOwner_2026.pdf",
+      "fileType": "pdf",
+      "rawText": "ALEX MARTIN\nProduct Owner Senior & Chef de Projet Digital\nParis, France | alex.martin.pro@email.fr | +33 6 12 34 56 78 | linkedin.com/in/alex-martin-pro\n\nRÉSUMÉ PROFESSIONNEL\nProduct Owner passionné par la conception de produits centrés utilisateur et la maximisation de valeur métier. Plus de 6 années d'expérience en environnements Agile Scrum/Kanban, de la découverte produit jusqu'au déploiement continu.\n\nCOMPÉTENCES CLÉS\n- Méthodologies : Agile, Scrum, Kanban, Lean Startup, Design Thinking\n- Outils : Jira, Confluence, Figma, Miro, Notion, Mixpanel, Google Analytics\n- Technique : Spécifications fonctionnelles, API REST, SQL basique, CI/CD, Git\n- Langues : Français (Natif), Anglais (Courant C1 / Bilingue professionnel)\n\nEXPÉRIENCES PROFESSIONNELLES\n2023 - Présent | Senior Product Owner | TechPulse SaaS (Paris)\n- Pilotage de la roadmap d'une solution SaaS B2B utilisée par 120 000 utilisateurs actifs.\n- Réduction du churn de 22% en refondant le module d'onboarding utilisateur et le tableau de bord d'analytique.\n- Animation quotidienne d'une squad multidisciplinaire de 9 personnes (6 développeurs, 1 designer, 1 QA, 1 data analyst).\n- Définition des OKRs trimestriels et priorisation stricte du backlog selon la méthode RICE.\n\n2020 - 2023 | Product Owner / Chef de Projet Web | MediaNext Solutions\n- Gestion de bout en bout de 4 refontes d'applications web avec architecture cloud moderne.\n- Amélioration de 35% de la vélocité de l'équipe de dev via la clarification des User Stories et critères d'acceptation Gherkin.\n- Réalisation d'une cinquantaine d'interviews utilisateurs pour cadrer les besoins majeurs et valider les prototypes interactifs.\n\nFORMATION & CERTIFICATIONS\n- Certification PSPO II (Professional Scrum Product Owner) - Scrum.org (2023)\n- Master 2 en Management des Systèmes d'Information & Projets Numériques (2020)",
+      "isDefault": true,
+      "fileSize": 45200,
+      "createdAt": "2026-09-25T11:18:17.796Z",
+      "updatedAt": "2026-09-25T11:18:17.796Z"
+    },
+    {
+      "id": "cv-tech-2",
+      "title": "CV Technique - Développeur Fullstack Web",
+      "targetRole": "Développeur Fullstack TypeScript / Node",
+      "fileName": "CV_Alex_Martin_Fullstack_Dev.docx",
+      "fileType": "docx",
+      "rawText": "ALEX MARTIN\nDéveloppeur Fullstack TypeScript & React\nParis / Télétravail | alex.martin.pro@email.fr | github.com/alex-martin\n\nCOMPÉTENCES TECHNIQUES\n- Langages : TypeScript, JavaScript ES6+, Python, SQL\n- Frontend : React, Next.js, Tailwind CSS, Redux Toolkit, Vite\n- Backend : Node.js, Express, PostgreSQL, Prisma, Redis, Docker\n- Outils & Pratiques : Git, GitHub Actions CI/CD, Jest, Vitest, Tests E2E Playwright\n\nEXPÉRIENCES\n2024 - Présent : Développeur Fullstack (Missions & Projets Open Source)\n- Conception d'APIs REST résilientes et de dashboards interactifs sous React et Tailwind.\n- Optimisation des temps de réponse backend de 40% par mise en cache Redis et requêtes SQL indexées.",
+      "isDefault": false,
+      "fileSize": 31400,
+      "createdAt": "2026-09-25T11:18:17.796Z",
+      "updatedAt": "2026-09-25T11:18:17.796Z"
+    }
+  ],
+  "applications": [
+    {
+      "id": "app-sample-1",
+      "company": "Doctolib",
+      "role": "Product Owner Senior - Parcours Praticiens",
+      "status": "interview",
+      "appliedDate": "2026-09-15",
+      "followUpDate": "2026-09-28",
+      "location": "Nantes / Paris (Hybride)",
+      "contractType": "CDI",
+      "salary": "62k€ - 68k€",
+      "jobUrl": "https://careers.doctolib.fr/offres/product-owner-praticiens",
+      "notes": "Premier tour RH validé le 18/09. Entretien technique et Product Case Study prévu jeudi prochain à 14h00.",
+      "score": 88,
+      "analysisId": "sample-analysis-1",
+      "checklist": {
+        "cvSent": true,
+        "coverLetterSent": true,
+        "portfolioSent": true,
+        "followUpDone": true
+      },
+      "createdAt": "2026-09-15T10:00:00.000Z",
+      "updatedAt": "2026-09-18T16:30:00.000Z"
+    },
+    {
+      "id": "app-sample-2",
+      "company": "Mirakl",
+      "role": "Lead Product Manager - Marketplaces",
+      "status": "applied",
+      "appliedDate": "2026-09-21",
+      "followUpDate": "2026-09-28",
+      "location": "Paris 8e (Hybride)",
+      "contractType": "CDI",
+      "salary": "65k€ - 72k€",
+      "jobUrl": "https://www.mirakl.com/careers/lead-pm",
+      "notes": "Candidature spontanée via recommandation. Score ATS de 84% obtenu sur la fiche de poste.",
+      "score": 84,
+      "analysisId": null,
+      "checklist": {
+        "cvSent": true,
+        "coverLetterSent": true,
+        "portfolioSent": false,
+        "followUpDone": false
+      },
+      "createdAt": "2026-09-21T09:15:00.000Z",
+      "updatedAt": "2026-09-21T09:15:00.000Z"
+    }
+  ],
+  "analyses": [
+    {
+      "id": "sample-analysis-1",
+      "timestamp": "18/09/2026 14:20",
+      "title": "Product Owner Senior - Doctolib",
+      "jobSnippet": "Doctolib recherche un Product Owner Senior pour piloter la refonte du module de gestion de rendez-vous praticiens...",
+      "cvSnippet": "Senior Product Owner chez TechPulse SaaS. Pilotage de roadmap SaaS B2B, réduction de churn...",
+      "cvText": "Senior Product Owner chez TechPulse SaaS. Pilotage de roadmap SaaS B2B, réduction de churn...",
+      "jobText": "Doctolib recherche un Product Owner Senior expérimenté pour piloter la roadmap produit...",
+      "score": 88,
+      "fileName": "CV_Alex_Martin_ProductOwner_2026.pdf",
+      "jobUrl": "https://careers.doctolib.fr/offres/product-owner-praticiens",
+      "analysisResult": "### Score d'adéquation ATS : 88/100\n\n**Points forts :**\n- Forte expérience démontrée en SaaS B2B et méthodes Scrum.\n- Réalisations chiffrées très valorisantes (réduction de churn de 22%, gestion de squad de 9 personnes).\n- Certification PSPO II reconnue.\n\n**Axes d'optimisation :**\n- Ajouter le mot-clé « Santé numérique / HealthTech » et les contraintes réglementaires (RGPD / HDS)."
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "sugg-1",
+      "type": "star_accomplishment",
+      "title": "Accomplissement STAR - Réduction du Churn Client",
+      "originalText": "Gestion de la refonte du tableau de bord client pour améliorer la rétention.",
+      "generatedContent": "Piloté la refonte intégrale du tableau de bord analytique et de l'onboarding client (Situation/Tâche), en coordonnant une squad Agile de 9 collaborateurs et en itérant sur les retours de 50+ utilisateurs clés (Action), aboutissant à une diminution du churn de 22% et un gain de satisfaction NPS de +18 points en 6 mois (Résultat).",
+      "targetRole": "Product Owner Senior",
+      "createdAt": "2026-09-25T11:18:17.796Z"
+    },
+    {
+      "id": "sugg-2",
+      "type": "branding_bio",
+      "title": "Bio d'Accroche CV - Style Axé Métriques & Impact",
+      "generatedContent": "Product Owner Senior certifié PSPO II avec 6 ans d'expérience dans l'accélération de produits SaaS B2B. Spécialiste de la transformation de retours clients complexes en roadmaps à fort ROI, ayant permis jusqu'à -22% de désabonnement et +35% de vélocité d'équipe.",
+      "targetRole": "Product Owner",
+      "createdAt": "2026-09-25T11:18:17.796Z"
+    }
+  ],
+  "settings": {
+    "selectedModel": "gemini-3.8-flash",
+    "autoSaveToDb": true,
+    "backupFrequency": "weekly",
+    "lastBackupDate": "2026-09-25T11:18:17.796Z"
+  }
+}
