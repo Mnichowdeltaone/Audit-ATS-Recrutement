@@ -19,6 +19,7 @@ import {
   HelpCircle,
   BookOpen,
   Award,
+  Trophy,
   Target,
   ShieldAlert,
   Lightbulb,
@@ -65,6 +66,11 @@ import DatabaseManager from './components/DatabaseManager';
 import CvOptimizationModal from './components/CvOptimizationModal';
 import SettingsAndProfile from './components/SettingsAndProfile';
 import Sidebar from './components/Sidebar';
+import InteractiveGuide from './components/InteractiveGuide';
+import InteractiveTourModal from './components/InteractiveTourModal';
+import VisualAnalysisModal from './components/VisualAnalysisModal';
+import { parseAnalysisResult } from './utils/analysisParser';
+import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from './utils/sampleData';
 import { localDbClient } from './services/localDbClient';
 import { ApplicationItem, SavedCv, DatabaseStats, UserProfile } from './types';
 
@@ -336,6 +342,8 @@ export default function App() {
   const [isExtractingProfile, setIsExtractingProfile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isTourModalOpen, setIsTourModalOpen] = useState(false);
+  const [isVisualModalOpen, setIsVisualModalOpen] = useState(false);
 
   // Suivi des candidatures persistant
   const [applications, setApplications] = useState<ApplicationItem[]>(() => {
@@ -646,7 +654,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [copiedStatus, setCopiedStatus] = useState<string | null>(null);
-  const [resultView, setResultView] = useState<'raw' | 'cards'>('raw');
+  const [resultView, setResultView] = useState<'raw' | 'cards'>('cards');
 
   // État de l'historique persistant
   const [history, setHistory] = useState<AnalysisHistoryItem[]>(() => {
@@ -1012,6 +1020,7 @@ export default function App() {
       }
 
       setAnalysisResult(finalResult);
+      setIsVisualModalOpen(true);
       confetti({ particleCount: 90, spread: 65, origin: { y: 0.6 } });
 
       const score = extractScore(finalResult);
@@ -1131,6 +1140,7 @@ export default function App() {
         userProfile={userProfile}
         userProfiles={userProfiles}
         onSelectProfile={handleSelectProfile}
+        onOpenTour={() => setIsTourModalOpen(true)}
         apiKey={apiKey}
         hasServerKey={hasServerKey}
         selectedModel={selectedModel}
@@ -1166,7 +1176,8 @@ export default function App() {
                   {activeTab === 'tracker' && '💼 Suivi des Candidatures'}
                   {activeTab === 'history' && '🕒 Historique des Audits'}
                   {activeTab === 'database' && '🗄️ Base de Données Locale'}
-                  {(activeTab === 'settings' || activeTab === 'code' || activeTab === 'guide') && '👤 Espace Personnel & Technique'}
+                  {activeTab === 'guide' && '💡 Mode d\'Emploi Interactif & Astuces'}
+                  {(activeTab === 'settings' || activeTab === 'code') && '👤 Espace Personnel & Technique'}
                 </h1>
                 <span className="hidden sm:inline-flex text-[10px] bg-red-50 text-[#FF4B4B] border border-red-200 px-2 py-0.5 rounded-full font-medium">
                   {selectedModel}
@@ -1178,13 +1189,41 @@ export default function App() {
                 {activeTab === 'tracker' && 'Gérez vos candidatures, relances et entretiens en mode Kanban interactif'}
                 {activeTab === 'history' && 'Retrouvez vos rapports d\'audit passés et comparez les scores d\'adéquation'}
                 {activeTab === 'database' && 'Gérez vos CVs enregistrés, suggestions IA et sauvegardes'}
-                {(activeTab === 'settings' || activeTab === 'code' || activeTab === 'guide') && 'Profil candidat, sauvegarde de la clé API Gemini, base locale et documentation technique'}
+                {activeTab === 'guide' && 'Guide pas-à-pas, simulateur ATS interactif, quiz recruteur et checklist pour réussir vos candidatures'}
+                {(activeTab === 'settings' || activeTab === 'code') && 'Profil candidat, sauvegarde de la clé API Gemini, base locale et documentation technique'}
               </p>
             </div>
           </div>
 
           {/* Raccourcis et statut en en-tête */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Bouton Mode d'emploi interactif */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('guide')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer shadow-xs ${
+                activeTab === 'guide'
+                  ? 'bg-amber-400 text-gray-950 ring-2 ring-amber-300 scale-102'
+                  : 'bg-linear-to-r from-amber-400 to-orange-400 text-gray-950 hover:brightness-105 hover:scale-105 active:scale-95'
+              }`}
+              title="Consulter le mode d'emploi interactif & les astuces pro"
+            >
+              <BookOpen className="w-3.5 h-3.5 fill-current" />
+              <span className="hidden sm:inline">Mode d&apos;emploi interactif 💡</span>
+              <span className="sm:hidden">Guide 💡</span>
+            </button>
+
+            {/* Bouton Visite Guidée Animée */}
+            <button
+              type="button"
+              onClick={() => setIsTourModalOpen(true)}
+              className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-all cursor-pointer hover:scale-102"
+              title="Démarrer la visite guidée en 5 étapes"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>Visite guidée ✨</span>
+            </button>
+
             {/* Statut Clé API */}
             <button
               type="button"
@@ -1275,6 +1314,61 @@ export default function App() {
              ========================================================================= */}
           {activeTab === 'app' && (
             <div className="w-full flex flex-col gap-6">
+              {/* 🌟 BANDEAU D'ACCUEIL COLORÉ & FUN AVEC DÉMO ET VISITE GUIDÉE */}
+              <div className="bg-linear-to-r from-purple-700 via-indigo-600 to-blue-600 rounded-3xl p-5 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+                <div className="absolute -right-6 -bottom-6 w-40 h-40 bg-amber-400/20 rounded-full blur-2xl pointer-events-none" />
+                <div className="flex items-center gap-3.5 relative z-10">
+                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner shrink-0">
+                    🚀
+                  </div>
+                  <div>
+                    <h2 className="text-sm sm:text-base font-black flex items-center gap-2">
+                      <span>Prêt à propulser votre candidature vers le succès ?</span>
+                    </h2>
+                    <p className="text-xs text-purple-100 mt-0.5">
+                      Testez en 1 clic notre exemple complet, suivez le mode d&apos;emploi interactif ou lancez un audit personnalisé !
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap shrink-0 relative z-10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCvText(SAMPLE_DEMO_CV);
+                      setJobText(SAMPLE_DEMO_JOB);
+                      setSelectedCvId('');
+                      confetti({ particleCount: 50, spread: 70 });
+                      setCvSaveSuccess("🚀 Données d'essai (CV Trésorier + Offre) chargées en 1 clic ! Vous pouvez lancer l'analyse ci-dessous.");
+                      setTimeout(() => setCvSaveSuccess(null), 4000);
+                    }}
+                    className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current text-purple-900" />
+                    <span>Charger Démo 1-Clic</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('guide')}
+                    className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer hover:scale-102"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Mode d&apos;emploi 💡</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsTourModalOpen(true)}
+                    className="px-3 py-2 bg-purple-500/30 hover:bg-purple-500/50 text-purple-100 border border-purple-400/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer hover:scale-102"
+                    title="Démarrer la visite guidée pas à pas"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Visite ✨</span>
+                  </button>
+                </div>
+              </div>
+
               {/* En-tête et descriptif avec barre d'actions rapides */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-xs">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4 mb-4">
@@ -1923,36 +2017,47 @@ export default function App() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Bouton pour ouvrir dans une autre fenêtre avec graphiques et KPIs */}
+                      <button
+                        type="button"
+                        onClick={() => setIsVisualModalOpen(true)}
+                        className="px-3.5 py-1.5 bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105 active:scale-95 ring-2 ring-emerald-300"
+                        title="Ouvrir le rapport d'analyse dans une fenêtre dédiée avec graphiques et KPIs"
+                      >
+                        <Trophy className="w-4 h-4 text-amber-300" />
+                        <span>📊 Autre fenêtre (Graphiques & KPIs)</span>
+                      </button>
+
                       <div className="flex items-center bg-white border border-emerald-300 rounded-lg p-0.5 text-xs">
                         <button
                           type="button"
-                          onClick={() => setResultView('raw')}
-                          className={`px-2.5 py-1 rounded-md transition-colors font-medium ${
-                            resultView === 'raw'
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-emerald-900 hover:bg-emerald-50'
-                          }`}
-                        >
-                          Markdown brut
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => setResultView('cards')}
-                          className={`px-2.5 py-1 rounded-md transition-colors font-medium ${
+                          className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
                             resultView === 'cards'
                               ? 'bg-emerald-600 text-white'
                               : 'text-emerald-900 hover:bg-emerald-50'
                           }`}
                         >
-                          Fiche Visuelle
+                          Fiche Visuelle & Graphiques
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setResultView('raw')}
+                          className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
+                            resultView === 'raw'
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-emerald-900 hover:bg-emerald-50'
+                          }`}
+                        >
+                          Texte brut
                         </button>
                       </div>
 
                       <button
                         type="button"
                         onClick={() => copyToClipboard(analysisResult, 'result')}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center gap-1 font-medium transition-colors"
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center gap-1 font-medium transition-colors cursor-pointer"
                         title="Copier le rapport"
                       >
                         {copiedStatus === 'result' ? (
@@ -1975,7 +2080,7 @@ export default function App() {
                         title="Créer un nouveau CV ou modifier l'actuel en intégrant les modifications proposées par l'audit"
                       >
                         <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                        <span>✨ Adapter mon CV à cette offre</span>
+                        <span>✨ Adapter mon CV</span>
                       </button>
 
                       <button
@@ -1985,7 +2090,7 @@ export default function App() {
                         title="Ajouter cette opportunité à mon tableau de suivi des candidatures"
                       >
                         <Briefcase className="w-3.5 h-3.5" />
-                        <span>➕ Suivre cette candidature</span>
+                        <span>➕ Suivre</span>
                       </button>
 
                       <button
@@ -1995,13 +2100,13 @@ export default function App() {
                         title="Optimiser mon CV avec les méthodes STAR et l'IA"
                       >
                         <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                        <span>✨ Améliorer mon CV</span>
+                        <span>Lettre & STAR</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => downloadFile('rapport_cv_move_personnel.md', analysisResult)}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center gap-1 font-medium transition-colors"
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center gap-1 font-medium transition-colors cursor-pointer"
                         title="Télécharger en fichier .md"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -2058,18 +2163,117 @@ export default function App() {
                       />
                     </div>
                   ) : (
-                    <div className="p-6 sm:p-8 space-y-6">
-                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
-                        <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
-                          <Target className="w-4 h-4 text-[#FF4B4B]" />
-                          <span>Synthèse d&apos;audit ATS</span>
+                    (() => {
+                      const p = parseAnalysisResult(analysisResult, cvText, jobText);
+                      return (
+                        <div className="p-6 sm:p-8 space-y-7">
+                          {/* Bannière d'accès à la fenêtre visuelle dédiée */}
+                          <div className="bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 rounded-3xl p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-11 h-11 bg-white/20 rounded-2xl backdrop-blur-xs flex items-center justify-center text-2xl shadow-inner shrink-0">
+                                📊
+                              </div>
+                              <div>
+                                <h4 className="font-black text-sm sm:text-base leading-tight">
+                                  Rapport Visuel & KPIs disponible dans une autre fenêtre !
+                                </h4>
+                                <p className="text-xs text-emerald-100 mt-0.5">
+                                  Pour une vue immersive plein écran avec jauge, matrice de compétences et questions d&apos;entretien.
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setIsVisualModalOpen(true)}
+                              className="px-4 py-2.5 bg-white text-emerald-950 hover:bg-emerald-50 rounded-xl text-xs font-black shadow-xs shrink-0 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1.5"
+                            >
+                              <Trophy className="w-4 h-4 text-emerald-600" />
+                              <span>Ouvrir dans une autre fenêtre ↗</span>
+                            </button>
+                          </div>
+
+                          {/* 4 KPIs Clés */}
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                            <div className="p-4 bg-indigo-50/80 border border-indigo-100 rounded-2xl shadow-2xs">
+                              <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider block">Filtres ATS</span>
+                              <div className="text-2xl font-black text-indigo-950 mt-0.5">{p.kpis.atsPassProbability}%</div>
+                              <span className="text-[11px] text-indigo-800 font-medium">Passage quasi-assuré</span>
+                            </div>
+                            <div className="p-4 bg-emerald-50/80 border border-emerald-100 rounded-2xl shadow-2xs">
+                              <span className="text-[10px] font-extrabold text-emerald-900 uppercase tracking-wider block">Mots-Clés Requis</span>
+                              <div className="text-2xl font-black text-emerald-950 mt-0.5">{p.kpis.keywordMatchRate}%</div>
+                              <span className="text-[11px] text-emerald-800 font-medium">Couverture forte</span>
+                            </div>
+                            <div className="p-4 bg-amber-50/80 border border-amber-100 rounded-2xl shadow-2xs">
+                              <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider block">Lecture Recruteur</span>
+                              <div className="text-2xl font-black text-amber-950 mt-0.5">{p.kpis.recruiterReadTime}</div>
+                              <span className="text-[11px] text-amber-800 font-medium">Attention captée</span>
+                            </div>
+                            <div className="p-4 bg-blue-50/80 border border-blue-100 rounded-2xl shadow-2xs">
+                              <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider block">Chance d&apos;Entretien</span>
+                              <div className="text-2xl font-black text-blue-950 mt-0.5">{p.kpis.interviewChance}%</div>
+                              <span className="text-[11px] text-blue-800 font-medium">Forte probabilité</span>
+                            </div>
+                          </div>
+
+                          {/* Graphique des 5 Axes */}
+                          <div className="bg-gray-50/90 rounded-3xl border border-gray-200 p-5 space-y-4 shadow-2xs">
+                            <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                              <Sliders className="w-4 h-4 text-purple-600" />
+                              <span>Graphique d&apos;évaluation multi-critères</span>
+                            </h4>
+                            <div className="space-y-3">
+                              {p.axisScores.map((ax, idx) => (
+                                <div key={idx} className="space-y-1">
+                                  <div className="flex justify-between text-xs font-bold text-gray-800">
+                                    <span>{ax.axis}</span>
+                                    <span className="font-black text-purple-700">{ax.score}%</span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                    <div
+                                      className="bg-linear-to-r from-purple-600 via-indigo-600 to-emerald-500 h-2.5 rounded-full transition-all duration-700"
+                                      style={{ width: `${ax.score}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Les 3 Points Forts */}
+                          <div className="space-y-3">
+                            <h4 className="font-extrabold text-xs uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span>Vos 3 Points Forts Majeurs Valorisés</span>
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              {p.strengths.map((s, idx) => (
+                                <div key={idx} className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 shadow-2xs">
+                                  <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                    Point Fort #{idx + 1}
+                                  </span>
+                                  <h5 className="font-extrabold text-xs text-gray-900">{s.title}</h5>
+                                  <p className="text-xs text-gray-600 leading-relaxed font-normal">{s.description}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Bouton d'ouverture fenêtre complète */}
+                          <div className="pt-2 flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => setIsVisualModalOpen(true)}
+                              className="px-6 py-3 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black shadow-md flex items-center gap-2 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                            >
+                              <Trophy className="w-4 h-4 text-amber-300" />
+                              <span>Afficher tout le rapport dans une autre fenêtre (Graphiques, Matrice & Entretien)</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div
-                          className="text-xs text-gray-700 leading-relaxed"
-                          dangerouslySetInnerHTML={{ __html: marked.parse(analysisResult) as string }}
-                        />
-                      </div>
-                    </div>
+                      );
+                    })()
                   )}
                 </div>
               )}
@@ -2312,15 +2516,30 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100">
-                      <button
-                        type="button"
-                        onClick={() => handleLoadHistoryItem(item)}
-                        className="text-xs font-semibold text-[#FF4B4B] hover:text-[#d03232] flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Consulter & Charger</span>
-                      </button>
+                    <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadHistoryItem(item)}
+                          className="text-xs font-semibold text-[#FF4B4B] hover:text-[#d03232] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Consulter</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLoadHistoryItem(item);
+                            setIsVisualModalOpen(true);
+                          }}
+                          className="text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Ouvrir dans une autre fenêtre avec graphiques et KPIs"
+                        >
+                          <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Rapport Visuel 📊</span>
+                        </button>
+                      </div>
 
                       {confirmDeleteHistoryId === item.id ? (
                         <div
@@ -2368,9 +2587,27 @@ export default function App() {
         )}
 
         {/* =========================================================================
+            ONGLET : MODE D'EMPLOI INTERACTIF & ASTUCES
+           ========================================================================= */}
+        {activeTab === 'guide' && (
+          <InteractiveGuide
+            onNavigateToTab={(tab) => setActiveTab(tab)}
+            onLoadSampleData={(sampleCv, sampleJob) => {
+              setCvText(sampleCv);
+              setJobText(sampleJob);
+              setSelectedCvId('');
+              setCvSaveSuccess("🚀 Données d'exemple (CV Trésorier + Offre) chargées avec succès !");
+              setTimeout(() => setCvSaveSuccess(null), 3500);
+            }}
+            userProfilesCount={userProfiles.length}
+            onOpenTour={() => setIsTourModalOpen(true)}
+          />
+        )}
+
+        {/* =========================================================================
             ONGLET : ESPACE PERSONNEL & TECHNIQUE (PROFIL, CLÉ API, BDD, DOCUMENTATION)
            ========================================================================= */}
-        {(activeTab === 'settings' || activeTab === 'code' || activeTab === 'guide') && (
+        {(activeTab === 'settings' || activeTab === 'code') && (
           <SettingsAndProfile
             apiKey={apiKey}
             setApiKey={setApiKey}
@@ -2395,7 +2632,7 @@ export default function App() {
             onProfileUpdated={(updated) => setUserProfile(updated)}
             onProfilesUpdated={(updatedList) => setUserProfiles(updatedList)}
             onSelectProfile={handleSelectProfile}
-            initialSubTab={activeTab === 'code' || activeTab === 'guide' ? 'tech' : 'profile'}
+            initialSubTab={activeTab === 'code' ? 'tech' : 'profile'}
           />
         )}
       </div>
@@ -2437,6 +2674,54 @@ export default function App() {
         }}
         onNavigateToTab={(t) => setActiveTab(t as any)}
       />
+
+      {/* Modal Visite Guidée Interactive en 5 Étapes */}
+      <InteractiveTourModal
+        isOpen={isTourModalOpen}
+        onClose={() => setIsTourModalOpen(false)}
+        onNavigateToTab={(tab) => setActiveTab(tab)}
+        onLoadSampleData={(sampleCv, sampleJob) => {
+          setCvText(sampleCv);
+          setJobText(sampleJob);
+          setSelectedCvId('');
+          setCvSaveSuccess("🚀 Données de démonstration chargées avec succès !");
+          setTimeout(() => setCvSaveSuccess(null), 3500);
+        }}
+      />
+
+      {/* Fenêtre Dédiée Visuelle avec Graphiques et KPIs */}
+      {analysisResult && (
+        <VisualAnalysisModal
+          isOpen={isVisualModalOpen}
+          onClose={() => setIsVisualModalOpen(false)}
+          rawAnalysisText={analysisResult}
+          cvText={cvText}
+          jobText={jobText}
+          onOpenCvOptimization={() => setIsCvOptimizationModalOpen(true)}
+          onAddToTracker={handleAddAnalysisToTracker}
+          onNavigateToCvAssistant={() => setActiveTab('cv-assistant')}
+        />
+      )}
+
+      {/* Bouton Flottant d'Aide & Mode d'Emploi Interactif */}
+      <div className="fixed bottom-5 right-5 z-40">
+        <button
+          type="button"
+          onClick={() => {
+            if (activeTab === 'guide') {
+              setIsTourModalOpen(true);
+            } else {
+              setActiveTab('guide');
+            }
+          }}
+          className="group px-4 py-2.5 bg-linear-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-700 hover:to-amber-600 text-white rounded-full shadow-xl flex items-center gap-2 font-black text-xs transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer ring-2 ring-white/60 hover:shadow-purple-500/25"
+          title="Ouvrir le Mode d'emploi interactif & Guide astuces"
+        >
+          <Sparkles className="w-4 h-4 text-amber-300 animate-spin-slow" />
+          <span className="hidden sm:inline">Mode d&apos;emploi interactif 💡</span>
+          <span className="sm:hidden">Guide 💡</span>
+        </button>
+      </div>
     </div>
   );
 }

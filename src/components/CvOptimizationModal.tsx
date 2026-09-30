@@ -34,6 +34,7 @@ interface CvOptimizationModalProps {
   onReplaceCurrentCv: (newCvText: string) => void;
   onSaveNewCvToDb: (title: string, cvText: string) => Promise<void>;
   onNavigateToTab?: (tab: string) => void;
+  onAppliedOptimization?: (modifiedCv: string, summaryBullets: string[]) => void;
 }
 
 export default function CvOptimizationModal({
@@ -49,6 +50,7 @@ export default function CvOptimizationModal({
   onReplaceCurrentCv,
   onSaveNewCvToDb,
   onNavigateToTab,
+  onAppliedOptimization,
 }: CvOptimizationModalProps) {
   const [targetRole, setTargetRole] = useState(initialTargetRole);
   const [companyName, setCompanyName] = useState(initialCompanyName);
@@ -165,6 +167,7 @@ export default function CvOptimizationModal({
   const handleApplyReplacement = () => {
     if (!optimizedCv.trim()) return;
     onReplaceCurrentCv(optimizedCv);
+    onAppliedOptimization?.(optimizedCv, modificationsSummary);
     setSuccessNotice('✅ Le CV actif dans l\'analyseur a été mis à jour avec la version optimisée !');
     setTimeout(() => {
       onClose();
@@ -177,6 +180,7 @@ export default function CvOptimizationModal({
     setIsSavingNew(true);
     try {
       await onSaveNewCvToDb(newCvTitle.trim(), optimizedCv);
+      onAppliedOptimization?.(optimizedCv, modificationsSummary);
       setSuccessNotice(`⭐ Nouveau CV « ${newCvTitle} » sauvegardé dans votre base locale !`);
       setTimeout(() => {
         setIsSavingNew(false);

@@ -31,6 +31,27 @@ export interface ApplicationItem {
   updatedAt: string;
 }
 
+export type EvolutionStepType =
+  | 'initial_analysis'
+  | 'recommendations_applied'
+  | 're_analysis';
+
+export interface EvolutionStep {
+  id: string;
+  version: number; // 1, 2, 3...
+  type: EvolutionStepType;
+  title: string;
+  timestamp: string;
+  score: number | null;
+  scoreDelta?: number; // e.g. +16
+  cvText: string;
+  analysisResult?: string;
+  changesApplied?: string[]; // e.g. ["Harmonisation titre", "Ajout mot-clé AGICAP", "STAR lettrage"]
+  summaryNote?: string;
+  strengthsCount?: number;
+  weaknessesCount?: number;
+}
+
 export interface AnalysisHistoryItem {
   id: string;
   timestamp: string;
@@ -44,6 +65,9 @@ export interface AnalysisHistoryItem {
   fileName?: string;
   fileType?: string;
   jobUrl?: string;
+  sessionId?: string; // ID unique du fil d'évolution CV <-> Offre
+  currentVersion?: number; // Version active (1, 2, 3...)
+  evolutionSteps?: EvolutionStep[]; // Liste de toutes les étapes de traitement
 }
 
 export interface ExtractedFileResult {

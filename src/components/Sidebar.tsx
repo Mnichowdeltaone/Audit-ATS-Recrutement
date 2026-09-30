@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Layers,
   Sparkles,
@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Settings,
   X,
+  BookOpen,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
 
@@ -41,6 +42,7 @@ interface SidebarProps {
   userProfile: UserProfile | null;
   userProfiles?: UserProfile[];
   onSelectProfile?: (id: string) => void;
+  onOpenTour?: () => void;
   apiKey: string;
   hasServerKey: boolean;
   selectedModel: string;
@@ -61,6 +63,7 @@ export default function Sidebar({
   userProfile,
   userProfiles = [],
   onSelectProfile,
+  onOpenTour,
   apiKey,
   hasServerKey,
   selectedModel,
@@ -70,6 +73,22 @@ export default function Sidebar({
   isMobileOpen,
   setIsMobileOpen,
 }: SidebarProps) {
+  const [tipIndex, setTipIndex] = useState(0);
+
+  const RECRUITER_TIPS = [
+    "Les robots ATS détestent les colonnes multiples : restez linéaire pour un score maximal !",
+    "Relancez votre recruteur entre 9h et 10h le mardi : c'est le créneau statistique le plus lu.",
+    "Un chiffre vaut 1000 adjectifs : 'Trésorerie consolidée de 45 M€' surpasse 'Trésorier rigoureux'.",
+    "Citez toujours vos progiciels phares (AGICAP, Kyriba, Excel VBA) dans vos compétences clés.",
+    "Le test des 6 secondes : les 3 premières lignes de votre CV décident de l'attention du recruteur.",
+    "Une lettre courte en 3 paragraphes ciblés est 3 fois plus lue qu'un long pavé d'une page !",
+  ];
+
+  const nextTip = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTipIndex((prev) => (prev + 1) % RECRUITER_TIPS.length);
+  };
+
   // Navigation cliquable avec gestion du menu mobile
   const handleNavClick = (tab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => {
     setActiveTab(tab);
@@ -137,6 +156,20 @@ export default function Sidebar({
           color: 'text-emerald-600',
           activeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
           badge: dbStats ? String(dbStats.cvsCount) : null,
+        },
+      ],
+    },
+    {
+      title: 'Guide & Aide',
+      items: [
+        {
+          id: 'guide' as const,
+          label: 'Mode d\'emploi interactif',
+          icon: BookOpen,
+          color: 'text-amber-500',
+          activeBg: 'bg-amber-50 text-amber-950 border-amber-300 font-black',
+          badge: 'Tuto 💡',
+          badgeColor: 'bg-linear-to-r from-amber-400 to-orange-400 text-gray-950 font-black shadow-2xs',
         },
       ],
     },
@@ -313,6 +346,43 @@ export default function Sidebar({
             </div>
           </div>
         ))}
+
+        {/* Widget Astuce Recruteur Express & Fun */}
+        {!isCollapsed && (
+          <div className="mx-2 mb-2 p-3 bg-linear-to-br from-amber-50/90 to-orange-50/70 border border-amber-200/90 rounded-xl space-y-1.5 shadow-2xs">
+            <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
+              <span className="flex items-center gap-1">
+                <span>💡</span>
+                <span>Astuce Recruteur</span>
+              </span>
+              <button
+                type="button"
+                onClick={nextTip}
+                className="px-1.5 py-0.5 bg-amber-200/60 hover:bg-amber-300 text-amber-900 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                title="Afficher une autre astuce"
+              >
+                🎲 Autre
+              </button>
+            </div>
+            <p className="text-[10px] text-amber-950 leading-relaxed font-medium">
+              &laquo; {RECRUITER_TIPS[tipIndex]} &raquo;
+            </p>
+          </div>
+        )}
+
+        {/* Bouton Visite Guidée */}
+        {!isCollapsed && onOpenTour && (
+          <div className="mx-2 mb-2">
+            <button
+              type="button"
+              onClick={onOpenTour}
+              className="w-full py-1.5 px-2 bg-linear-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 text-purple-800 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>✨ Visite guidée interactive</span>
+            </button>
+          </div>
+        )}
 
       </div>
 
