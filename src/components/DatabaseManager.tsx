@@ -499,7 +499,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                 value={profileForm.firstName}
                 onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                placeholder="Alex"
+                placeholder="Prénom"
               />
             </div>
 
@@ -510,7 +510,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                 value={profileForm.lastName}
                 onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                placeholder="Martin"
+                placeholder="Nom"
               />
             </div>
 

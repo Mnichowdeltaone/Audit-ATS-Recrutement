@@ -28,10 +28,19 @@ import {
   Zap,
   HelpCircle,
   ExternalLink,
+  FileCode,
+  BookOpen,
+  Terminal,
+  Check,
+  Copy,
+  Code2,
+  Trash2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { localDbClient } from '../services/localDbClient';
 import { UserProfile, DatabaseStats, SavedCv } from '../types';
+import { PYTHON_APP_CODE, REQUIREMENTS_TXT } from '../utils/pythonCode';
+import { extractProfileFromCv } from '../utils/profileExtractor';
 
 interface SettingsAndProfileProps {
   apiKey: string;
@@ -44,7 +53,13 @@ interface SettingsAndProfileProps {
   dbStats: DatabaseStats | null;
   onRefreshDbStats: () => Promise<void>;
   savedCvs: SavedCv[];
+  currentCvText?: string;
+  activeCvTitle?: string;
+  userProfiles?: UserProfile[];
   onProfileUpdated?: (profile: UserProfile) => void;
+  onProfilesUpdated?: (profiles: UserProfile[]) => void;
+  onSelectProfile?: (profileId: string) => void;
+  initialSubTab?: 'profile' | 'api' | 'backup' | 'tech';
 }
 
 export default function SettingsAndProfile({
@@ -58,41 +73,64 @@ export default function SettingsAndProfile({
   dbStats,
   onRefreshDbStats,
   savedCvs,
+  currentCvText = '',
+  activeCvTitle = '',
+  userProfiles,
   onProfileUpdated,
+  onProfilesUpdated,
+  onSelectProfile,
+  initialSubTab = 'profile',
 }: SettingsAndProfileProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'api' | 'backup'>('profile');
+  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'api' | 'backup' | 'tech'>(initialSubTab);
+  const [techView, setTechView] = useState<'code' | 'guide'>('code');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
+  const [isKeySavedInStorage, setIsKeySavedInStorage] = useState<boolean>(() => {
+    return !!localDbClient.getSavedApiKey();
+  });
 
-  // Profil Utilisateur State
-  const [profile, setProfile] = useState<UserProfile>({
-    id: 'user-default',
-    firstName: 'Alex',
-    lastName: 'Martin',
-    email: 'contact@alexmartin.fr',
-    phone: '06 12 34 56 78',
-    location: 'Paris, France',
-    currentTitle: 'Product Owner Senior',
-    bio: 'Product Owner passionné cumulant plus de 6 ans d\'expérience dans l\'accélération de solutions SaaS B2B complexes. Spécialiste de la transformation des retours utilisateurs en roadmaps à fort ROI, avec une maîtrise approfondie des cycles Agiles Scrum.',
-    linkedinUrl: 'https://linkedin.com/in/alexmartin',
-    githubUrl: 'https://github.com/alexmartin',
-    portfolioUrl: 'https://alexmartin.fr',
-    targetRoles: ['Product Owner Senior', 'Lead Product Manager', 'Chef de Projet Digital'],
-    skills: [
-      'Agile Scrum (PSPO II)',
-      'Gestion de Backlog & User Stories',
-      'Amplitude & Mixpanel',
-      'Google Analytics 4',
-      'Jira & Confluence',
-      'Figma & Miro',
-      'SQL & Requêtes données',
-      'API REST & Webhooks',
-    ],
-    updatedAt: new Date().toISOString(),
+  // Liste Multi-Profils synchronisée
+  const [profiles, setProfiles] = useState<UserProfile[]>(() => {
+    if (userProfiles && userProfiles.length > 0) return userProfiles;
+    return localDbClient.getLocalProfiles();
+  });
+
+  useEffect(() => {
+    if (userProfiles && userProfiles.length > 0) {
+      setProfiles(userProfiles);
+    }
+  }, [userProfiles]);
+
+  // Profil Utilisateur Actif
+  const [profile, setProfile] = useState<UserProfile>(() => {
+    const local = localDbClient.getLocalProfile();
+    if (local && (local.firstName || local.lastName)) {
+      return local;
+    }
+    return {
+      id: `profile-${Date.now()}`,
+      name: 'Profil Principal',
+      isDefault: true,
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      location: '',
+      currentTitle: '',
+      bio: '',
+      linkedinUrl: '',
+      githubUrl: '',
+      portfolioUrl: '',
+      targetRoles: [],
+      skills: [],
+      updatedAt: new Date().toISOString(),
+    };
   });
 
   const [newSkillInput, setNewSkillInput] = useState('');
   const [newRoleInput, setNewRoleInput] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isExtractingFromCv, setIsExtractingFromCv] = useState(false);
 
   // Test de connexion API
   const [isTestingApi, setIsTestingApi] = useState(false);
@@ -106,22 +144,183 @@ export default function SettingsAndProfile({
   // Notification Toast
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Charger le profil depuis la BDD locale au montage
+  // Charger les profils depuis la BDD locale au montage
   useEffect(() => {
     localDbClient
-      .getProfile()
-      .then((loaded) => {
-        if (loaded) {
-          setProfile((prev) => ({
-            ...prev,
-            ...loaded,
-            targetRoles: loaded.targetRoles || prev.targetRoles,
-            skills: loaded.skills || prev.skills,
-          }));
+      .getProfiles()
+      .then((loadedList) => {
+        if (loadedList && loadedList.length > 0) {
+          setProfiles(loadedList);
+          onProfilesUpdated?.(loadedList);
+          const active = loadedList.find((p) => p.isDefault) || loadedList[0];
+          if (active) {
+            setProfile(active);
+            onProfileUpdated?.(active);
+          }
         }
       })
-      .catch((err) => console.warn('Erreur chargement profil :', err));
+      .catch((err) => console.warn('Erreur chargement profils :', err));
   }, []);
+
+  // Changer de profil actif
+  const handleSelectProfile = async (targetId: string) => {
+    try {
+      const switched = await localDbClient.setDefaultProfile(targetId);
+      if (switched) {
+        setProfile(switched);
+        setProfiles((prev) =>
+          prev.map((p) => ({
+            ...p,
+            isDefault: p.id === targetId,
+          }))
+        );
+        onProfileUpdated?.(switched);
+        setNotice({
+          type: 'success',
+          message: `Profil actif basculé sur « ${switched.name || switched.currentTitle || 'Profil'} » !`,
+        });
+        setTimeout(() => setNotice(null), 3000);
+      }
+    } catch {
+      setNotice({ type: 'error', message: 'Erreur lors du changement de profil.' });
+      setTimeout(() => setNotice(null), 3000);
+    }
+  };
+
+  // Créer un nouveau profil
+  const handleCreateNewProfile = async (populateFromCv = false) => {
+    setIsSavingProfile(true);
+    setNotice(null);
+    try {
+      let initialData: Partial<UserProfile> = {
+        name: `Profil ${profiles.length + 1}`,
+        isDefault: true,
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        location: profile.location || '',
+        currentTitle: '',
+        bio: '',
+        targetRoles: [],
+        skills: [],
+      };
+
+      if (populateFromCv) {
+        const textToUse = currentCvText.trim() || (savedCvs[0]?.rawText || '');
+        if (textToUse) {
+          const extracted = await extractProfileFromCv(textToUse, apiKey, selectedModel);
+          initialData = {
+            ...initialData,
+            ...extracted,
+            name: extracted.currentTitle || `Profil CV (${new Date().toLocaleDateString('fr-FR')})`,
+          };
+        }
+      }
+
+      const newP = await localDbClient.saveProfile(initialData);
+      setProfile(newP);
+      const updatedList = await localDbClient.getProfiles();
+      setProfiles(updatedList);
+      onProfileUpdated?.(newP);
+      onProfilesUpdated?.(updatedList);
+
+      confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+      setNotice({
+        type: 'success',
+        message: `Nouveau profil « ${newP.name} » créé et activé !`,
+      });
+      setTimeout(() => setNotice(null), 3500);
+    } catch {
+      setNotice({ type: 'error', message: 'Erreur lors de la création du profil.' });
+      setTimeout(() => setNotice(null), 3000);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // Supprimer un profil
+  const handleDeleteProfile = async (idToDelete: string) => {
+    if (profiles.length <= 1) {
+      setNotice({ type: 'error', message: 'Vous devez conserver au moins un profil actif.' });
+      setTimeout(() => setNotice(null), 3000);
+      return;
+    }
+
+    try {
+      await localDbClient.deleteProfile(idToDelete);
+      const updatedList = await localDbClient.getProfiles();
+      setProfiles(updatedList);
+      onProfilesUpdated?.(updatedList);
+      const newActive = updatedList.find((p) => p.isDefault) || updatedList[0];
+      if (newActive) {
+        setProfile(newActive);
+        onProfileUpdated?.(newActive);
+      }
+      setNotice({ type: 'success', message: 'Profil supprimé avec succès.' });
+      setTimeout(() => setNotice(null), 3000);
+    } catch {
+      setNotice({ type: 'error', message: 'Erreur lors de la suppression du profil.' });
+      setTimeout(() => setNotice(null), 3000);
+    }
+  };
+
+  // Remplir le profil sélectionné avec le CV actuel
+  const handlePopulateFromCurrentCv = async () => {
+    const textToUse = currentCvText.trim() || (savedCvs.find((c) => c.isDefault)?.rawText || savedCvs[0]?.rawText || '');
+    if (!textToUse) {
+      setNotice({
+        type: 'error',
+        message: 'Aucun CV texte trouvé. Veuillez d’abord charger ou importer un CV dans l’analyseur.',
+      });
+      setTimeout(() => setNotice(null), 3500);
+      return;
+    }
+
+    setIsExtractingFromCv(true);
+    setNotice(null);
+
+    try {
+      const extracted = await extractProfileFromCv(textToUse, apiKey, selectedModel);
+
+      const mergedProfile: UserProfile = {
+        ...profile,
+        firstName: extracted.firstName || profile.firstName,
+        lastName: extracted.lastName || profile.lastName,
+        email: extracted.email || profile.email,
+        phone: extracted.phone || profile.phone,
+        location: extracted.location || profile.location,
+        currentTitle: extracted.currentTitle || profile.currentTitle,
+        bio: extracted.bio || profile.bio,
+        linkedinUrl: extracted.linkedinUrl || profile.linkedinUrl,
+        githubUrl: extracted.githubUrl || profile.githubUrl,
+        targetRoles: extracted.targetRoles && extracted.targetRoles.length > 0 ? extracted.targetRoles : profile.targetRoles,
+        skills: extracted.skills && extracted.skills.length > 0 ? extracted.skills : profile.skills,
+        name: profile.name && !profile.name.startsWith('Profil ') ? profile.name : extracted.currentTitle || profile.name || 'Profil Candidat',
+        updatedAt: new Date().toISOString(),
+      };
+
+      await localDbClient.saveProfile(mergedProfile);
+      setProfile(mergedProfile);
+      const updatedList = await localDbClient.getProfiles();
+      setProfiles(updatedList);
+      onProfileUpdated?.(mergedProfile);
+      onProfilesUpdated?.(updatedList);
+
+      confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+      setNotice({
+        type: 'success',
+        message: `✅ Profil mis à jour et rempli avec succès à partir du CV actuel (${mergedProfile.firstName} ${mergedProfile.lastName}, ${mergedProfile.currentTitle}) !`,
+      });
+      setTimeout(() => setNotice(null), 4000);
+    } catch (err) {
+      console.error('Erreur extraction CV :', err);
+      setNotice({ type: 'error', message: 'Erreur lors de l’extraction des données du CV.' });
+      setTimeout(() => setNotice(null), 3500);
+    } finally {
+      setIsExtractingFromCv(false);
+    }
+  };
 
   // Sauvegarder le profil
   const handleSaveProfile = async () => {
@@ -134,9 +333,12 @@ export default function SettingsAndProfile({
       };
       await localDbClient.saveProfile(updated);
       setProfile(updated);
+      const updatedList = await localDbClient.getProfiles();
+      setProfiles(updatedList);
       onProfileUpdated?.(updated);
+      onProfilesUpdated?.(updatedList);
       confetti({ particleCount: 35, spread: 50, origin: { y: 0.6 } });
-      setNotice({ type: 'success', message: 'Profil utilisateur enregistré avec succès dans la base locale !' });
+      setNotice({ type: 'success', message: `Profil « ${updated.name || 'Candidat'} » enregistré avec succès dans la base locale !` });
       setTimeout(() => setNotice(null), 3500);
     } catch {
       setNotice({ type: 'error', message: 'Erreur lors de la sauvegarde du profil.' });
@@ -250,6 +452,77 @@ export default function SettingsAndProfile({
     }
   };
 
+  // Sauvegarde explicite de la clé API avec retour visuel immédiat
+  const handleSaveApiKey = () => {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      setNotice({ type: 'error', message: 'Veuillez saisir une clé API valide avant d\'enregistrer.' });
+      setTimeout(() => setNotice(null), 3500);
+      return;
+    }
+    localDbClient.saveApiKey(trimmed);
+    localDbClient.saveModel(selectedModel);
+    setIsKeySavedInStorage(true);
+    confetti({ particleCount: 35, spread: 60, origin: { y: 0.6 } });
+    setNotice({
+      type: 'success',
+      message: '✅ Clé API Google Gemini sauvegardée avec succès ! Elle restera mémorisée à chaque nouveau démarrage.',
+    });
+    setTimeout(() => setNotice(null), 4500);
+  };
+
+  // Suppression de la clé sauvegardée
+  const handleClearApiKey = () => {
+    setApiKey('');
+    localDbClient.saveApiKey('');
+    setIsKeySavedInStorage(false);
+    setApiTestResult(null);
+    setNotice({
+      type: 'success',
+      message: 'Clé API supprimée de la mémoire locale du navigateur.',
+    });
+    setTimeout(() => setNotice(null), 3500);
+  };
+
+  // Changement de clé API avec sauvegarde continue
+  const handleApiKeyChange = (val: string) => {
+    setApiKey(val);
+    localDbClient.saveApiKey(val);
+    setIsKeySavedInStorage(!!val.trim());
+  };
+
+  // Changement de modèle avec persistance
+  const handleSelectModel = (model: 'gemini-3.8-flash' | 'gemini-flash-latest') => {
+    setSelectedModel(model);
+    localDbClient.saveModel(model);
+  };
+
+  // Copie de snippets dans le presse-papier
+  const handleCopyCode = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSnippet(label);
+      setTimeout(() => setCopiedSnippet(null), 2500);
+    } catch {
+      // Ignorer
+    }
+  };
+
+  // Téléchargement du script app.py
+  const handleDownloadAppPy = () => {
+    const blob = new Blob([PYTHON_APP_CODE], { type: 'text/x-python' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'app.py';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setNotice({ type: 'success', message: 'Fichier app.py téléchargé avec succès !' });
+    setTimeout(() => setNotice(null), 3000);
+  };
+
   // Exporter la base locale
   const handleExportBackup = async () => {
     try {
@@ -274,7 +547,7 @@ export default function SettingsAndProfile({
 
   return (
     <div className="w-full space-y-6 animate-fade-in">
-      {/* Header Paramétrage */}
+      {/* Header Espace Personnel & Technique */}
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -282,14 +555,14 @@ export default function SettingsAndProfile({
               <Sliders className="w-5 h-5" />
             </span>
             <h1 className="text-xl font-bold text-gray-900">
-              Paramétrage & Profil Utilisateur
+              Espace Personnel & Technique
             </h1>
             <span className="text-xs bg-purple-100 text-purple-800 font-semibold px-2.5 py-0.5 rounded-full">
-              Configuration Centrale
+              Configuration & Documentation
             </span>
           </div>
           <p className="text-xs text-gray-500 max-w-3xl">
-            Personnalisez vos informations personnelles, votre clé API Google Gemini et vos préférences d&apos;analyse. Ces données sont stockées de façon sécurisée dans votre navigateur.
+            Gérez votre profil candidat, sauvegardez durablement votre clé API Google Gemini, administrez votre base locale et consultez la documentation technique complète.
           </p>
         </div>
 
@@ -333,6 +606,19 @@ export default function SettingsAndProfile({
             <Database className="w-3.5 h-3.5 text-blue-600" />
             <span>Données & Sauvegardes</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('tech')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              activeSubTab === 'tech'
+                ? 'bg-white text-emerald-700 shadow-xs'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FileCode className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Documentation Technique</span>
+          </button>
         </div>
       </div>
 
@@ -359,12 +645,207 @@ export default function SettingsAndProfile({
          ========================================================================= */}
       {activeSubTab === 'profile' && (
         <div className="space-y-6">
+
+          {/* 1. GESTIONNAIRE MULTI-PROFILS */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-purple-100 text-purple-700 rounded-lg">
+                    <User className="w-4 h-4" />
+                  </span>
+                  <h2 className="text-base font-bold text-gray-900">
+                    Mes Profils Candidat ({profiles.length})
+                  </h2>
+                  <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full font-bold">
+                    Multi-Profils
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Gérez plusieurs profils candidats ciblés et basculez d&apos;un profil à l&apos;autre en un clic.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleCreateNewProfile(false)}
+                  disabled={isSavingProfile}
+                  className="px-3 py-1.5 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-300 text-gray-800 hover:text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Créer un nouveau profil vierge"
+                >
+                  <Plus className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Nouveau profil vierge</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleCreateNewProfile(true)}
+                  disabled={isSavingProfile || (!currentCvText.trim() && savedCvs.length === 0)}
+                  className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
+                  title="Créer un nouveau profil directement pré-rempli à partir du CV actuel"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>✨ Nouveau profil depuis CV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Liste des profils sous forme de cartes cliquables */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {profiles.map((p) => {
+                const isActive = p.id === profile.id || p.isDefault;
+                const pInitials = `${p.firstName?.[0] || ''}${p.lastName?.[0] || ''}`.toUpperCase() || 'CV';
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => handleSelectProfile(p.id)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                      isActive
+                        ? 'bg-purple-50/70 border-purple-400 ring-2 ring-purple-200 shadow-xs'
+                        : 'bg-white border-gray-200 hover:border-purple-200 hover:bg-gray-50/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+                            isActive
+                              ? 'bg-linear-to-tr from-purple-600 to-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {pInitials}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-gray-900 truncate">
+                              {p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil sans nom'}
+                            </span>
+                            {isActive && (
+                              <span className="bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                Actif
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 truncate">
+                            {p.currentTitle || (p.firstName ? `${p.firstName} ${p.lastName}` : 'Titre à définir')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {profiles.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Supprimer définitivement le profil « ${p.name || 'ce profil'} » ?`)) {
+                              handleDeleteProfile(p.id);
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Supprimer ce profil"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-500">
+                      <span>{p.skills?.length || 0} compétences</span>
+                      {p.associatedCvTitle && (
+                        <span className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded truncate max-w-[140px]" title={p.associatedCvTitle}>
+                          📄 {p.associatedCvTitle}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. BANNIÈRE PROMINENTE : REMPLIR LE PROFIL ACTUEL DEPUIS LE CV */}
+          <div className="p-5 rounded-2xl bg-linear-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-purple-600 text-white rounded-lg shadow-2xs">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                </span>
+                <h3 className="text-sm font-bold text-gray-900">
+                  Remplir le profil « {profile.name || profile.currentTitle || 'Actif'} » avec le CV actuel
+                </h3>
+              </div>
+              <p className="text-xs text-gray-600 max-w-2xl leading-relaxed">
+                Le CV actuellement ouvert dans l&apos;analyseur remplit automatiquement ce profil : votre nom, prénom, email, téléphone, localisation, titre professionnel, bio/résumé, compétences et rôles cibles sont extraits et synchronisés en 1 clic.
+              </p>
+              <div className="flex items-center gap-2 pt-1 text-[11px] text-purple-900 font-medium">
+                {currentCvText.trim() ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                    <span>
+                      CV actuel détecté : <strong>{activeCvTitle || (savedCvs[0]?.title) || 'Texte dans l\'analyseur'}</strong> ({currentCvText.trim().length} caractères)
+                    </span>
+                  </>
+                ) : savedCvs.length > 0 ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                    <span>
+                      CV en base prêt : <strong>{savedCvs[0].title}</strong> ({savedCvs[0].rawText.length} caractères)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>
+                    <span className="text-gray-500">
+                      Aucun CV texte chargé pour le moment.
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                type="button"
+                onClick={handlePopulateFromCurrentCv}
+                disabled={isExtractingFromCv || (!currentCvText.trim() && savedCvs.length === 0)}
+                className="px-4 py-2.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer hover:shadow-md"
+                title="Remplir et synchroniser automatiquement ce profil avec le CV actuel"
+              >
+                {isExtractingFromCv ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Extraction en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 text-amber-300" />
+                    <span>⚡ Remplir ce profil avec le CV actuel</span>
+                  </>
+                )}
+              </button>
+
+              {(!currentCvText.trim() && savedCvs.length === 0) && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('app')}
+                  className="px-3 py-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Importer un CV</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 3. FORMULAIRE D'ÉDITION DU PROFIL ACTIF */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
               <div>
                 <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                   <User className="w-4 h-4 text-purple-600" />
-                  <span>Informations Personnelles & Identité Professionnelle</span>
+                  <span>Édition du profil : « {profile.name || profile.currentTitle || 'Actif'} »</span>
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Ces informations servent de base au générateur de CV, à la lettre de motivation et à l&apos;alignement des mots-clés.
@@ -394,6 +875,40 @@ export default function SettingsAndProfile({
               </div>
             </div>
 
+            {/* Nom du profil et CV source */}
+            <div className="p-3.5 bg-purple-50/50 border border-purple-200/70 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block font-bold text-purple-950 mb-1">
+                  Nom / Libellé de ce Profil
+                </label>
+                <input
+                  type="text"
+                  value={profile.name || ''}
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                  placeholder="Ex: Trésorier Opérationnel, Consultant TMS, Direction Financière..."
+                  className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-gray-900 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Ce nom vous permet d&apos;identifier ce profil dans vos candidatures et dans le menu latéral.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  CV source associé
+                </label>
+                <input
+                  type="text"
+                  value={profile.associatedCvTitle || 'Non associé (saisie manuelle)'}
+                  readOnly
+                  className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-600 text-xs cursor-not-allowed"
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Indique quel CV a été utilisé pour alimenter automatiquement les champs de ce profil.
+                </p>
+              </div>
+            </div>
+
             {/* Grille des coordonnées */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div>
@@ -404,7 +919,7 @@ export default function SettingsAndProfile({
                   type="text"
                   value={profile.firstName}
                   onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                  placeholder="Alex"
+                  placeholder="Ex: François"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -417,7 +932,7 @@ export default function SettingsAndProfile({
                   type="text"
                   value={profile.lastName}
                   onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                  placeholder="Martin"
+                  placeholder="Ex: Delrieu"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -430,7 +945,7 @@ export default function SettingsAndProfile({
                   type="text"
                   value={profile.currentTitle}
                   onChange={(e) => setProfile({ ...profile, currentTitle: e.target.value })}
-                  placeholder="Product Owner Senior | Expert SaaS & Agile"
+                  placeholder="Ex: Trésorier Opérationnel | Cash Manager"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -444,7 +959,7 @@ export default function SettingsAndProfile({
                   type="email"
                   value={profile.email}
                   onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  placeholder="contact@alexmartin.fr"
+                  placeholder="Ex: delrieu.fra@gmail.com"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -458,7 +973,7 @@ export default function SettingsAndProfile({
                   type="tel"
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  placeholder="06 12 34 56 78"
+                  placeholder="Ex: 06 72 42 88 93"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -472,7 +987,7 @@ export default function SettingsAndProfile({
                   type="text"
                   value={profile.location}
                   onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                  placeholder="Paris, France (Télétravail partiel)"
+                  placeholder="Ex: Montrouge (92120), Île-de-France"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -493,7 +1008,7 @@ export default function SettingsAndProfile({
                     type="url"
                     value={profile.linkedinUrl}
                     onChange={(e) => setProfile({ ...profile, linkedinUrl: e.target.value })}
-                    placeholder="https://linkedin.com/in/alexmartin"
+                    placeholder="https://linkedin.com/in/mon-profil"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
@@ -507,7 +1022,7 @@ export default function SettingsAndProfile({
                     type="url"
                     value={profile.githubUrl}
                     onChange={(e) => setProfile({ ...profile, githubUrl: e.target.value })}
-                    placeholder="https://github.com/alexmartin"
+                    placeholder="https://github.com/mon-profil"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
@@ -521,7 +1036,7 @@ export default function SettingsAndProfile({
                     type="url"
                     value={profile.portfolioUrl}
                     onChange={(e) => setProfile({ ...profile, portfolioUrl: e.target.value })}
-                    placeholder="https://alexmartin.fr"
+                    placeholder="https://mon-portfolio.fr"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
@@ -715,7 +1230,7 @@ export default function SettingsAndProfile({
             )}
 
             {/* Champ de saisie de la clé */}
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-gray-700">
                   Clé API Google Gemini Personnalisée
@@ -735,7 +1250,7 @@ export default function SettingsAndProfile({
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(e) => handleApiKeyChange(e.target.value)}
                   placeholder="ex: AIzaSyD..."
                   className="w-full text-xs font-mono px-3.5 py-2.5 pr-10 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50/50 text-gray-900"
                 />
@@ -749,8 +1264,45 @@ export default function SettingsAndProfile({
                 </button>
               </div>
 
+              {/* Bouton de sauvegarde explicite demandé par l'utilisateur */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveApiKey}
+                    className="px-4 py-2 bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Sauvegarder la clé API</span>
+                  </button>
+
+                  {apiKey.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleClearApiKey}
+                      className="px-3 py-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Supprimer la clé de la mémoire"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Effacer</span>
+                    </button>
+                  )}
+                </div>
+
+                {isKeySavedInStorage ? (
+                  <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Clé mémorisée (chargée automatiquement au démarrage)</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-gray-500">
+                    Cliquez sur &quot;Sauvegarder la clé API&quot; pour la conserver au prochain démarrage.
+                  </span>
+                )}
+              </div>
+
               <p className="text-[11px] text-gray-500">
-                Votre clé reste strictement confinée dans votre session et n&apos;est jamais partagée publiquement.
+                Votre clé reste strictement confinée dans le stockage local de votre navigateur et n&apos;est jamais partagée publiquement.
               </p>
             </div>
 
@@ -763,7 +1315,7 @@ export default function SettingsAndProfile({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <button
                   type="button"
-                  onClick={() => setSelectedModel('gemini-3.8-flash')}
+                  onClick={() => handleSelectModel('gemini-3.8-flash')}
                   className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
                     selectedModel === 'gemini-3.8-flash'
                       ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 shadow-xs'
@@ -783,7 +1335,7 @@ export default function SettingsAndProfile({
 
                 <button
                   type="button"
-                  onClick={() => setSelectedModel('gemini-flash-latest')}
+                  onClick={() => handleSelectModel('gemini-flash-latest')}
                   className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
                     selectedModel === 'gemini-flash-latest'
                       ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 shadow-xs'
@@ -942,6 +1494,200 @@ export default function SettingsAndProfile({
                 </button>
               </div>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          SOUS-ONGLET 4 : DOCUMENTATION TECHNIQUE & CODE PYTHON
+         ========================================================================= */}
+      {activeSubTab === 'tech' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-emerald-600" />
+                  <span>Documentation Technique, Code Source & Déploiement</span>
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Consultez et téléchargez le script Python Streamlit autonome (app.py), ses dépendances et le guide d&apos;hébergement.
+                </p>
+              </div>
+
+              {/* Bascule Code Python / Guide */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setTechView('code')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    techView === 'code'
+                      ? 'bg-white text-emerald-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Code2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Code Python (app.py)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTechView('guide')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    techView === 'guide'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Guide Déploiement</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Vue 1 : Code Python (app.py & requirements.txt) */}
+            {techView === 'code' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                      <Terminal className="w-4 h-4 text-emerald-600" />
+                      <span>Script Python Streamlit complet (app.py)</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Application Python 3.9+ autonome incluant extraction PDF/DOCX, scraping web d&apos;annonces et audit d&apos;adéquation ATS via l&apos;API Gemini.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(PYTHON_APP_CODE, 'app_py')}
+                      className="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {copiedSnippet === 'app_py' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-700 font-bold">Copié !</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Copier app.py</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDownloadAppPy}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Télécharger app.py</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Prévisualisation code app.py */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-gray-500 font-mono">
+                    <span className="font-bold text-gray-700">📄 app.py</span>
+                    <span>Python 3.9+ • Streamlit & Google GenAI</span>
+                  </div>
+                  <pre className="bg-gray-950 text-gray-100 p-4 rounded-xl text-xs font-mono overflow-x-auto max-h-[460px] leading-relaxed border border-gray-800 shadow-inner">
+                    <code>{PYTHON_APP_CODE}</code>
+                  </pre>
+                </div>
+
+                {/* Prévisualisation requirements.txt */}
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between text-xs text-gray-500 font-mono">
+                    <span className="font-bold text-gray-700">📦 requirements.txt</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(REQUIREMENTS_TXT, 'requirements')}
+                      className="text-xs text-emerald-600 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                    >
+                      {copiedSnippet === 'requirements' ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="font-bold">Copié !</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copier requirements.txt</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <pre className="bg-gray-950 text-emerald-400 p-3 rounded-lg text-xs font-mono overflow-x-auto border border-gray-800">
+                    <code>{REQUIREMENTS_TXT}</code>
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {/* Vue 2 : Guide Déploiement & ATS */}
+            {techView === 'guide' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+                <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl space-y-3 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                      <Terminal className="w-4 h-4 text-emerald-600" />
+                      <span>1. Exécution locale (Terminal)</span>
+                    </div>
+                    <ol className="list-decimal list-inside text-xs text-gray-700 space-y-2 leading-relaxed">
+                      <li>
+                        Placez <code>app.py</code> et <code>requirements.txt</code> dans un même dossier de votre machine.
+                      </li>
+                      <li>
+                        Ouvrez un terminal et installez les dépendances :
+                        <pre className="bg-gray-950 text-gray-100 p-2 rounded mt-1 font-mono text-[11px]">
+                          pip install -r requirements.txt
+                        </pre>
+                      </li>
+                      <li>
+                        Lancez l&apos;application Streamlit :
+                        <pre className="bg-gray-950 text-emerald-400 p-2 rounded mt-1 font-mono text-[11px]">
+                          streamlit run app.py
+                        </pre>
+                      </li>
+                      <li>
+                        Votre navigateur ouvre l&apos;application à l&apos;adresse <code>http://localhost:8501</code>.
+                      </li>
+                    </ol>
+                  </div>
+
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-900">
+                    💡 <strong>Pré-requis :</strong> Python 3.9 ou version supérieure installé.
+                  </div>
+                </div>
+
+                <div className="p-5 bg-gray-50 border border-gray-200 rounded-xl space-y-3 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                      <ExternalLink className="w-4 h-4 text-blue-600" />
+                      <span>2. Déploiement gratuit Streamlit Cloud</span>
+                    </div>
+                    <ol className="list-decimal list-inside text-xs text-gray-700 space-y-2 leading-relaxed">
+                      <li>Déposez <code>app.py</code> et <code>requirements.txt</code> sur un dépôt GitHub.</li>
+                      <li>
+                        Rendez-vous sur <a href="https://share.streamlit.io" target="_blank" rel="noreferrer" className="text-blue-600 underline font-semibold">share.streamlit.io</a> et connectez-vous avec GitHub.
+                      </li>
+                      <li>Sélectionnez votre dépôt, la branche principale et le fichier <code>app.py</code>.</li>
+                      <li>Cliquez sur <strong>Deploy</strong> : votre application sera en ligne 24h/24 avec URL HTTPS.</li>
+                    </ol>
+                  </div>
+
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-900">
+                    🔒 <strong>Sécurité API :</strong> Dans les paramètres Streamlit Cloud, ajoutez votre clé dans <em>Secrets</em> (<code>GEMINI_API_KEY</code>) pour un fonctionnement 100% autonome.
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
         </div>

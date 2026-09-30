@@ -6,8 +6,6 @@ import {
   History,
   Database,
   Sliders,
-  FileCode,
-  BookOpen,
   PanelLeftClose,
   PanelLeftOpen,
   User,
@@ -15,18 +13,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   ChevronRight,
-  Clock,
   Settings,
   X,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
-
-export interface SamplePreset {
-  title: string;
-  cv: string;
-  job: string;
-  jobUrl?: string;
-}
 
 export interface NavItem {
   id: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
@@ -49,16 +39,16 @@ interface SidebarProps {
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
   userProfile: UserProfile | null;
+  userProfiles?: UserProfile[];
+  onSelectProfile?: (id: string) => void;
   apiKey: string;
   hasServerKey: boolean;
   selectedModel: string;
   applicationsCount: number;
   historyCount: number;
   dbStats: DatabaseStats | null;
-  history: AnalysisHistoryItem[];
-  onLoadHistoryItem: (item: AnalysisHistoryItem) => void;
-  samplePresets: SamplePreset[];
-  onLoadPreset: (preset: SamplePreset) => void;
+  history?: AnalysisHistoryItem[];
+  onLoadHistoryItem?: (item: AnalysisHistoryItem) => void;
   isMobileOpen: boolean;
   setIsMobileOpen: (open: boolean) => void;
 }
@@ -69,16 +59,14 @@ export default function Sidebar({
   isCollapsed,
   setIsCollapsed,
   userProfile,
+  userProfiles = [],
+  onSelectProfile,
   apiKey,
   hasServerKey,
   selectedModel,
   applicationsCount,
   historyCount,
   dbStats,
-  history,
-  onLoadHistoryItem,
-  samplePresets,
-  onLoadPreset,
   isMobileOpen,
   setIsMobileOpen,
 }: SidebarProps) {
@@ -90,17 +78,17 @@ export default function Sidebar({
     }
   };
 
-  const candidateInitials = userProfile
-    ? `${userProfile.firstName?.[0] || 'C'}${userProfile.lastName?.[0] || 'V'}`.toUpperCase()
-    : 'AM';
+  const candidateInitials = userProfile && (userProfile.firstName || userProfile.lastName)
+    ? `${userProfile.firstName?.[0] || ''}${userProfile.lastName?.[0] || ''}`.toUpperCase() || 'CV'
+    : '👤';
 
-  const candidateFullName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`.trim() || 'Alex Martin'
-    : 'Alex Martin';
+  const candidateFullName = userProfile && (userProfile.firstName || userProfile.lastName)
+    ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()
+    : 'Mon Espace Candidat';
 
-  const candidateTitle = userProfile?.currentTitle || 'Product Owner Senior';
+  const candidateTitle = userProfile?.currentTitle || 'Espace Personnel & Recrutement';
 
-  // Navigation items grouped functionally
+  // Navigation fluide et épurée (sans encombrement)
   const navSections: NavSection[] = [
     {
       title: 'Analyse & Génération',
@@ -124,7 +112,7 @@ export default function Sidebar({
       ],
     },
     {
-      title: 'Suivi & Historique',
+      title: 'Suivi & Candidatures',
       items: [
         {
           id: 'tracker' as const,
@@ -153,37 +141,16 @@ export default function Sidebar({
       ],
     },
     {
-      title: 'Espace Personnel & Système',
+      title: 'Espace Personnel & Technique',
       items: [
         {
           id: 'settings' as const,
-          label: 'Paramétrage & Profil',
+          label: 'Espace Personnel & Technique',
           icon: Sliders,
           color: 'text-indigo-600',
           activeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
           badge: apiKey.trim() || hasServerKey ? 'Prêt' : 'À configurer',
           badgeColor: apiKey.trim() || hasServerKey ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800',
-        },
-      ],
-    },
-    {
-      title: 'Documentation & Technique',
-      items: [
-        {
-          id: 'code' as const,
-          label: 'Code Python (app.py)',
-          icon: FileCode,
-          color: 'text-emerald-600',
-          activeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-          badge: null,
-        },
-        {
-          id: 'guide' as const,
-          label: 'Guide & Déploiement',
-          icon: BookOpen,
-          color: 'text-blue-600',
-          activeBg: 'bg-blue-50 text-blue-700 border-blue-200',
-          badge: null,
         },
       ],
     },
@@ -237,21 +204,52 @@ export default function Sidebar({
         <div className="p-3 border-b border-gray-100 bg-gray-50/70 shrink-0">
           <div
             onClick={() => handleNavClick('settings')}
-            className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-gray-200/80 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group"
+            className="p-2 bg-white rounded-xl border border-gray-200/80 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group space-y-1.5"
             title="Ouvrir l'onglet Paramétrage & Profil"
           >
-            <div className="w-8 h-8 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-              {candidateInitials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-gray-900 truncate flex items-center justify-between">
-                <span>{candidateFullName}</span>
-                <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-purple-600 transition-colors shrink-0" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                {candidateInitials}
               </div>
-              <div className="text-[10px] text-gray-500 truncate font-medium">
-                {candidateTitle}
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-gray-900 truncate flex items-center justify-between">
+                  <span>{candidateFullName}</span>
+                  <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-purple-600 transition-colors shrink-0" />
+                </div>
+                <div className="text-[10px] text-gray-500 truncate font-medium">
+                  {candidateTitle}
+                </div>
               </div>
             </div>
+
+            {/* Sélecteur de profil actif si plusieurs profils */}
+            {userProfiles.length > 1 ? (
+              <div
+                className="pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider shrink-0">
+                  Profil :
+                </span>
+                <select
+                  value={userProfile?.id || ''}
+                  onChange={(e) => onSelectProfile?.(e.target.value)}
+                  className="bg-purple-50/80 hover:bg-purple-100 border border-purple-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-purple-900 truncate max-w-[130px] cursor-pointer focus:outline-none"
+                  title="Changer de profil actif"
+                >
+                  {userProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.isDefault ? '⭐ ' : ''}{p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="pt-1 border-t border-gray-100/80 flex items-center justify-between text-[10px] text-gray-400">
+                <span className="truncate">{userProfile?.name || 'Profil Principal'}</span>
+                <span className="text-purple-600 font-semibold">Gérer</span>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -260,7 +258,7 @@ export default function Sidebar({
             type="button"
             onClick={() => handleNavClick('settings')}
             className="w-9 h-9 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs hover:scale-105 transition-transform cursor-pointer"
-            title={`Profil de ${candidateFullName} - Cliquer pour configurer`}
+            title={`Profil de ${candidateFullName} (${userProfile?.name || 'Actif'}) - Cliquer pour configurer`}
           >
             {candidateInitials}
           </button>
@@ -316,91 +314,9 @@ export default function Sidebar({
           </div>
         ))}
 
-        {/* 4. Raccourcis Pratiques (quand non replié) */}
-        {!isCollapsed && (
-          <div className="pt-2 border-t border-gray-100 space-y-3">
-            {/* Exemples rapides de tests */}
-            <div className="px-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#FF4B4B]" />
-                <span>Exemples pré-remplis</span>
-              </div>
-              <div className="space-y-1">
-                {samplePresets.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      onLoadPreset(preset);
-                      handleNavClick('app');
-                    }}
-                    className="w-full text-left text-[11px] px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-gray-900 border border-gray-200/80 transition-colors flex items-center justify-between group cursor-pointer"
-                  >
-                    <span className="truncate">{preset.title}</span>
-                    <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-gray-600 shrink-0" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Raccourci vers les 2 derniers audits */}
-            {history.length > 0 && (
-              <div className="px-2">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <History className="w-3 h-3 text-purple-600" />
-                    <span>Audits récents</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleNavClick('history')}
-                    className="text-[10px] text-[#FF4B4B] hover:underline font-semibold"
-                  >
-                    Voir ({history.length})
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  {history.slice(0, 2).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        onLoadHistoryItem(item);
-                        handleNavClick('app');
-                      }}
-                      className="p-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200/80 rounded-lg text-left cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-1 text-[11px]">
-                        <span className="font-semibold text-gray-800 truncate">
-                          {item.title}
-                        </span>
-                        {item.score !== null && (
-                          <span
-                            className={`text-[9px] font-bold px-1 rounded text-white shrink-0 ${
-                              item.score >= 75
-                                ? 'bg-emerald-600'
-                                : item.score >= 50
-                                ? 'bg-amber-500'
-                                : 'bg-red-500'
-                            }`}
-                          >
-                            {item.score}%
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[9px] text-gray-400 mt-0.5 flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        <span>{item.timestamp}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* 5. Pied de page / Statut API Google Gemini */}
+      {/* 4. Pied de page / Statut API Google Gemini */}
       <div className="p-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
         {!isCollapsed ? (
           <div className="space-y-2">

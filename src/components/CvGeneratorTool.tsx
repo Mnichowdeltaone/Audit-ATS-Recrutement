@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { localDbClient } from '../services/localDbClient';
-import { SavedCv } from '../types';
+import { SavedCv, UserProfile } from '../types';
 
 interface CvGeneratorToolProps {
   currentCvText?: string;
@@ -31,6 +31,7 @@ interface CvGeneratorToolProps {
   onNavigateToAnalyzer: () => void;
   apiKey?: string;
   hasServerKey?: boolean;
+  userProfile?: UserProfile | null;
 }
 
 export default function CvGeneratorTool({
@@ -40,28 +41,55 @@ export default function CvGeneratorTool({
   onNavigateToAnalyzer,
   apiKey,
   hasServerKey,
+  userProfile,
 }: CvGeneratorToolProps) {
-  // Formulaire de saisie
-  const [candidateName, setCandidateName] = useState('Alex Martin');
-  const [contactInfo, setContactInfo] = useState('Paris, France | 06 12 34 56 78 | contact@alexmartin.fr | linkedin.com/in/alexmartin');
-  const [targetRole, setTargetRole] = useState('Product Owner Senior');
+  // Formulaire de saisie initialisé avec le profil utilisateur ou vide
+  const [candidateName, setCandidateName] = useState(() => {
+    if (userProfile && (userProfile.firstName || userProfile.lastName)) {
+      return `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+    }
+    return '';
+  });
+
+  const [contactInfo, setContactInfo] = useState(() => {
+    if (userProfile) {
+      const parts = [userProfile.location, userProfile.phone, userProfile.email, userProfile.linkedinUrl].filter(Boolean);
+      return parts.join(' | ');
+    }
+    return '';
+  });
+
+  const [targetRole, setTargetRole] = useState(() => {
+    return userProfile?.targetRoles?.[0] || userProfile?.currentTitle || '';
+  });
+
   const [targetCompany, setTargetCompany] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<'ats_standard' | 'impact_star' | 'tech_modern' | 'executive'>('impact_star');
   
-  const [notesOrExperience, setNotesOrExperience] = useState(
-    currentCvText ||
-      `EXPÉRIENCES :
-- Lead Product Owner chez TechVentures (2022 - Présent) : refonte onboarding client, squad de 8 devs, churn réduit de 22%, NPS +18.
-- Product Owner chez CloudCommerce (2019 - 2022) : tunnel de commande, A/B testing (+15% conversion), rituels Scrum.
-
-COMPÉTENCES :
-Agile Scrum (PSPO II), Amplitude, Google Analytics 4, Jira, Confluence, Figma, SQL, API REST.
-
-FORMATION :
-Master 2 Management des SI & Projets Digitaux (2019)`
-  );
-
+  const [notesOrExperience, setNotesOrExperience] = useState(currentCvText || '');
   const [jobOfferText, setJobOfferText] = useState(currentJobText || '');
+
+  // Synchronisation dynamique quand le profil ou le CV actif change
+  useEffect(() => {
+    if (userProfile && !candidateName) {
+      const name = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+      if (name) setCandidateName(name);
+    }
+    if (userProfile && !contactInfo) {
+      const parts = [userProfile.location, userProfile.phone, userProfile.email, userProfile.linkedinUrl].filter(Boolean);
+      if (parts.length > 0) setContactInfo(parts.join(' | '));
+    }
+    if (userProfile && !targetRole) {
+      const role = userProfile.targetRoles?.[0] || userProfile.currentTitle || '';
+      if (role) setTargetRole(role);
+    }
+  }, [userProfile]);
+
+  useEffect(() => {
+    if (currentCvText && !notesOrExperience) {
+      setNotesOrExperience(currentCvText);
+    }
+  }, [currentCvText]);
 
   // États de génération
   const [isGenerating, setIsGenerating] = useState(false);
@@ -319,7 +347,7 @@ Master 2 Management des SI & Projets Digitaux (2019)`
                   type="text"
                   value={candidateName}
                   onChange={(e) => setCandidateName(e.target.value)}
-                  placeholder="Ex: Alex Martin"
+                  placeholder="Ex: Votre Nom & Prénom"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>

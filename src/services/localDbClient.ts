@@ -42,12 +42,7 @@ async function setIdbCache(key: string, value: unknown): Promise<void> {
       tx.onerror = reject;
     });
   } catch {
-    // Fallback localStorage si indisponible
-    try {
-      localStorage.setItem(`idb_cache_${key}`, JSON.stringify(value));
-    } catch {
-      // Ignorer dépassement quota
-    }
+    // Fallback localStorage
   }
 }
 
@@ -67,314 +62,720 @@ async function getIdbCache<T>(key: string): Promise<T | null> {
       req.onerror = () => resolve(null);
     });
   } catch {
-    try {
-      const raw = localStorage.getItem(`idb_cache_${key}`);
-      return raw ? (JSON.parse(raw) as T) : null;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 
-export const localDbClient = {
-  // Récupérer l'état de la base
-  async fetchStats(): Promise<DatabaseStats> {
-    try {
-      const res = await fetch('/api/db/status');
-      if (res.ok) {
-        const json = await res.json();
-        return json.stats;
-      }
-    } catch (err) {
-      console.warn('Erreur fetchStats serveur, calcul local :', err);
+// Helpers directs et synchrones pour le stockage local du navigateur
+function getStorage<T>(key: string, defaultValue: T): T {
+  try {
+    const item = localStorage.getItem(key);
+    if (item !== null) {
+      return JSON.parse(item) as T;
     }
-    // Fallback local
+  } catch (err) {
+    console.warn(`Erreur lecture ${key} :`, err);
+  }
+  return defaultValue;
+}
+
+function setStorage<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    console.warn(`Erreur écriture ${key} :`, err);
+  }
+}
+
+// Filtre pour éliminer toute donnée de démonstration (Thomas Dupont, Clara Martin, Alex Martin, etc.)
+function filterOutDemoCv(cv: SavedCv): boolean {
+  if (!cv || !cv.id) return false;
+  if (cv.id === 'cv-default-1' || cv.id === 'cv-tech-2' || cv.id.startsWith('demo-')) return false;
+  const raw = (cv.rawText || '').toUpperCase();
+  if (raw.includes('THOMAS DUPONT') || raw.includes('CLARA MARTIN') || raw.includes('CIGDEM ROUSSEAU') || raw.includes('MAXIME LEROY')) {
+    return false;
+  }
+  return true;
+}
+
+function filterOutDemoApp(app: ApplicationItem): boolean {
+  if (!app || !app.id) return false;
+  if (app.id.startsWith('app-sample-') || app.id === 'app-1' || app.id === 'app-2' || app.id === 'app-3') {
+    return false;
+  }
+  const company = (app.company || '').toLowerCase();
+  if (company.includes('technova') || company.includes('retailgroup') || company.includes('finmetrics') || company.includes('valoria capital')) {
+    return false;
+  }
+  return true;
+}
+
+function filterOutDemoAnalysis(item: AnalysisHistoryItem): boolean {
+  if (!item || !item.id) return false;
+  if (item.id.startsWith('sample-')) return false;
+  const cv = (item.cvText || '').toUpperCase();
+  if (cv.includes('THOMAS DUPONT') || cv.includes('CLARA MARTIN') || cv.includes('MAXIME LEROY')) {
+    return false;
+  }
+  return true;
+}
+
+export const localDbClient = {
+  // CLÉ API & MODÈLE IA (PERSISTANTS DANS LE NAVIGATEUR)
+  getSavedApiKey(): string {
+    try {
+      return (
+        localStorage.getItem('cv_move_gemini_api_key') ||
+        localStorage.getItem('gemini_api_key') ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  },
+
+  saveApiKey(key: string): void {
+    try {
+      const clean = (key || '').trim();
+      if (clean) {
+        localStorage.setItem('cv_move_gemini_api_key', clean);
+        localStorage.setItem('gemini_api_key', clean);
+      } else {
+        localStorage.removeItem('cv_move_gemini_api_key');
+        localStorage.removeItem('gemini_api_key');
+      }
+    } catch (e) {
+      console.warn('Erreur sauvegarde clé API :', e);
+    }
+  },
+
+  getSavedModel(): string {
+    try {
+      return localStorage.getItem('cv_move_selected_model') || 'gemini-3.8-flash';
+    } catch {
+      return 'gemini-3.8-flash';
+    }
+  },
+
+  saveModel(model: string): void {
+    try {
+      if (model) {
+        localStorage.setItem('cv_move_selected_model', model);
+      }
+    } catch (e) {
+      console.warn('Erreur sauvegarde modèle :', e);
+    }
+  },
+
+  // STATISTIQUES EN DIRECT
+  async fetchStats(): Promise<DatabaseStats> {
+    const cvs = this.getLocalCvs();
+    const applications = this.getLocalApplications();
+    const analyses = this.getLocalAnalyses();
+    const suggestions = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
+
     return {
-      cvsCount: 0,
-      applicationsCount: 0,
-      analysesCount: 0,
-      suggestionsCount: 0,
-      dbSizeBytes: 0,
+      cvsCount: cvs.length,
+      applicationsCount: applications.length,
+      analysesCount: analyses.length,
+      suggestionsCount: suggestions.length,
+      dbSizeBytes: JSON.stringify({ cvs, applications, analyses, suggestions }).length,
       lastUpdated: new Date().toISOString(),
     };
   },
 
-  // Récupérer toute la BDD
+  // BASE DE DONNÉES COMPLÈTE
   async fetchAll(): Promise<DatabaseSchema | null> {
-    try {
-      const res = await fetch('/api/db/all');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data) {
-          await setIdbCache('full_database', json.data);
-          return json.data as DatabaseSchema;
-        }
-      }
-    } catch (err) {
-      console.warn('Mode hors-ligne ou erreur serveur, utilisation du cache local :', err);
-    }
-    return await getIdbCache<DatabaseSchema>('full_database');
+    const profile = await this.getProfile();
+    const cvs = await this.getCvs();
+    const applications = await this.getApplications();
+    const analyses = await this.getAnalyses();
+    const suggestions = await this.getSuggestions();
+    const settings = await this.getSettings();
+
+    return {
+      version: 1,
+      lastUpdated: new Date().toISOString(),
+      profile: profile || {
+        id: 'user_profile',
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        location: '',
+        currentTitle: '',
+        bio: '',
+        linkedinUrl: '',
+        githubUrl: '',
+        portfolioUrl: '',
+        targetRoles: [],
+        skills: [],
+        updatedAt: new Date().toISOString(),
+      },
+      cvs,
+      applications,
+      analyses,
+      suggestions,
+      settings,
+    };
   },
 
-  // PROFIL
+  // ==========================================
+  // MULTI-PROFILS UTILISATEUR
+  // ==========================================
+  getLocalProfile(): UserProfile | null {
+    const p = getStorage<UserProfile | null>('cv_move_user_profile', null);
+    if (p && p.firstName === 'Alex' && p.lastName === 'Martin' && p.email?.includes('alex.martin')) {
+      return null;
+    }
+    return p;
+  },
+
+  getLocalProfiles(): UserProfile[] {
+    const list = getStorage<UserProfile[]>('cv_move_user_profiles', []);
+    return list.filter((p) => !(p.firstName === 'Alex' && p.lastName === 'Martin'));
+  },
+
   async getProfile(): Promise<UserProfile | null> {
+    const local = this.getLocalProfile();
+    if (local && (local.firstName || local.lastName)) {
+      return local;
+    }
+
     try {
       const res = await fetch('/api/db/profile');
       if (res.ok) {
-        const data = await res.json();
-        await setIdbCache('user_profile', data);
-        return data as UserProfile;
+        const serverProfile = (await res.json()) as UserProfile;
+        if (serverProfile && (serverProfile.firstName || serverProfile.lastName) && serverProfile.firstName !== 'Alex') {
+          setStorage('cv_move_user_profile', serverProfile);
+          await setIdbCache('user_profile', serverProfile);
+          return serverProfile;
+        }
       }
     } catch (err) {
       console.warn('Erreur getProfile serveur :', err);
     }
-    return await getIdbCache<UserProfile>('user_profile');
+
+    return local;
+  },
+
+  async getProfiles(): Promise<UserProfile[]> {
+    const localList = this.getLocalProfiles();
+
+    try {
+      const res = await fetch('/api/db/profiles');
+      if (res.ok) {
+        const serverProfiles = (await res.json()) as UserProfile[];
+        const cleanServer = serverProfiles.filter((p) => !(p.firstName === 'Alex' && p.lastName === 'Martin'));
+
+        const map = new Map<string, UserProfile>();
+        for (const p of cleanServer) {
+          map.set(p.id, p);
+        }
+        for (const p of localList) {
+          if (!map.has(p.id)) {
+            map.set(p.id, p);
+            fetch('/api/db/profiles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(p),
+            }).catch(() => {});
+          }
+        }
+
+        const merged = Array.from(map.values());
+        setStorage('cv_move_user_profiles', merged);
+        await setIdbCache('user_profiles', merged);
+
+        // Assurer qu'il y a un profil actif synchronisé
+        const defaultProfile = merged.find((p) => p.isDefault) || merged[0];
+        if (defaultProfile) {
+          setStorage('cv_move_user_profile', defaultProfile);
+          await setIdbCache('user_profile', defaultProfile);
+        }
+
+        return merged;
+      }
+    } catch (err) {
+      console.warn('Erreur getProfiles serveur :', err);
+    }
+
+    if (localList.length === 0) {
+      const single = this.getLocalProfile();
+      if (single) return [single];
+    }
+
+    return localList;
   },
 
   async saveProfile(profile: Partial<UserProfile>): Promise<UserProfile> {
+    const current = this.getLocalProfile() || ({ id: `profile-${Date.now()}` } as UserProfile);
+    const updated: UserProfile = {
+      ...current,
+      ...profile,
+      id: profile.id || current.id || `profile-${Date.now()}`,
+      name: profile.name || profile.currentTitle || `${profile.firstName || current.firstName || ''} ${profile.lastName || current.lastName || ''}`.trim() || 'Mon Profil',
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 1. Sauvegarde locale synchrone immédiate (profil actif)
+    setStorage('cv_move_user_profile', updated);
+    await setIdbCache('user_profile', updated);
+
+    // 2. Mise à jour de la liste multi-profils
+    const allProfiles = this.getLocalProfiles();
+    const existingIdx = allProfiles.findIndex((p) => p.id === updated.id);
+
+    let updatedList: UserProfile[];
+    if (existingIdx >= 0) {
+      updatedList = allProfiles.map((p) => (p.id === updated.id ? { ...p, ...updated } : p));
+    } else {
+      updatedList = [updated, ...allProfiles];
+    }
+
+    if (updated.isDefault) {
+      updatedList = updatedList.map((p) => ({
+        ...p,
+        isDefault: p.id === updated.id,
+      }));
+    }
+
+    setStorage('cv_move_user_profiles', updatedList);
+    await setIdbCache('user_profiles', updatedList);
+
+    // 3. Synchronisation serveur
     try {
-      const res = await fetch('/api/db/profile', {
+      await fetch('/api/db/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profile),
+        body: JSON.stringify(updated),
       });
-      if (res.ok) {
-        const json = await res.json();
-        await setIdbCache('user_profile', json.profile);
-        return json.profile;
-      }
     } catch (err) {
       console.warn('Erreur saveProfile serveur :', err);
     }
-    // Mise en cache locale
-    const cached = (await getIdbCache<UserProfile>('user_profile')) || ({} as UserProfile);
-    const updated = { ...cached, ...profile, updatedAt: new Date().toISOString() } as UserProfile;
-    await setIdbCache('user_profile', updated);
+
     return updated;
   },
 
-  // CVS
+  async setDefaultProfile(id: string): Promise<UserProfile | null> {
+    const allProfiles = this.getLocalProfiles();
+    let target: UserProfile | null = null;
+
+    const updatedList = allProfiles.map((p) => {
+      const isDef = p.id === id;
+      if (isDef) target = { ...p, isDefault: true };
+      return { ...p, isDefault: isDef };
+    });
+
+    if (target) {
+      setStorage('cv_move_user_profile', target);
+      setStorage('cv_move_user_profiles', updatedList);
+      await setIdbCache('user_profile', target);
+      await setIdbCache('user_profiles', updatedList);
+
+      try {
+        await fetch(`/api/db/profiles/${id}/set-default`, { method: 'POST' });
+      } catch (err) {
+        console.warn('Erreur setDefaultProfile serveur :', err);
+      }
+    }
+
+    return target;
+  },
+
+  async deleteProfile(id: string): Promise<boolean> {
+    const allProfiles = this.getLocalProfiles();
+    if (allProfiles.length <= 1) {
+      return false; // Impossible de supprimer le dernier profil
+    }
+
+    const filtered = allProfiles.filter((p) => p.id !== id);
+    let newDefault = filtered.find((p) => p.isDefault) || filtered[0];
+    if (newDefault) {
+      newDefault = { ...newDefault, isDefault: true };
+      setStorage('cv_move_user_profile', newDefault);
+      await setIdbCache('user_profile', newDefault);
+    }
+
+    setStorage('cv_move_user_profiles', filtered);
+    await setIdbCache('user_profiles', filtered);
+
+    try {
+      await fetch(`/api/db/profiles/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Erreur deleteProfile serveur :', err);
+    }
+
+    return true;
+  },
+
+  // ==========================================
+  // CVS ENREGISTRÉS
+  // ==========================================
+  getLocalCvs(): SavedCv[] {
+    const raw = getStorage<SavedCv[]>('cv_move_saved_cvs', []);
+    return raw.filter(filterOutDemoCv);
+  },
+
   async getCvs(): Promise<SavedCv[]> {
+    const localCvs = this.getLocalCvs();
+
     try {
       const res = await fetch('/api/db/cvs');
       if (res.ok) {
-        const data = await res.json();
-        await setIdbCache('saved_cvs', data);
-        return data as SavedCv[];
+        const serverCvs = (await res.json()) as SavedCv[];
+        const cleanServer = serverCvs.filter(filterOutDemoCv);
+
+        const map = new Map<string, SavedCv>();
+        for (const cv of cleanServer) {
+          map.set(cv.id, cv);
+        }
+        for (const cv of localCvs) {
+          if (!map.has(cv.id)) {
+            map.set(cv.id, cv);
+            fetch('/api/db/cvs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(cv),
+            }).catch(() => {});
+          }
+        }
+
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
+        );
+
+        setStorage('cv_move_saved_cvs', merged);
+        localStorage.setItem('cv_move_cvs_initialized', 'true');
+        await setIdbCache('saved_cvs', merged);
+        return merged;
       }
     } catch (err) {
       console.warn('Erreur getCvs serveur :', err);
     }
-    const cached = await getIdbCache<SavedCv[]>('saved_cvs');
-    return cached || [];
+
+    return localCvs;
   },
 
   async saveCv(cv: SavedCv): Promise<SavedCv> {
+    const current = this.getLocalCvs();
+    const filtered = current.filter((c) => c.id !== cv.id);
+    const updated = [cv, ...filtered];
+
+    setStorage('cv_move_saved_cvs', updated);
+    localStorage.setItem('cv_move_cvs_initialized', 'true');
+    await setIdbCache('saved_cvs', updated);
+
     try {
-      const res = await fetch('/api/db/cvs', {
+      await fetch('/api/db/cvs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cv),
       });
-      if (res.ok) {
-        const json = await res.json();
-        const list = await this.getCvs();
-        await setIdbCache('saved_cvs', list);
-        return json.cv;
-      }
     } catch (err) {
       console.warn('Erreur saveCv serveur :', err);
     }
+
     return cv;
   },
 
   async deleteCv(id: string): Promise<boolean> {
+    const current = this.getLocalCvs();
+    const updated = current.filter((c) => c.id !== id);
+
+    setStorage('cv_move_saved_cvs', updated);
+    localStorage.setItem('cv_move_cvs_initialized', 'true');
+    await setIdbCache('saved_cvs', updated);
+
     try {
-      const res = await fetch(`/api/db/cvs/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const json = await res.json();
-        return json.success;
-      }
+      await fetch(`/api/db/cvs/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteCv serveur :', err);
     }
-    return false;
+
+    return true;
   },
 
   async setDefaultCv(id: string): Promise<SavedCv | null> {
+    const current = this.getLocalCvs();
+    let target: SavedCv | null = null;
+    const updated = current.map((c) => {
+      const isDef = c.id === id;
+      if (isDef) target = { ...c, isDefault: true };
+      return { ...c, isDefault: isDef };
+    });
+
+    setStorage('cv_move_saved_cvs', updated);
+    await setIdbCache('saved_cvs', updated);
+
     try {
-      const res = await fetch(`/api/db/cvs/${id}/set-default`, { method: 'POST' });
-      if (res.ok) {
-        const json = await res.json();
-        return json.cv;
-      }
+      await fetch(`/api/db/cvs/${id}/set-default`, { method: 'POST' });
     } catch (err) {
       console.warn('Erreur setDefaultCv serveur :', err);
     }
-    return null;
+
+    return target;
   },
 
+  // ==========================================
   // CANDIDATURES
+  // ==========================================
+  getLocalApplications(): ApplicationItem[] {
+    const raw = getStorage<ApplicationItem[]>('cv_move_applications', []);
+    return raw.filter(filterOutDemoApp);
+  },
+
   async getApplications(): Promise<ApplicationItem[]> {
+    const localApps = this.getLocalApplications();
+
     try {
       const res = await fetch('/api/db/applications');
       if (res.ok) {
-        const data = await res.json();
-        await setIdbCache('applications', data);
-        return data as ApplicationItem[];
+        const serverApps = (await res.json()) as ApplicationItem[];
+        const cleanServer = serverApps.filter(filterOutDemoApp);
+
+        // Fusionner sans doublons
+        const map = new Map<string, ApplicationItem>();
+        for (const app of cleanServer) {
+          map.set(app.id, app);
+        }
+        for (const app of localApps) {
+          if (!map.has(app.id)) {
+            map.set(app.id, app);
+            // Sauvegarder sur le serveur les candidatures locales manquantes
+            fetch('/api/db/applications', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(app),
+            }).catch(() => {});
+          }
+        }
+
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime()
+        );
+
+        setStorage('cv_move_applications', merged);
+        localStorage.setItem('cv_move_apps_initialized', 'true');
+        await setIdbCache('applications', merged);
+        return merged;
       }
     } catch (err) {
       console.warn('Erreur getApplications serveur :', err);
     }
-    const cached = await getIdbCache<ApplicationItem[]>('applications');
-    return cached || [];
+
+    // Par défaut, retourner les candidatures réelles locales
+    setStorage('cv_move_applications', localApps);
+    localStorage.setItem('cv_move_apps_initialized', 'true');
+    return localApps;
   },
 
   async saveApplication(app: ApplicationItem): Promise<ApplicationItem> {
+    const current = this.getLocalApplications();
+    const filtered = current.filter((a) => a.id !== app.id);
+    const updated = [app, ...filtered];
+
+    setStorage('cv_move_applications', updated);
+    localStorage.setItem('cv_move_apps_initialized', 'true');
+    await setIdbCache('applications', updated);
+
     try {
-      const res = await fetch('/api/db/applications', {
+      await fetch('/api/db/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(app),
       });
-      if (res.ok) {
-        const json = await res.json();
-        return json.application;
-      }
     } catch (err) {
       console.warn('Erreur saveApplication serveur :', err);
     }
+
     return app;
   },
 
   async deleteApplication(id: string): Promise<boolean> {
+    const current = this.getLocalApplications();
+    const updated = current.filter((a) => a.id !== id);
+
+    setStorage('cv_move_applications', updated);
+    localStorage.setItem('cv_move_apps_initialized', 'true');
+    await setIdbCache('applications', updated);
+
     try {
-      const res = await fetch(`/api/db/applications/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const json = await res.json();
-        return json.success;
-      }
+      await fetch(`/api/db/applications/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteApplication serveur :', err);
     }
-    return false;
+
+    return true;
   },
 
-  // ANALYSES
+  // ==========================================
+  // HISTORIQUE DES ANALYSES
+  // ==========================================
+  getLocalAnalyses(): AnalysisHistoryItem[] {
+    const raw = getStorage<AnalysisHistoryItem[]>('cv_move_history', []);
+    return raw.filter(filterOutDemoAnalysis);
+  },
+
   async getAnalyses(): Promise<AnalysisHistoryItem[]> {
+    const local = this.getLocalAnalyses();
+
     try {
       const res = await fetch('/api/db/analyses');
       if (res.ok) {
-        const data = await res.json();
-        await setIdbCache('analyses', data);
-        return data as AnalysisHistoryItem[];
+        const serverList = (await res.json()) as AnalysisHistoryItem[];
+        const cleanServer = serverList.filter(filterOutDemoAnalysis);
+
+        const map = new Map<string, AnalysisHistoryItem>();
+        for (const item of cleanServer) {
+          map.set(item.id, item);
+        }
+        for (const item of local) {
+          if (!map.has(item.id)) {
+            map.set(item.id, item);
+            fetch('/api/db/analyses', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(item),
+            }).catch(() => {});
+          }
+        }
+
+        const merged = Array.from(map.values());
+        setStorage('cv_move_history', merged);
+        localStorage.setItem('cv_move_history_initialized', 'true');
+        return merged;
       }
     } catch (err) {
       console.warn('Erreur getAnalyses serveur :', err);
     }
-    const cached = await getIdbCache<AnalysisHistoryItem[]>('analyses');
-    return cached || [];
+
+    setStorage('cv_move_history', local);
+    localStorage.setItem('cv_move_history_initialized', 'true');
+    return local;
   },
 
-  async saveAnalysis(analysis: AnalysisHistoryItem): Promise<AnalysisHistoryItem> {
+  async saveAnalysis(item: AnalysisHistoryItem): Promise<AnalysisHistoryItem> {
+    const current = this.getLocalAnalyses();
+    const filtered = current.filter((a) => a.id !== item.id);
+    const updated = [item, ...filtered];
+
+    setStorage('cv_move_history', updated);
+    localStorage.setItem('cv_move_history_initialized', 'true');
+
     try {
-      const res = await fetch('/api/db/analyses', {
+      await fetch('/api/db/analyses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(analysis),
+        body: JSON.stringify(item),
       });
-      if (res.ok) {
-        const json = await res.json();
-        return json.analysis;
-      }
     } catch (err) {
       console.warn('Erreur saveAnalysis serveur :', err);
     }
-    return analysis;
+
+    return item;
   },
 
   async deleteAnalysis(id: string): Promise<boolean> {
+    const current = this.getLocalAnalyses();
+    const updated = current.filter((a) => a.id !== id);
+
+    setStorage('cv_move_history', updated);
+    localStorage.setItem('cv_move_history_initialized', 'true');
+
     try {
-      const res = await fetch(`/api/db/analyses/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const json = await res.json();
-        return json.success;
-      }
+      await fetch(`/api/db/analyses/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteAnalysis serveur :', err);
     }
-    return false;
+
+    return true;
   },
 
   async clearAnalyses(): Promise<boolean> {
+    setStorage('cv_move_history', []);
+    localStorage.setItem('cv_move_history_initialized', 'true');
+
     try {
-      const res = await fetch('/api/db/analyses', { method: 'DELETE' });
-      if (res.ok) {
-        const json = await res.json();
-        return json.success;
-      }
+      await fetch('/api/db/analyses', { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur clearAnalyses serveur :', err);
     }
-    return false;
+
+    return true;
   },
 
+  // ==========================================
   // SUGGESTIONS
+  // ==========================================
   async getSuggestions(): Promise<SavedSuggestion[]> {
+    const local = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
     try {
       const res = await fetch('/api/db/suggestions');
       if (res.ok) {
-        const data = await res.json();
-        await setIdbCache('suggestions', data);
-        return data as SavedSuggestion[];
+        const serverList = (await res.json()) as SavedSuggestion[];
+        if (serverList.length > 0 && local.length === 0) {
+          setStorage('cv_move_suggestions', serverList);
+          return serverList;
+        }
       }
-    } catch (err) {
-      console.warn('Erreur getSuggestions serveur :', err);
+    } catch {
+      // Ignorer
     }
-    const cached = await getIdbCache<SavedSuggestion[]>('suggestions');
-    return cached || [];
+    return local;
   },
 
-  async saveSuggestion(suggestion: SavedSuggestion): Promise<SavedSuggestion> {
+  async saveSuggestion(sugg: SavedSuggestion): Promise<SavedSuggestion> {
+    const current = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
+    const filtered = current.filter((s) => s.id !== sugg.id);
+    const updated = [sugg, ...filtered];
+
+    setStorage('cv_move_suggestions', updated);
+
     try {
-      const res = await fetch('/api/db/suggestions', {
+      await fetch('/api/db/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(suggestion),
+        body: JSON.stringify(sugg),
       });
-      if (res.ok) {
-        const json = await res.json();
-        return json.suggestion;
-      }
-    } catch (err) {
-      console.warn('Erreur saveSuggestion serveur :', err);
+    } catch {
+      // Ignorer
     }
-    return suggestion;
+
+    return sugg;
   },
 
   async deleteSuggestion(id: string): Promise<boolean> {
+    const current = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
+    const updated = current.filter((s) => s.id !== id);
+    setStorage('cv_move_suggestions', updated);
+
     try {
-      const res = await fetch(`/api/db/suggestions/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const json = await res.json();
-        return json.success;
-      }
-    } catch (err) {
-      console.warn('Erreur deleteSuggestion serveur :', err);
+      await fetch(`/api/db/suggestions/${id}`, { method: 'DELETE' });
+    } catch {
+      // Ignorer
     }
-    return false;
+    return true;
   },
 
+  // ==========================================
   // PARAMÈTRES
+  // ==========================================
   async getSettings(): Promise<UserSettings> {
+    const local = getStorage<UserSettings | null>('cv_move_user_settings', null);
+    if (local) return local;
+
     try {
       const res = await fetch('/api/db/settings');
       if (res.ok) {
-        return (await res.json()) as UserSettings;
+        const s = (await res.json()) as UserSettings;
+        setStorage('cv_move_user_settings', s);
+        return s;
       }
-    } catch (err) {
-      console.warn('Erreur getSettings serveur :', err);
+    } catch {
+      // Ignorer
     }
+
     return {
       selectedModel: 'gemini-3.8-flash',
       autoSaveToDb: true,
@@ -383,44 +784,57 @@ export const localDbClient = {
   },
 
   async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
+    const current = await this.getSettings();
+    const updated = { ...current, ...settings };
+    setStorage('cv_move_user_settings', updated);
+
     try {
-      const res = await fetch('/api/db/settings', {
+      await fetch('/api/db/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(updated),
       });
-      if (res.ok) {
-        const json = await res.json();
-        return json.settings;
-      }
-    } catch (err) {
-      console.warn('Erreur updateSettings serveur :', err);
+    } catch {
+      // Ignorer
     }
-    return settings as UserSettings;
+
+    return updated;
   },
 
   // IMPORT / RESTORE / RESET
   async importDatabase(data: Partial<DatabaseSchema>): Promise<DatabaseSchema> {
+    if (data.cvs) setStorage('cv_move_saved_cvs', data.cvs);
+    if (data.applications) setStorage('cv_move_applications', data.applications);
+    if (data.profile) setStorage('cv_move_user_profile', data.profile);
+    if (data.analyses) setStorage('cv_move_history', data.analyses);
+    if (data.suggestions) setStorage('cv_move_suggestions', data.suggestions);
+
     const res = await fetch('/api/db/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      throw new Error("Échec de l'importation de la base de données");
+      throw new Error("Échec de l'importation");
     }
     const json = await res.json();
-    await setIdbCache('full_database', json.data);
     return json.data;
   },
 
   async resetDatabase(): Promise<DatabaseSchema> {
+    localStorage.removeItem('cv_move_saved_cvs');
+    localStorage.removeItem('cv_move_applications');
+    localStorage.removeItem('cv_move_user_profile');
+    localStorage.removeItem('cv_move_history');
+    localStorage.removeItem('cv_move_suggestions');
+    localStorage.setItem('cv_move_apps_initialized', 'true');
+    localStorage.setItem('cv_move_cvs_initialized', 'true');
+
     const res = await fetch('/api/db/reset', { method: 'POST' });
     if (!res.ok) {
       throw new Error('Échec de la réinitialisation');
     }
     const json = await res.json();
-    await setIdbCache('full_database', json.data);
     return json.data;
   },
 };

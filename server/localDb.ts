@@ -19,195 +19,30 @@ const DATA_DIR = path.join(ROOT_DIR, 'data');
 const DB_FILE_PATH = path.join(DATA_DIR, 'local_database.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
-// Données initiales par défaut
+// Données initiales par défaut (Vierge pour l'espace personnel de l'utilisateur)
 const DEFAULT_DATABASE: DatabaseSchema = {
   version: 1,
   lastUpdated: new Date().toISOString(),
   profile: {
     id: 'user_profile',
-    firstName: 'Alex',
-    lastName: 'Martin',
-    email: 'alex.martin.pro@email.fr',
-    phone: '+33 6 12 34 56 78',
-    location: 'Paris & Île-de-France (Hybride / Télétravail)',
-    currentTitle: 'Product Owner Senior / Chef de Projet Digital',
-    bio: 'Product Owner & Chef de Projet Digital avec 6 ans d\'expérience dans le pilotage de produits SaaS B2B et d\'applications web à fort trafic. Expert méthodologies Agile/Scrum et découverte utilisateur orientée données.',
-    linkedinUrl: 'https://linkedin.com/in/alex-martin-pro',
-    githubUrl: 'https://github.com/alex-martin',
-    portfolioUrl: 'https://alex-martin.dev',
-    targetRoles: [
-      'Product Owner Senior',
-      'Lead Product Manager',
-      'Chef de Projet Digital & IT',
-    ],
-    skills: [
-      'Agile / Scrum',
-      'Jira / Confluence',
-      'Roadmapping produit',
-      'Product Discovery',
-      'KPIs & Data Analytics',
-      'Figma / UX basics',
-      'API REST & Webhooks',
-      'TypeScript / React notions',
-    ],
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    location: '',
+    currentTitle: '',
+    bio: '',
+    linkedinUrl: '',
+    githubUrl: '',
+    portfolioUrl: '',
+    targetRoles: [],
+    skills: [],
     updatedAt: new Date().toISOString(),
   },
-  cvs: [
-    {
-      id: 'cv-default-1',
-      title: 'CV Principal - Product Owner & Lead Agile',
-      targetRole: 'Product Owner Senior',
-      fileName: 'CV_Alex_Martin_ProductOwner_2026.pdf',
-      fileType: 'pdf',
-      rawText: `ALEX MARTIN
-Product Owner Senior & Chef de Projet Digital
-Paris, France | alex.martin.pro@email.fr | +33 6 12 34 56 78 | linkedin.com/in/alex-martin-pro
-
-RÉSUMÉ PROFESSIONNEL
-Product Owner passionné par la conception de produits centrés utilisateur et la maximisation de valeur métier. Plus de 6 années d'expérience en environnements Agile Scrum/Kanban, de la découverte produit jusqu'au déploiement continu.
-
-COMPÉTENCES CLÉS
-- Méthodologies : Agile, Scrum, Kanban, Lean Startup, Design Thinking
-- Outils : Jira, Confluence, Figma, Miro, Notion, Mixpanel, Google Analytics
-- Technique : Spécifications fonctionnelles, API REST, SQL basique, CI/CD, Git
-- Langues : Français (Natif), Anglais (Courant C1 / Bilingue professionnel)
-
-EXPÉRIENCES PROFESSIONNELLES
-2023 - Présent | Senior Product Owner | TechPulse SaaS (Paris)
-- Pilotage de la roadmap d'une solution SaaS B2B utilisée par 120 000 utilisateurs actifs.
-- Réduction du churn de 22% en refondant le module d'onboarding utilisateur et le tableau de bord d'analytique.
-- Animation quotidienne d'une squad multidisciplinaire de 9 personnes (6 développeurs, 1 designer, 1 QA, 1 data analyst).
-- Définition des OKRs trimestriels et priorisation stricte du backlog selon la méthode RICE.
-
-2020 - 2023 | Product Owner / Chef de Projet Web | MediaNext Solutions
-- Gestion de bout en bout de 4 refontes d'applications web avec architecture cloud moderne.
-- Amélioration de 35% de la vélocité de l'équipe de dev via la clarification des User Stories et critères d'acceptation Gherkin.
-- Réalisation d'une cinquantaine d'interviews utilisateurs pour cadrer les besoins majeurs et valider les prototypes interactifs.
-
-FORMATION & CERTIFICATIONS
-- Certification PSPO II (Professional Scrum Product Owner) - Scrum.org (2023)
-- Master 2 en Management des Systèmes d'Information & Projets Numériques (2020)`,
-      isDefault: true,
-      fileSize: 45200,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'cv-tech-2',
-      title: 'CV Technique - Développeur Fullstack Web',
-      targetRole: 'Développeur Fullstack TypeScript / Node',
-      fileName: 'CV_Alex_Martin_Fullstack_Dev.docx',
-      fileType: 'docx',
-      rawText: `ALEX MARTIN
-Développeur Fullstack TypeScript & React
-Paris / Télétravail | alex.martin.pro@email.fr | github.com/alex-martin
-
-COMPÉTENCES TECHNIQUES
-- Langages : TypeScript, JavaScript ES6+, Python, SQL
-- Frontend : React, Next.js, Tailwind CSS, Redux Toolkit, Vite
-- Backend : Node.js, Express, PostgreSQL, Prisma, Redis, Docker
-- Outils & Pratiques : Git, GitHub Actions CI/CD, Jest, Vitest, Tests E2E Playwright
-
-EXPÉRIENCES
-2024 - Présent : Développeur Fullstack (Missions & Projets Open Source)
-- Conception d'APIs REST résilientes et de dashboards interactifs sous React et Tailwind.
-- Optimisation des temps de réponse backend de 40% par mise en cache Redis et requêtes SQL indexées.`,
-      isDefault: false,
-      fileSize: 31400,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ],
-  applications: [
-    {
-      id: 'app-sample-1',
-      company: 'Doctolib',
-      role: 'Product Owner Senior - Parcours Praticiens',
-      status: 'interview',
-      appliedDate: '2026-09-15',
-      followUpDate: '2026-09-28',
-      location: 'Nantes / Paris (Hybride)',
-      contractType: 'CDI',
-      salary: '62k€ - 68k€',
-      jobUrl: 'https://careers.doctolib.fr/offres/product-owner-praticiens',
-      notes: 'Premier tour RH validé le 18/09. Entretien technique et Product Case Study prévu jeudi prochain à 14h00.',
-      score: 88,
-      analysisId: 'sample-analysis-1',
-      checklist: {
-        cvSent: true,
-        coverLetterSent: true,
-        portfolioSent: true,
-        followUpDone: true,
-      },
-      createdAt: '2026-09-15T10:00:00.000Z',
-      updatedAt: '2026-09-18T16:30:00.000Z',
-    },
-    {
-      id: 'app-sample-2',
-      company: 'Mirakl',
-      role: 'Lead Product Manager - Marketplaces',
-      status: 'applied',
-      appliedDate: '2026-09-21',
-      followUpDate: '2026-09-28',
-      location: 'Paris 8e (Hybride)',
-      contractType: 'CDI',
-      salary: '65k€ - 72k€',
-      jobUrl: 'https://www.mirakl.com/careers/lead-pm',
-      notes: 'Candidature spontanée via recommandation. Score ATS de 84% obtenu sur la fiche de poste.',
-      score: 84,
-      analysisId: null,
-      checklist: {
-        cvSent: true,
-        coverLetterSent: true,
-        portfolioSent: false,
-        followUpDone: false,
-      },
-      createdAt: '2026-09-21T09:15:00.000Z',
-      updatedAt: '2026-09-21T09:15:00.000Z',
-    },
-  ],
-  analyses: [
-    {
-      id: 'sample-analysis-1',
-      timestamp: '18/09/2026 14:20',
-      title: 'Product Owner Senior - Doctolib',
-      jobSnippet: 'Doctolib recherche un Product Owner Senior pour piloter la refonte du module de gestion de rendez-vous praticiens...',
-      cvSnippet: 'Senior Product Owner chez TechPulse SaaS. Pilotage de roadmap SaaS B2B, réduction de churn...',
-      cvText: 'Senior Product Owner chez TechPulse SaaS. Pilotage de roadmap SaaS B2B, réduction de churn...',
-      jobText: 'Doctolib recherche un Product Owner Senior expérimenté pour piloter la roadmap produit...',
-      score: 88,
-      fileName: 'CV_Alex_Martin_ProductOwner_2026.pdf',
-      jobUrl: 'https://careers.doctolib.fr/offres/product-owner-praticiens',
-      analysisResult: `### Score d'adéquation ATS : 88/100
-
-**Points forts :**
-- Forte expérience démontrée en SaaS B2B et méthodes Scrum.
-- Réalisations chiffrées très valorisantes (réduction de churn de 22%, gestion de squad de 9 personnes).
-- Certification PSPO II reconnue.
-
-**Axes d'optimisation :**
-- Ajouter le mot-clé « Santé numérique / HealthTech » et les contraintes réglementaires (RGPD / HDS).`,
-    },
-  ],
-  suggestions: [
-    {
-      id: 'sugg-1',
-      type: 'star_accomplishment',
-      title: 'Accomplissement STAR - Réduction du Churn Client',
-      originalText: 'Gestion de la refonte du tableau de bord client pour améliorer la rétention.',
-      generatedContent: 'Piloté la refonte intégrale du tableau de bord analytique et de l\'onboarding client (Situation/Tâche), en coordonnant une squad Agile de 9 collaborateurs et en itérant sur les retours de 50+ utilisateurs clés (Action), aboutissant à une diminution du churn de 22% et un gain de satisfaction NPS de +18 points en 6 mois (Résultat).',
-      targetRole: 'Product Owner Senior',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'sugg-2',
-      type: 'branding_bio',
-      title: 'Bio d\'Accroche CV - Style Axé Métriques & Impact',
-      generatedContent: 'Product Owner Senior certifié PSPO II avec 6 ans d\'expérience dans l\'accélération de produits SaaS B2B. Spécialiste de la transformation de retours clients complexes en roadmaps à fort ROI, ayant permis jusqu\'à -22% de désabonnement et +35% de vélocité d\'équipe.',
-      targetRole: 'Product Owner',
-      createdAt: new Date().toISOString(),
-    },
-  ],
+  cvs: [],
+  applications: [],
+  analyses: [],
+  suggestions: [],
   settings: {
     selectedModel: 'gemini-3.8-flash',
     autoSaveToDb: true,
@@ -235,11 +70,31 @@ export function getDatabase(): DatabaseSchema {
   try {
     const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
     const parsed = JSON.parse(raw) as DatabaseSchema;
+    const profile = { ...DEFAULT_DATABASE.profile, ...(parsed.profile || {}) };
+
+    let profiles: UserProfile[] = Array.isArray(parsed.profiles) && parsed.profiles.length > 0
+      ? parsed.profiles
+      : [];
+
+    // Migration transparente si profiles est vide mais qu'un profil principal existe
+    if (profiles.length === 0 && (profile.firstName || profile.currentTitle)) {
+      profiles = [
+        {
+          ...profile,
+          name: profile.name || profile.currentTitle || `${profile.firstName} ${profile.lastName}`.trim() || 'Profil Principal',
+          isDefault: true,
+        },
+      ];
+    } else if (profiles.length === 0) {
+      profiles = [profile];
+    }
+
     // Rétrocompatibilité et fusion avec les champs manquants
     return {
       version: parsed.version || 1,
       lastUpdated: parsed.lastUpdated || new Date().toISOString(),
-      profile: { ...DEFAULT_DATABASE.profile, ...(parsed.profile || {}) },
+      profile,
+      profiles,
       cvs: Array.isArray(parsed.cvs) ? parsed.cvs : DEFAULT_DATABASE.cvs,
       applications: Array.isArray(parsed.applications) ? parsed.applications : DEFAULT_DATABASE.applications,
       analyses: Array.isArray(parsed.analyses) ? parsed.analyses : DEFAULT_DATABASE.analyses,
@@ -264,11 +119,16 @@ export async function saveDatabase(data: DatabaseSchema): Promise<void> {
 }
 
 // =============================================================================
-// GESTION DU PROFIL
+// GESTION DES PROFILS (MULTI-PROFILS CANDIDAT)
 // =============================================================================
 export async function getProfile(): Promise<UserProfile> {
   const db = getDatabase();
   return db.profile;
+}
+
+export async function getProfiles(): Promise<UserProfile[]> {
+  const db = getDatabase();
+  return db.profiles || [db.profile];
 }
 
 export async function updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
@@ -279,8 +139,100 @@ export async function updateProfile(updates: Partial<UserProfile>): Promise<User
     updatedAt: new Date().toISOString(),
   };
   db.profile = updatedProfile;
+
+  // Mettre également à jour dans la liste des profils
+  if (!db.profiles) db.profiles = [];
+  const idx = db.profiles.findIndex((p) => p.id === updatedProfile.id);
+  if (idx >= 0) {
+    db.profiles[idx] = updatedProfile;
+  } else {
+    db.profiles.push(updatedProfile);
+  }
+
   await saveDatabase(db);
   return updatedProfile;
+}
+
+export async function saveProfileToDb(profileToSave: UserProfile): Promise<UserProfile> {
+  const db = getDatabase();
+  if (!db.profiles) db.profiles = [];
+
+  const now = new Date().toISOString();
+  const cleanProfile: UserProfile = {
+    ...profileToSave,
+    id: profileToSave.id || `profile-${Date.now()}`,
+    name: profileToSave.name || profileToSave.currentTitle || `${profileToSave.firstName} ${profileToSave.lastName}`.trim() || 'Profil Candidat',
+    updatedAt: now,
+    createdAt: profileToSave.createdAt || now,
+  };
+
+  const existingIndex = db.profiles.findIndex((p) => p.id === cleanProfile.id);
+
+  if (cleanProfile.isDefault || db.profiles.length === 0) {
+    db.profiles.forEach((p) => {
+      p.isDefault = false;
+    });
+    cleanProfile.isDefault = true;
+    db.profile = cleanProfile;
+  }
+
+  if (existingIndex >= 0) {
+    db.profiles[existingIndex] = cleanProfile;
+  } else {
+    db.profiles.unshift(cleanProfile);
+  }
+
+  // Si le profil actuel modifié correspond au profil actif, on le met à jour
+  if (db.profile.id === cleanProfile.id || cleanProfile.isDefault) {
+    db.profile = cleanProfile;
+  }
+
+  await saveDatabase(db);
+  return cleanProfile;
+}
+
+export async function setDefaultProfile(id: string): Promise<UserProfile | null> {
+  const db = getDatabase();
+  if (!db.profiles) return null;
+
+  let target: UserProfile | null = null;
+  db.profiles.forEach((p) => {
+    if (p.id === id) {
+      p.isDefault = true;
+      target = p;
+    } else {
+      p.isDefault = false;
+    }
+  });
+
+  if (target) {
+    db.profile = target;
+    await saveDatabase(db);
+  }
+
+  return target;
+}
+
+export async function deleteProfileFromDb(id: string): Promise<boolean> {
+  const db = getDatabase();
+  if (!db.profiles || db.profiles.length <= 1) {
+    return false; // Garder au moins 1 profil
+  }
+
+  const initialLen = db.profiles.length;
+  db.profiles = db.profiles.filter((p) => p.id !== id);
+
+  if (db.profiles.length < initialLen) {
+    // Si on a supprimé le profil actif, désigner le premier restant
+    if (db.profile.id === id && db.profiles.length > 0) {
+      db.profiles[0].isDefault = true;
+      db.profile = db.profiles[0];
+    }
+    await saveDatabase(db);
+    return true;
+  }
+
+  return false;
 }
 
 // =============================================================================

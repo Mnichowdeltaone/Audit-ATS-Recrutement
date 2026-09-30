@@ -725,7 +725,7 @@ app.get('/api/db/all', (_req: Request, res: Response) => {
   }
 });
 
-// Profil personnel
+// Profil personnel & Multi-profils
 app.get('/api/db/profile', async (_req: Request, res: Response) => {
   try {
     const profile = await localDb.getProfile();
@@ -737,8 +737,116 @@ app.get('/api/db/profile', async (_req: Request, res: Response) => {
 
 app.post('/api/db/profile', async (req: Request, res: Response) => {
   try {
-    const updated = await localDb.updateProfile(req.body);
+    const updated = await localDb.saveProfileToDb(req.body);
     res.json({ success: true, profile: updated });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.get('/api/db/profiles', async (_req: Request, res: Response) => {
+  try {
+    const profiles = await localDb.getProfiles();
+    res.json(profiles);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.post('/api/db/profiles', async (req: Request, res: Response) => {
+  try {
+    const saved = await localDb.saveProfileToDb(req.body);
+    res.json({ success: true, profile: saved });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.post('/api/db/profiles/:id/set-default', async (req: Request, res: Response) => {
+  try {
+    const updated = await localDb.setDefaultProfile(req.params.id);
+    if (!updated) {
+      res.status(404).json({ error: 'Profil non trouvé' });
+      return;
+    }
+    res.json({ success: true, profile: updated });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.delete('/api/db/profiles/:id', async (req: Request, res: Response) => {
+  try {
+    const deleted = await localDb.deleteProfileFromDb(req.params.id);
+    res.json({ success: deleted });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+// Extraction intelligente du profil à partir d'un CV
+app.post('/api/extract-profile', async (req: Request, res: Response) => {
+  try {
+    const { cvText, apiKey: userApiKey, model: requestedModel } = req.body;
+    if (!cvText || typeof cvText !== 'string' || !cvText.trim()) {
+      res.status(400).json({ error: 'Le texte du CV est requis pour extraire le profil.' });
+      return;
+    }
+
+    const keyToUse =
+      (userApiKey && typeof userApiKey === 'string' && userApiKey.trim()) ||
+      process.env.GEMINI_API_KEY;
+
+    let profileResult: Record<string, unknown> = {};
+
+    if (keyToUse && keyToUse !== 'MY_GEMINI_API_KEY') {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: keyToUse.trim(),
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+        });
+
+        const prompt = `Tu es un assistant RH et ATS expert. Analyse le CV suivant et extrait les informations du candidat au format JSON STRICT UNIQUEMENT (sans markdown, sans guillemets inverses).
+Les champs requis sont :
+- "firstName": prénom du candidat (ex: François)
+- "lastName": nom de famille (ex: Delrieu)
+- "email": adresse email (ex: delrieu.fra@gmail.com)
+- "phone": numéro de téléphone (ex: 06 72 42 88 93)
+- "location": ville ou département (ex: Montrouge)
+- "currentTitle": intitulé professionnel principal du candidat (ex: Trésorier Opérationnel)
+- "bio": paragraphe de synthèse ou résumé professionnel (3-4 phrases percutantes résumant son expertise)
+- "targetRoles": tableau des 2 à 4 rôles ciblés (ex: ["Trésorier Opérationnel", "Cash Manager", "Consultant TMS"])
+- "skills": tableau des 8 à 15 compétences techniques, outils et savoir-faire clés
+
+Voici le texte du CV :
+${cvText.trim()}`;
+
+        const modelsToTry = [
+          requestedModel || 'gemini-3.8-flash',
+          'gemini-flash-latest',
+        ];
+
+        for (const m of modelsToTry) {
+          try {
+            const aiResponse = await ai.models.generateContent({
+              model: m,
+              contents: prompt,
+            });
+            const text = (aiResponse.text || '').replace(/^```json/i, '').replace(/```$/g, '').trim();
+            if (text) {
+              profileResult = JSON.parse(text);
+              break;
+            }
+          } catch (modelErr) {
+            console.warn(`Extraction IA échouée avec ${m}:`, modelErr);
+          }
+        }
+      } catch (genErr) {
+        console.warn('Erreur appel IA extraction profil :', genErr);
+      }
+    }
+
+    res.json({ success: true, profile: profileResult });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
   }

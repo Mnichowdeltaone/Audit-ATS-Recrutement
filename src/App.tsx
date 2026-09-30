@@ -53,16 +53,18 @@ import {
   Settings,
   Mail,
   Zap,
+  Plus,
 } from 'lucide-react';
 import { marked } from 'marked';
 import confetti from 'canvas-confetti';
 import { parseCvFile, ExtractedFileResult } from './utils/fileExtractor';
-import ApplicationTracker, { INITIAL_SAMPLE_APPLICATIONS } from './components/ApplicationTracker';
+import { extractProfileFromCv } from './utils/profileExtractor';
+import ApplicationTracker from './components/ApplicationTracker';
 import CvAssistant from './components/CvAssistant';
 import DatabaseManager from './components/DatabaseManager';
 import CvOptimizationModal from './components/CvOptimizationModal';
 import SettingsAndProfile from './components/SettingsAndProfile';
-import Sidebar, { SamplePreset } from './components/Sidebar';
+import Sidebar from './components/Sidebar';
 import { localDbClient } from './services/localDbClient';
 import { ApplicationItem, SavedCv, DatabaseStats, UserProfile } from './types';
 
@@ -307,167 +309,6 @@ export interface AnalysisHistoryItem {
   jobUrl?: string;
 }
 
-// Exemples pré-remplis
-const SAMPLE_PRESETS = [
-  {
-    title: 'Développeur Full Stack',
-    cv: `THOMAS DUPONT - DÉVELOPPEUR FULL STACK (4 ANS D'EXPÉRIENCE)
-Email: thomas.dupont@email.com | Tél: 06 12 34 56 78 | Paris
-
-COMPÉTENCES CLÉS :
-- Frontend : React, Next.js, TypeScript, Tailwind CSS, Redux Toolkit
-- Backend : Node.js, Express, PostgreSQL, Prisma, APIs REST
-- Outils & DevOps : Git, Docker, Jest, CI/CD GitHub Actions, Linux
-- Méthodologies : Agile Scrum, Code Review, TDD
-
-EXPÉRIENCES PROFESSIONNELLES :
-1. Développeur Web Full Stack - TechNova SAS (2022 - Présent)
-- Développement d'une application SaaS de gestion logistique utilisée par 45 000 utilisateurs quotidiens.
-- Refonte de l'interface en React / TypeScript améliorant les performances de chargement de 38%.
-- Mise en place d'APIs REST Node.js/PostgreSQL sécurisées avec authentification JWT et tests unitaires Jest (>80% couverture).
-
-2. Développeur Frontend Junior - WebStudio Agency (2020 - 2022)
-- Création de 12 sites vitrines et plateformes e-commerce responsives sous React et Tailwind CSS.
-- Collaboration étroite avec les équipes UI/UX pour l'intégration de maquettes Figma pixel-perfect.
-
-FORMATION :
-- Master Informatique & Ingénierie du Web - Université Paris-Cité (2020)
-- Langues : Français (Natif), Anglais (Courant - B2/C1)`,
-    job: `OFFRE D'EMPLOI : DÉVELOPPEUR FULL STACK REACT / NODE.JS (H/F) - CDI
-Entreprise : ScaleUp Fintech Innovante - Paris 8e (Hybride 2j présentiel)
-
-VOS MISSIONS :
-Au sein de notre équipe produit (12 ingénieurs), vous participerez activement à la conception et au déploiement de notre nouvelle plateforme de paiement instantané :
-- Concevoir et implémenter des fonctionnalités modernes, performantes et scalables sur notre stack React/TypeScript et Node.js.
-- Construire des APIs REST et GraphQL robustes connectées à nos bases PostgreSQL.
-- Participer à la qualité de code (revues de code, tests automatisés Jest/Cypress, documentation).
-- Contribuer à la scalabilité de l'infrastructure Docker / AWS en collaboration avec l'équipe DevOps.
-
-PROFIL RECHERCHÉ :
-- Diplôme Bac+5 en informatique ou équivalent.
-- Au minimum 3 ans d'expérience significative en développement React et Node.js en production.
-- Excellente maîtrise de TypeScript, React et bases relationnelles (PostgreSQL).
-- Connaissance souhaitée de Docker et d'un cloud public (AWS ou GCP).
-- Sensibilité forte à l'expérience utilisateur, aux performances web et aux problématiques de sécurité.
-- Bon niveau d'anglais technique à l'oral comme à l'écrit.`,
-    jobUrl: 'https://exemple-recrutement.fr/offres/dev-fullstack-paris',
-  },
-  {
-    title: 'Chef de Projet Digital',
-    cv: `CLARA MARTIN - CHEF DE PROJET DIGITAL & SCUM MASTER
-Email: clara.martin@email.com | Lyon | Profil LinkedIn: in/claramartin
-
-RÉSUMÉ :
-Chef de projet certifiée Scrum Master (PSM I) avec 5 ans d'expérience dans le pilotage de projets digitaux et applications mobiles dans le secteur de la distribution.
-
-COMPÉTENCES :
-- Pilotage : Gestion de projet Agile (Scrum / Kanban), Roadmap, Gestion de budget (jusqu'à 300k€)
-- Outils : Jira, Confluence, Trello, Miro, Notion, Figma
-- Analytique : Google Analytics 4, Mixpanel, Excel avancé
-- Communication : Animation de cérémonies agiles, relation client, coordination transverse (UX, Tech, Marketing)
-
-PARCOURS :
-Chef de Projet Digital - RetailGroup (2021 - Présent)
-- Pilotage de la refonte du site e-commerce et de l'application mobile de click-and-collect.
-- Animation quotidienne d'une équipe pluridisciplinaire de 8 personnes (4 développeurs, 2 UX designers, 1 QA).
-- Réduction du cycle de release de 3 semaines à 10 jours grâce à la rationalisation des sprints Agile.`,
-    job: `OFFRE D'EMPLOI : LEAD PRODUCT OWNER / CHEF DE PROJET AGILE (H/F)
-Entreprise : E-Commerce Retail Leader - Lyon
-
-MISSIONS :
-- Définir et porter la vision produit pour nos parcours clients digitaux omnicanaux.
-- Rédiger les user stories, prioriser le product backlog et définir les critères d'acceptation.
-- Collaborer quotidiennement avec les équipes de développement technique, UX/UI et le marketing.
-- Suivre les KPI de conversion, le NPS et le taux d'abandon panier pour itérer continuellement.
-
-PROFIL :
-- 4 à 6 ans d'expérience en gestion de projet digital ou Product Ownership e-commerce.
-- Maîtrise éprouvée des méthodologies Agile Scrum (certification appréciée).
-- Forte orientation data et expérience avec GA4 ou Amplitude.`,
-    jobUrl: 'https://exemple-recrutement.fr/offres/chef-projet-lyon',
-  },
-  {
-    title: 'Directeur / Resp. Comptable',
-    cv: `CIGDEM ROUSSEAU - RESPONSABLE / DIRECTEUR COMPTABLE GROUPE
-Email: c.rousseau@email.fr | Paris (8e) / Île-de-France | Tél: 06 98 76 54 32
-
-PROFIL & EXPERTISE :
-Directrice Comptable et Financière cumulant plus de 12 ans d'expérience dans le pilotage de la comptabilité générale, analytique, de la consolidation et du reporting financier de groupes multi-entités.
-Maîtrise approfondie des normes françaises, IFRS, de la fiscalité des entreprises, de la gestion de trésorerie et du management d'équipes comptables (jusqu'à 15 collaborateurs).
-
-COMPÉTENCES CLÉS :
-- Comptabilité & Finance : Clôtures mensuelles et annuelles, Bilan, Liasse fiscale, Audit légal CAC, IFRS
-- Systèmes d'Information : SAP S/4HANA, Cegid, Sage 1000, Microsoft Excel avancé (VBA, Power Query)
-- Management & Organisation : Conduite du changement, harmonisation des plans comptables, dématérialisation factures
-- Trésorerie & BFR : Prévisions de trésorerie, négociation bancaire, optimisation des délais DSO
-
-EXPÉRIENCES PROFESSIONNELLES :
-1. Directrice Comptable Groupe - Groupe Valoria Capital (2019 - Présent)
-- Supervision complète des clôtures comptables, liasses fiscales et reportings de 8 filiales (CA consolidé: 85M€).
-- Management et animation d'une équipe de 10 personnes (comptables généraux, fournisseurs et trésorerie).
-- Déploiement de SAP S/4HANA Finance, réduisant le délai de clôture (Fast Close) de J+14 à J+6.
-
-2. Responsable Comptable - Alliance BTP Solutions (2014 - 2019)
-- Gestion de la comptabilité générale et analytique de 3 entités opérationnelles.
-- Interlocutrice privilégiée des Commissaires aux Comptes, banques et administrations fiscales.
-
-FORMATION :
-- DSCG (Diplôme Supérieur de Comptabilité et de Gestion) - INTEC Paris
-- Master 2 Finance, Contrôle de Gestion & Audit - Université Paris-Dauphine`,
-    job: `OFFRE D'EMPLOI : DIRECTEUR / RESPONSABLE COMPTABLE GROUPE (H/F) - CDI
-Localisation : Paris (8e) & Déplacements Saint-Quentin-en-Yvelines | Rémunération : 75K€ - 90K€
-
-MISSIONS PRINCIPALES :
-Directement rattaché(e) au Directeur Administratif et Financier, vous pilotez la fonction comptable du groupe :
-- Superviser la production des comptes sociaux et consolidés du groupe dans le respect des calendriers et normes fiscales.
-- Coordonner les arrêtés mensuels, trimestriels et annuels ainsi que l'établissement des liasses fiscales.
-- Animer et faire grandir une équipe comptable expérimentée (8 personnes), en favorisant la montée en compétences.
-- Être le garant de la fiabilité des flux financiers, de l'optimisation des processus de contrôle interne et du BFR.
-- Piloter la relation avec les Commissaires aux Comptes, les auditeurs externes et les banques.
-- Participer activement à la digitalisation des flux comptables (facturation électronique obligatoire 2026).
-
-PROFIL RECHERCHÉ :
-- Formation supérieure en Comptabilité/Finance (DSCG, DEC, Master CCA ou École de Commerce).
-- Expérience minimale de 8 à 10 ans en cabinet d'expertise comptable/audit puis en entreprise en tant que Responsable ou Directeur Comptable.
-- Expérience managériale confirmée avec leadership bienveillant.
-- Excellente maîtrise des ERP comptables (SAP, Cegid ou Sage).
-- Rigueur, capacité de synthèse, aisance relationnelle et orientation business partner.`,
-    jobUrl: 'https://recrutement.entreprise.fr/offres/directeur-comptable-paris8',
-  },
-  {
-    title: 'Data Analyst & BI',
-    cv: `MAXIME LEROY - DATA ANALYST SENIOR (SQL, PYTHON, POWER BI)
-Email: maxime.leroy@email.com | Tél: 06 45 67 89 01 | Paris / Remote
-
-RÉSUMÉ :
-Data Analyst expérimenté (5 ans) spécialisé dans la transformation de volumes massifs de données en tableaux de bord décisionnels à fort impact stratégique pour le Comex et les équipes opérationnelles.
-
-COMPÉTENCES :
-- Données & Langages : SQL (avancé, optimisation requêtes), Python (Pandas, NumPy, Scikit-Learn), R
-- Dataviz & Outils BI : Power BI, Tableau Software, Google Data Studio / Looker Studio
-- Data Warehouse & Cloud : BigQuery, Snowflake, AWS S3, dbt, Airflow
-- Métiers : Suivi CAC/LTV, modélisation de churn, segmentation RFM, A/B Testing statistique
-
-EXPÉRIENCES :
-Data Analyst Senior - FinMetrics (2021 - Présent)
-- Création et maintenance de 18 dashboards Power BI utilisés par 120 collaborateurs au quotidien.
-- Réduction de l'attrition client de 18% grâce à un modèle prédictif de churn sous Python.`,
-    job: `OFFRE D'EMPLOI : SENIOR DATA ANALYST (H/F) - CDI
-Entreprise : Scale-up B2B SaaS - Paris
-
-MISSIONS :
-- Construire les modèles de données et indicateurs clés de performance (KPI) pour le produit et le marketing.
-- Développer des dashboards interactifs sous Power BI / Tableau pour guider les décisions de la direction.
-- Effectuer des analyses exploratoires pour identifier de nouveaux leviers de rétention et de croissance.
-
-PROFIL :
-- 4+ ans d'expérience en Data Analytics dans un environnement tech ou SaaS.
-- Maîtrise experte de SQL et d'un outil BI moderne (Power BI, Tableau ou Looker).
-- Bonnes compétences en Python et modélisation de données.`,
-    jobUrl: 'https://recrutement.entreprise.fr/offres/senior-data-analyst',
-  },
-];
-
 interface UrlFetchErrorInfo {
   message: string;
   isProtected?: boolean;
@@ -487,20 +328,18 @@ export default function App() {
   // Navigation par onglets
   const [activeTab, setActiveTab] = useState<'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings'>('app');
 
-  // Profil utilisateur et affichage
+  // Profil utilisateur et affichage (Multi-profils)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => {
+    return localDbClient.getLocalProfiles();
+  });
+  const [isExtractingProfile, setIsExtractingProfile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // Suivi des candidatures
+  // Suivi des candidatures persistant
   const [applications, setApplications] = useState<ApplicationItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('cv_move_applications');
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // ignore
-    }
-    return INITIAL_SAMPLE_APPLICATIONS;
+    return localDbClient.getLocalApplications();
   });
 
   // Base de données locale
@@ -517,38 +356,90 @@ export default function App() {
     }
   }, [applications]);
 
-  // État formulaire
-  const [apiKey, setApiKey] = useState('');
+  // État formulaire avec persistance automatique
+  const [apiKey, setApiKey] = useState<string>(() => {
+    return localDbClient.getSavedApiKey();
+  });
   const [showApiKey, setShowApiKey] = useState(false);
   const [hasServerKey, setHasServerKey] = useState(false);
-  const [cvText, setCvText] = useState('');
-  const [jobText, setJobText] = useState('');
-  const [jobUrl, setJobUrl] = useState('');
-  const [selectedModel, setSelectedModel] = useState<'gemini-3.8-flash' | 'gemini-flash-latest'>('gemini-3.8-flash');
+  const [cvText, setCvText] = useState<string>(() => {
+    try {
+      return localStorage.getItem('cv_move_current_cv_text') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [jobText, setJobText] = useState<string>(() => {
+    try {
+      return localStorage.getItem('cv_move_current_job_text') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [jobUrl, setJobUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem('cv_move_current_job_url') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [selectedModel, setSelectedModel] = useState<'gemini-3.8-flash' | 'gemini-flash-latest'>(() => {
+    return (localDbClient.getSavedModel() as any) || 'gemini-3.8-flash';
+  });
+
+  // Sauvegarde continue des champs de travail pour ne jamais perdre le travail en cours
+  useEffect(() => {
+    try {
+      localStorage.setItem('cv_move_current_cv_text', cvText);
+    } catch {}
+  }, [cvText]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('cv_move_current_job_text', jobText);
+    } catch {}
+  }, [jobText]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('cv_move_current_job_url', jobUrl);
+    } catch {}
+  }, [jobUrl]);
+
+  // Sauvegarde continue de la clé API dans le stockage du navigateur
+  useEffect(() => {
+    localDbClient.saveApiKey(apiKey);
+  }, [apiKey]);
+
+  // Sauvegarde continue du modèle sélectionné
+  useEffect(() => {
+    localDbClient.saveModel(selectedModel);
+  }, [selectedModel]);
 
   // Chargement initial depuis la base de données locale
   useEffect(() => {
     const initDb = async () => {
       try {
-        const [cvList, appList, analysesList, stats, profileData] = await Promise.all([
+        const [cvList, appList, analysesList, stats, profileData, profilesList] = await Promise.all([
           localDbClient.getCvs(),
           localDbClient.getApplications(),
           localDbClient.getAnalyses(),
           localDbClient.fetchStats(),
           localDbClient.getProfile(),
+          localDbClient.getProfiles(),
         ]);
         if (cvList && cvList.length > 0) {
           setSavedCvs(cvList);
           const defaultCv = cvList.find((c) => c.isDefault) || cvList[0];
           if (defaultCv) {
-            setCvText(defaultCv.rawText);
             setSelectedCvId(defaultCv.id);
+            setCvText((prev) => (prev.trim() ? prev : defaultCv.rawText));
           }
         }
-        if (appList && appList.length > 0) {
+        if (appList) {
           setApplications(appList);
         }
-        if (analysesList && analysesList.length > 0) {
+        if (analysesList) {
           setHistory(analysesList);
         }
         if (stats) {
@@ -556,6 +447,9 @@ export default function App() {
         }
         if (profileData) {
           setUserProfile(profileData);
+        }
+        if (profilesList && profilesList.length > 0) {
+          setUserProfiles(profilesList);
         }
       } catch (err) {
         console.warn('Initialisation BDD locale :', err);
@@ -610,6 +504,117 @@ export default function App() {
     } catch {
       setCvSaveSuccess("❌ Erreur lors de l'enregistrement du CV.");
       setTimeout(() => setCvSaveSuccess(null), 3500);
+    }
+  };
+
+  // Changer de profil actif
+  const handleSelectProfile = async (targetId: string) => {
+    try {
+      const switched = await localDbClient.setDefaultProfile(targetId);
+      if (switched) {
+        setUserProfile(switched);
+        setUserProfiles((prev) =>
+          prev.map((p) => ({
+            ...p,
+            isDefault: p.id === targetId,
+          }))
+        );
+        confetti({ particleCount: 30, spread: 50, origin: { y: 0.6 } });
+        setCvSaveSuccess(`✅ Profil actif basculé sur « ${switched.name || switched.currentTitle || 'Profil'} » !`);
+        setTimeout(() => setCvSaveSuccess(null), 3500);
+      }
+    } catch (err) {
+      console.warn('Erreur changement profil :', err);
+    }
+  };
+
+  // Remplir un profil à partir du CV actuel ou créer un nouveau profil
+  const handlePopulateProfileFromCurrentCv = async (targetProfileId?: string, isNew = false) => {
+    const textToUse = cvText.trim() || (savedCvs.find((c) => c.id === selectedCvId)?.rawText || savedCvs[0]?.rawText || '');
+    if (!textToUse) {
+      setCvSaveSuccess("⚠️ Aucun texte de CV trouvé. Importez un document ou collez du texte dans la zone CV.");
+      setTimeout(() => setCvSaveSuccess(null), 3500);
+      return;
+    }
+
+    setIsExtractingProfile(true);
+    setCvSaveSuccess(null);
+
+    const activeCvName = selectedCvId
+      ? (savedCvs.find((c) => c.id === selectedCvId)?.title || 'CV Enregistré')
+      : (uploadedFileInfo?.fileName || (cvText.trim() ? 'CV Actuel' : ''));
+
+    try {
+      const extracted = await extractProfileFromCv(textToUse, apiKey, selectedModel);
+
+      if (isNew) {
+        // Création d'un nouveau profil basé sur le CV actuel
+        const newProfileData: Partial<UserProfile> = {
+          id: `profile-${Date.now()}`,
+          name: extracted.currentTitle || `Profil ${userProfiles.length + 1}`,
+          isDefault: true,
+          associatedCvId: selectedCvId || undefined,
+          associatedCvTitle: activeCvName,
+          firstName: extracted.firstName || userProfile?.firstName || '',
+          lastName: extracted.lastName || userProfile?.lastName || '',
+          email: extracted.email || userProfile?.email || '',
+          phone: extracted.phone || userProfile?.phone || '',
+          location: extracted.location || userProfile?.location || '',
+          currentTitle: extracted.currentTitle || '',
+          bio: extracted.bio || '',
+          linkedinUrl: extracted.linkedinUrl || '',
+          githubUrl: extracted.githubUrl || '',
+          portfolioUrl: extracted.portfolioUrl || '',
+          targetRoles: extracted.targetRoles || [],
+          skills: extracted.skills || [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const saved = await localDbClient.saveProfile(newProfileData);
+        setUserProfile(saved);
+        const updatedList = await localDbClient.getProfiles();
+        setUserProfiles(updatedList);
+        confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+        setCvSaveSuccess(`🎉 Nouveau profil « ${saved.name} » créé et rempli depuis votre CV actuel !`);
+      } else {
+        // Mise à jour du profil cible (ou actif)
+        const current = userProfiles.find((p) => p.id === (targetProfileId || userProfile?.id)) || userProfile || ({ id: `profile-${Date.now()}` } as UserProfile);
+
+        const updatedProfile: UserProfile = {
+          ...current,
+          firstName: extracted.firstName || current.firstName,
+          lastName: extracted.lastName || current.lastName,
+          email: extracted.email || current.email,
+          phone: extracted.phone || current.phone,
+          location: extracted.location || current.location,
+          currentTitle: extracted.currentTitle || current.currentTitle,
+          bio: extracted.bio || current.bio,
+          linkedinUrl: extracted.linkedinUrl || current.linkedinUrl,
+          githubUrl: extracted.githubUrl || current.githubUrl,
+          portfolioUrl: extracted.portfolioUrl || current.portfolioUrl,
+          targetRoles: extracted.targetRoles && extracted.targetRoles.length > 0 ? extracted.targetRoles : current.targetRoles,
+          skills: extracted.skills && extracted.skills.length > 0 ? extracted.skills : current.skills,
+          name: current.name && !current.name.startsWith('Profil ') ? current.name : extracted.currentTitle || current.name || 'Profil Candidat',
+          associatedCvId: selectedCvId || undefined,
+          associatedCvTitle: activeCvName,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const saved = await localDbClient.saveProfile(updatedProfile);
+        setUserProfile(saved);
+        const updatedList = await localDbClient.getProfiles();
+        setUserProfiles(updatedList);
+        confetti({ particleCount: 45, spread: 60, origin: { y: 0.6 } });
+        setCvSaveSuccess(`✅ Profil « ${saved.name} » synchronisé et rempli avec le CV actuel (${saved.firstName} ${saved.lastName}, ${saved.currentTitle || 'Poste'}) !`);
+      }
+      setTimeout(() => setCvSaveSuccess(null), 4500);
+    } catch (err) {
+      console.error('Erreur extraction profil CV :', err);
+      setCvSaveSuccess("❌ Erreur lors de l'extraction des données du CV.");
+      setTimeout(() => setCvSaveSuccess(null), 3500);
+    } finally {
+      setIsExtractingProfile(false);
     }
   };
 
@@ -862,18 +867,6 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
-
-  // Charger un exemple pré-rempli
-  const loadPreset = (preset: SamplePreset) => {
-    setCvText(preset.cv);
-    setJobText(preset.job);
-    setJobUrl(preset.jobUrl || '');
-    setUploadedFileInfo(null);
-    setErrorMessage(null);
-    setFileError(null);
-    setUrlFetchErrorInfo(null);
-    setUrlFetchSuccess(null);
   };
 
   // Réinitialiser les champs
@@ -1136,6 +1129,8 @@ export default function App() {
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
         userProfile={userProfile}
+        userProfiles={userProfiles}
+        onSelectProfile={handleSelectProfile}
         apiKey={apiKey}
         hasServerKey={hasServerKey}
         selectedModel={selectedModel}
@@ -1144,8 +1139,6 @@ export default function App() {
         dbStats={dbStats}
         history={history}
         onLoadHistoryItem={handleLoadHistoryItem}
-        samplePresets={SAMPLE_PRESETS}
-        onLoadPreset={loadPreset}
         isMobileOpen={isMobileSidebarOpen}
         setIsMobileOpen={setIsMobileSidebarOpen}
       />
@@ -1173,9 +1166,7 @@ export default function App() {
                   {activeTab === 'tracker' && '💼 Suivi des Candidatures'}
                   {activeTab === 'history' && '🕒 Historique des Audits'}
                   {activeTab === 'database' && '🗄️ Base de Données Locale'}
-                  {activeTab === 'settings' && '👤 Paramétrage & Profil Utilisateur'}
-                  {activeTab === 'code' && '💻 Code Python (app.py)'}
-                  {activeTab === 'guide' && '📖 Guide de Déploiement'}
+                  {(activeTab === 'settings' || activeTab === 'code' || activeTab === 'guide') && '👤 Espace Personnel & Technique'}
                 </h1>
                 <span className="hidden sm:inline-flex text-[10px] bg-red-50 text-[#FF4B4B] border border-red-200 px-2 py-0.5 rounded-full font-medium">
                   {selectedModel}
@@ -1187,9 +1178,7 @@ export default function App() {
                 {activeTab === 'tracker' && 'Gérez vos candidatures, relances et entretiens en mode Kanban interactif'}
                 {activeTab === 'history' && 'Retrouvez vos rapports d\'audit passés et comparez les scores d\'adéquation'}
                 {activeTab === 'database' && 'Gérez vos CVs enregistrés, suggestions IA et sauvegardes'}
-                {activeTab === 'settings' && 'Gérez vos coordonnées, compétences, clé API Gemini et préférences'}
-                {activeTab === 'code' && 'Script Python Streamlit complet et autonome prêt à être déployé'}
-                {activeTab === 'guide' && 'Instructions pas à pas pour exécuter ou déployer gratuitement'}
+                {(activeTab === 'settings' || activeTab === 'code' || activeTab === 'guide') && 'Profil candidat, sauvegarde de la clé API Gemini, base locale et documentation technique'}
               </p>
             </div>
           </div>
@@ -1227,27 +1216,60 @@ export default function App() {
               )}
             </button>
 
-            {/* Profil Candidat Clickable Pill */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              className="flex items-center gap-2 pl-2 pr-3 py-1 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-200 rounded-full text-xs font-semibold text-gray-800 transition-colors cursor-pointer group"
-              title="Accéder à mon Profil et Paramètres"
-            >
-              <div className="w-6 h-6 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
-                {userProfile
-                  ? `${userProfile.firstName?.[0] || 'A'}${userProfile.lastName?.[0] || 'M'}`.toUpperCase()
-                  : 'AM'}
-              </div>
-              <span className="hidden sm:inline group-hover:text-purple-700">
-                {userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 'Mon Profil'}
-              </span>
-            </button>
+            {/* Profil Candidat Sélecteur / Pill */}
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full pl-2 pr-2.5 py-1 text-xs font-semibold text-gray-800">
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className="flex items-center gap-1.5 hover:text-purple-700 cursor-pointer"
+                title="Accéder à la gestion des profils"
+              >
+                <div className="w-6 h-6 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+                  {userProfile && (userProfile.firstName || userProfile.lastName)
+                    ? `${userProfile.firstName?.[0] || ''}${userProfile.lastName?.[0] || ''}`.toUpperCase() || 'CV'
+                    : '👤'}
+                </div>
+                <span className="hidden sm:inline">
+                  {userProfile?.name || (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName}` : 'Mon Profil')}
+                </span>
+              </button>
+
+              {userProfiles.length > 1 && (
+                <select
+                  value={userProfile?.id || ''}
+                  onChange={(e) => handleSelectProfile(e.target.value)}
+                  className="bg-transparent text-[11px] font-bold text-purple-700 border-none outline-none cursor-pointer pl-1"
+                  title="Changer de profil actif"
+                >
+                  {userProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         </header>
 
         {/* Espace de Travail Principal */}
         <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
+          {/* Notification Toast Globale */}
+          {cvSaveSuccess && (
+            <div className="mb-4 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between shadow-2xs animate-fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{cvSaveSuccess}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCvSaveSuccess(null)}
+                className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {/* =========================================================================
               ONGLET 1 : APPLICATION STREAMLIT (ANALYSEUR CV & OFFRE)
              ========================================================================= */}
@@ -1290,31 +1312,6 @@ export default function App() {
                         <span>Injecter mon profil</span>
                       </button>
                     )}
-
-                    {/* Charger un exemple pré-rempli */}
-                    <div className="relative group">
-                      <button
-                        type="button"
-                        className="text-xs flex items-center gap-1.5 px-3 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer font-medium"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-[#FF4B4B]" />
-                        <span>Charger un exemple</span>
-                        <ChevronDown className="w-3 h-3 text-gray-400" />
-                      </button>
-                      <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 hidden group-hover:block z-30">
-                        {SAMPLE_PRESETS.map((preset, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => loadPreset(preset)}
-                            className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex items-center justify-between cursor-pointer"
-                          >
-                            <span className="truncate">{preset.title}</span>
-                            <ChevronRight className="w-3 h-3 text-gray-400" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
 
                     {/* Charger un CV sauvegardé dans la base locale */}
                     {savedCvs.length > 0 && (
@@ -1643,7 +1640,7 @@ export default function App() {
                   </div>
 
                   {/* Sélecteur de CVs sauvegardés en base locale */}
-                  <div className="mb-2.5 p-2 bg-purple-50/70 border border-purple-200/90 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="mb-2 p-2 bg-purple-50/70 border border-purple-200/90 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-1.5 font-bold text-purple-900">
                       <Database className="w-3.5 h-3.5 text-purple-700 shrink-0" />
                       <span>Ma BDD de CVs :</span>
@@ -1678,6 +1675,70 @@ export default function App() {
                       >
                         <Save className="w-3 h-3" />
                         <span>Enregistrer en BDD</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Synchronisation Profil <-> CV Actuel (Multi-Profils) */}
+                  <div className="mb-2.5 p-2.5 bg-linear-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/90 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-md bg-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-[10px] shadow-2xs">
+                        <User className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-gray-900 text-[11px]">Profil cible :</span>
+                          <select
+                            value={userProfile?.id || ''}
+                            onChange={(e) => handleSelectProfile(e.target.value)}
+                            className="px-2 py-0.5 bg-white border border-purple-300 rounded font-bold text-purple-900 text-[11px] shadow-2xs cursor-pointer focus:outline-none max-w-[170px] truncate"
+                            title="Sélectionner le profil à afficher ou remplir"
+                          >
+                            {userProfiles.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.isDefault ? '⭐ ' : ''}{p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <p className="text-[10px] text-gray-600 truncate mt-0.5">
+                          {userProfile?.firstName
+                            ? `${userProfile.firstName} ${userProfile.lastName} • ${userProfile.currentTitle || 'Titre non défini'}`
+                            : 'Profil non renseigné'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handlePopulateProfileFromCurrentCv(userProfile?.id, false)}
+                        disabled={isExtractingProfile || !cvText.trim()}
+                        className="px-2.5 py-1 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 text-white rounded-md text-[11px] font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                        title="Remplir automatiquement ce profil avec le texte du CV actuel (nom, contact, compétences, etc.)"
+                      >
+                        {isExtractingProfile ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin text-white" />
+                            <span>Extraction...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-amber-300" />
+                            <span>Remplir le profil avec ce CV</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePopulateProfileFromCurrentCv(undefined, true)}
+                        disabled={isExtractingProfile || !cvText.trim()}
+                        className="px-2 py-1 bg-white hover:bg-purple-50 border border-purple-300 text-purple-700 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-40"
+                        title="Créer un nouveau profil candidat à partir de ce CV"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Nouveau profil</span>
                       </button>
                     </div>
                   </div>
@@ -1802,8 +1863,9 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!cvText || !jobText) {
-                          loadPreset(SAMPLE_PRESETS[0]);
+                        if (!cvText.trim() || !jobText.trim()) {
+                          setErrorMessage("Veuillez d'abord coller ou importer votre CV et l'offre d'emploi pour lancer la simulation.");
+                          return;
                         }
                         handleRunAnalysis(true);
                       }}
@@ -2058,6 +2120,7 @@ export default function App() {
             }}
             apiKey={apiKey}
             hasServerKey={hasServerKey}
+            userProfile={userProfile}
           />
         )}
 
@@ -2305,9 +2368,9 @@ export default function App() {
         )}
 
         {/* =========================================================================
-            ONGLET : PARAMÉTRAGE & PROFIL UTILISATEUR
+            ONGLET : ESPACE PERSONNEL & TECHNIQUE (PROFIL, CLÉ API, BDD, DOCUMENTATION)
            ========================================================================= */}
-        {activeTab === 'settings' && (
+        {(activeTab === 'settings' || activeTab === 'code' || activeTab === 'guide') && (
           <SettingsAndProfile
             apiKey={apiKey}
             setApiKey={setApiKey}
@@ -2322,138 +2385,18 @@ export default function App() {
               setDbStats(stats);
             }}
             savedCvs={savedCvs}
+            currentCvText={cvText}
+            activeCvTitle={
+              selectedCvId
+                ? (savedCvs.find((c) => c.id === selectedCvId)?.title || 'CV Enregistré')
+                : (uploadedFileInfo?.fileName || (cvText.trim() ? 'CV Actuel' : ''))
+            }
+            userProfiles={userProfiles}
             onProfileUpdated={(updated) => setUserProfile(updated)}
+            onProfilesUpdated={(updatedList) => setUserProfiles(updatedList)}
+            onSelectProfile={handleSelectProfile}
+            initialSubTab={activeTab === 'code' || activeTab === 'guide' ? 'tech' : 'profile'}
           />
-        )}
-
-        {/* =========================================================================
-            ONGLET 3 : CODE PYTHON (APP.PY ET REQUIREMENTS.TXT)
-           ========================================================================= */}
-        {activeTab === 'code' && (
-          <div className="w-full bg-white rounded-xl border border-gray-200 p-6 shadow-xs flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <Code2 className="w-5 h-5 text-emerald-600" />
-                  <span>Code source Python : app.py & requirements.txt</span>
-                </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Script Streamlit complet incluant l&apos;upload PDF/DOCX, le scraping d&apos;URL et l&apos;historique de session.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(PYTHON_APP_CODE, 'python_code')}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-800 flex items-center gap-1.5 font-medium transition-colors"
-                >
-                  {copiedStatus === 'python_code' ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Copié !</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-gray-500" />
-                      <span>Copier app.py</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => downloadFile('app.py', PYTHON_APP_CODE)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 font-medium transition-colors shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Télécharger app.py</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-gray-600 font-mono">
-                <span className="font-bold">📄 app.py (Complet et prêt à l&apos;emploi)</span>
-                <span>Python 3.9+ / Streamlit</span>
-              </div>
-              <pre className="bg-gray-900 text-gray-100 p-4 rounded-xl text-xs font-mono overflow-x-auto max-h-[500px] leading-relaxed border border-gray-800">
-                <code>{PYTHON_APP_CODE}</code>
-              </pre>
-            </div>
-
-            <div className="space-y-2 pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between text-xs text-gray-600 font-mono">
-                <span className="font-bold">📦 requirements.txt</span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(REQUIREMENTS_TXT, 'req_code')}
-                  className="text-xs text-[#FF4B4B] hover:underline"
-                >
-                  {copiedStatus === 'req_code' ? 'Copié !' : 'Copier'}
-                </button>
-              </div>
-              <pre className="bg-gray-900 text-emerald-400 p-3 rounded-lg text-xs font-mono overflow-x-auto border border-gray-800">
-                <code>{REQUIREMENTS_TXT}</code>
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            ONGLET 4 : GUIDE DÉPLOIEMENT & ATS
-           ========================================================================= */}
-        {activeTab === 'guide' && (
-          <div className="w-full bg-white rounded-xl border border-gray-200 p-6 shadow-xs space-y-6">
-            <div className="border-b border-gray-100 pb-4">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-blue-600" />
-                <span>Guide de démarrage & Déploiement</span>
-              </h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Toutes les instructions pour exécuter l&apos;application sur votre machine ou en ligne gratuitement.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
-                <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
-                  <Terminal className="w-4 h-4 text-emerald-600" />
-                  <span>1. Exécution locale (en 3 étapes)</span>
-                </div>
-                <ol className="list-decimal list-inside text-xs text-gray-700 space-y-2 leading-relaxed">
-                  <li>
-                    Placez <code>app.py</code> et <code>requirements.txt</code> dans un même dossier.
-                  </li>
-                  <li>
-                    Ouvrez votre terminal et installez les dépendances :
-                    <pre className="bg-gray-900 text-gray-100 p-2 rounded mt-1 font-mono text-[11px]">
-                      pip install -r requirements.txt
-                    </pre>
-                  </li>
-                  <li>
-                    Lancez l&apos;application Streamlit :
-                    <pre className="bg-gray-900 text-emerald-400 p-2 rounded mt-1 font-mono text-[11px]">
-                      streamlit run app.py
-                    </pre>
-                  </li>
-                </ol>
-              </div>
-
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
-                <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
-                  <ExternalLink className="w-4 h-4 text-blue-600" />
-                  <span>2. Déploiement gratuit sur Streamlit Cloud</span>
-                </div>
-                <ol className="list-decimal list-inside text-xs text-gray-700 space-y-2 leading-relaxed">
-                  <li>Déposez <code>app.py</code> et <code>requirements.txt</code> sur un dépôt GitHub.</li>
-                  <li>Connectez-vous sur <a href="https://share.streamlit.io" target="_blank" rel="noreferrer" className="text-blue-600 underline">share.streamlit.io</a>.</li>
-                  <li>Sélectionnez votre dépôt et cliquez sur <strong>Deploy</strong>.</li>
-                  <li>Votre application sera en ligne 24/7 avec une URL publique partageable !</li>
-                </ol>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </div>

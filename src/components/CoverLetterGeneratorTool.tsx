@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Mail,
@@ -22,6 +22,8 @@ import {
 import confetti from 'canvas-confetti';
 import { localDbClient } from '../services/localDbClient';
 
+import { UserProfile } from '../types';
+
 interface CoverLetterGeneratorToolProps {
   currentCvText?: string;
   currentJobText?: string;
@@ -30,6 +32,7 @@ interface CoverLetterGeneratorToolProps {
   apiKey?: string;
   hasServerKey?: boolean;
   onNavigateToTracker?: () => void;
+  userProfile?: UserProfile | null;
 }
 
 export default function CoverLetterGeneratorTool({
@@ -40,18 +43,44 @@ export default function CoverLetterGeneratorTool({
   apiKey,
   hasServerKey,
   onNavigateToTracker,
+  userProfile,
 }: CoverLetterGeneratorToolProps) {
   // Formulaire candidat & poste
-  const [candidateName, setCandidateName] = useState('Alex Martin');
-  const [targetRole, setTargetRole] = useState(defaultTargetRole || 'Product Owner Senior');
-  const [companyName, setCompanyName] = useState(defaultCompanyName || 'Doctolib');
-  const [hiringManager, setHiringManager] = useState("L'équipe Recrutement & Direction Produit");
+  const [candidateName, setCandidateName] = useState(() => {
+    if (userProfile && (userProfile.firstName || userProfile.lastName)) {
+      return `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+    }
+    return '';
+  });
+  const [targetRole, setTargetRole] = useState(defaultTargetRole || userProfile?.targetRoles?.[0] || userProfile?.currentTitle || '');
+  const [companyName, setCompanyName] = useState(defaultCompanyName || '');
+  const [hiringManager, setHiringManager] = useState("L'équipe Recrutement");
   
   // Ton de la lettre
   const [selectedTone, setSelectedTone] = useState<'impact' | 'corporate' | 'startup' | 'values'>('impact');
   
   // Points clés
-  const [keyArguments, setKeyArguments] = useState('6 ans en SaaS B2B, expertise Agile Scrum certifiée PSPO II, réduction de churn démontrée de 22%');
+  const [keyArguments, setKeyArguments] = useState(() => {
+    if (userProfile?.skills && userProfile.skills.length > 0) {
+      return userProfile.skills.slice(0, 3).join(', ');
+    }
+    return '';
+  });
+  
+  // Synchronisation dynamique si le profil est chargé
+  useEffect(() => {
+    if (userProfile && !candidateName) {
+      const name = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+      if (name) setCandidateName(name);
+    }
+    if (userProfile && !targetRole) {
+      const role = defaultTargetRole || userProfile?.targetRoles?.[0] || userProfile?.currentTitle || '';
+      if (role) setTargetRole(role);
+    }
+    if (userProfile && !keyArguments && userProfile.skills?.length > 0) {
+      setKeyArguments(userProfile.skills.slice(0, 3).join(', '));
+    }
+  }, [userProfile]);
   
   // Contenus de référence
   const [cvSnippet, setCvSnippet] = useState(currentCvText ? currentCvText.slice(0, 1500) : '');
@@ -300,7 +329,7 @@ export default function CoverLetterGeneratorTool({
                     type="text"
                     value={candidateName}
                     onChange={(e) => setCandidateName(e.target.value)}
-                    placeholder="Alex Martin"
+                    placeholder="Ex: Votre Nom & Prénom"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

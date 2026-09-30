@@ -55,6 +55,10 @@ export interface ExtractedFileResult {
 
 export interface UserProfile {
   id: string;
+  name?: string; // Nom ou étiquette du profil (ex: "Trésorier Opérationnel", "Consultant TMS")
+  isDefault?: boolean; // Indique si c'est le profil actif
+  associatedCvId?: string; // ID du CV lié si extrait d'un CV
+  associatedCvTitle?: string; // Nom du CV ayant servi à remplir le profil
   firstName: string;
   lastName: string;
   email: string;
@@ -68,6 +72,7 @@ export interface UserProfile {
   targetRoles: string[];
   skills: string[];
   updatedAt: string;
+  createdAt?: string;
 }
 
 export interface SavedCv {
@@ -111,7 +116,8 @@ export interface UserSettings {
 export interface DatabaseSchema {
   version: number;
   lastUpdated: string;
-  profile: UserProfile;
+  profile: UserProfile; // Profil actif
+  profiles?: UserProfile[]; // Tous les profils enregistrés
   cvs: SavedCv[];
   applications: ApplicationItem[];
   analyses: AnalysisHistoryItem[];

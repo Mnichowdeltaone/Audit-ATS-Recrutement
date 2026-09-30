@@ -88,77 +88,7 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export const INITIAL_SAMPLE_APPLICATIONS: ApplicationItem[] = [
-  {
-    id: 'app-1',
-    company: 'Doctolib',
-    role: 'Product Owner Senior - Santé Digitale',
-    status: 'interview',
-    appliedDate: '2026-09-15',
-    followUpDate: '2026-09-25',
-    location: 'Paris (Hybride 2j)',
-    contractType: 'CDI',
-    salary: '62k - 68k€',
-    jobUrl: 'https://careers.doctolib.fr/offres/po-sante',
-    contact: 'Sophie Martin (Talent Acquisition)',
-    notes: 'Premier call RH validé ! Entretien technique avec le VP Product prévu ce jeudi à 14h. Bien revoir la méthodologie OKR.',
-    score: 88,
-    checklist: {
-      cvSent: true,
-      coverLetterSent: true,
-      portfolioSent: true,
-      followUpDone: true,
-    },
-    createdAt: '2026-09-15T09:30:00Z',
-    updatedAt: '2026-09-20T16:45:00Z',
-  },
-  {
-    id: 'app-2',
-    company: 'Mirakl',
-    role: 'Développeur Fullstack TypeScript / Python',
-    status: 'applied',
-    appliedDate: '2026-09-21',
-    followUpDate: '2026-09-28',
-    location: 'Paris ou Full Remote',
-    contractType: 'CDI',
-    salary: '55k - 60k€',
-    jobUrl: 'https://mirakl.com/jobs/fullstack-engineer',
-    contact: 'contact-recrutement@mirakl.com',
-    notes: 'Candidature spontanée suite à analyse ATS (Score 84%). Relancer si pas de nouvelles d’ici lundi prochain.',
-    score: 84,
-    checklist: {
-      cvSent: true,
-      coverLetterSent: true,
-      portfolioSent: false,
-      followUpDone: false,
-    },
-    createdAt: '2026-09-21T11:00:00Z',
-    updatedAt: '2026-09-21T11:00:00Z',
-  },
-  {
-    id: 'app-3',
-    company: 'L’Oréal',
-    role: 'Chef de Projet Transformation Digitale & IA',
-    status: 'to_apply',
-    appliedDate: '',
-    followUpDate: '2026-09-26',
-    location: 'Clichy (92)',
-    contractType: 'CDI',
-    salary: '65k€ + prime',
-    jobUrl: 'https://careers.loreal.com/global/fr/job/chef-projet-ia',
-    contact: '',
-    notes: 'Offre repérée sur LinkedIn. Adapter le CV avec les mots-clés ATS axés sur la gestion du changement et l’IA générative.',
-    score: 79,
-    checklist: {
-      cvSent: false,
-      coverLetterSent: false,
-      portfolioSent: false,
-      followUpDone: false,
-    },
-    createdAt: '2026-09-23T14:20:00Z',
-    updatedAt: '2026-09-23T14:20:00Z',
-  },
-];
+export const INITIAL_SAMPLE_APPLICATIONS: ApplicationItem[] = [];
 
 export default function ApplicationTracker({
   applications,
@@ -271,7 +201,7 @@ export default function ApplicationTracker({
     setIsModalOpen(true);
   };
 
-  const handleSaveApplication = (e: React.FormEvent) => {
+  const handleSaveApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCompany.trim() || !formRole.trim()) return;
 
@@ -279,30 +209,32 @@ export default function ApplicationTracker({
 
     if (editingApp) {
       // Update
+      const updatedApp: ApplicationItem = {
+        ...editingApp,
+        company: formCompany.trim(),
+        role: formRole.trim(),
+        status: formStatus,
+        appliedDate: formAppliedDate,
+        followUpDate: formFollowUpDate,
+        location: formLocation.trim(),
+        contractType: formContractType,
+        salary: formSalary.trim(),
+        jobUrl: formJobUrl.trim(),
+        contact: formContact.trim(),
+        notes: formNotes.trim(),
+        score: isNaN(Number(parsedScore)) ? null : parsedScore,
+        analysisId: formAnalysisId.trim() || null,
+        checklist: formChecklist,
+        updatedAt: new Date().toISOString(),
+      };
       setApplications((prev) =>
-        prev.map((item) =>
-          item.id === editingApp.id
-            ? {
-                ...item,
-                company: formCompany.trim(),
-                role: formRole.trim(),
-                status: formStatus,
-                appliedDate: formAppliedDate,
-                followUpDate: formFollowUpDate,
-                location: formLocation.trim(),
-                contractType: formContractType,
-                salary: formSalary.trim(),
-                jobUrl: formJobUrl.trim(),
-                contact: formContact.trim(),
-                notes: formNotes.trim(),
-                score: isNaN(Number(parsedScore)) ? null : parsedScore,
-                analysisId: formAnalysisId.trim() || null,
-                checklist: formChecklist,
-                updatedAt: new Date().toISOString(),
-              }
-            : item
-        )
+        prev.map((item) => (item.id === editingApp.id ? updatedApp : item))
       );
+      try {
+        await localDbClient.saveApplication(updatedApp);
+      } catch (err) {
+        console.error('Erreur mise à jour candidature :', err);
+      }
     } else {
       // Create
       const newApp: ApplicationItem = {
@@ -325,6 +257,11 @@ export default function ApplicationTracker({
         updatedAt: new Date().toISOString(),
       };
       setApplications((prev) => [newApp, ...prev]);
+      try {
+        await localDbClient.saveApplication(newApp);
+      } catch (err) {
+        console.error('Erreur création candidature :', err);
+      }
     }
 
     setIsModalOpen(false);
@@ -344,18 +281,28 @@ export default function ApplicationTracker({
     }
   };
 
-  const handleQuickStatusChange = (id: string, newStatus: ApplicationStatus) => {
+  const handleQuickStatusChange = async (id: string, newStatus: ApplicationStatus) => {
+    let targetApp: ApplicationItem | null = null;
     setApplications((prev) =>
-      prev.map((app) =>
-        app.id === id
-          ? {
-              ...app,
-              status: newStatus,
-              updatedAt: new Date().toISOString(),
-            }
-          : app
-      )
+      prev.map((app) => {
+        if (app.id === id) {
+          targetApp = {
+            ...app,
+            status: newStatus,
+            updatedAt: new Date().toISOString(),
+          };
+          return targetApp;
+        }
+        return app;
+      })
     );
+    if (targetApp) {
+      try {
+        await localDbClient.saveApplication(targetApp);
+      } catch (err) {
+        console.error('Erreur mise à jour statut candidature :', err);
+      }
+    }
   };
 
   // Export to CSV

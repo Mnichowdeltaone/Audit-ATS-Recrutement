@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   BookOpen,
@@ -23,6 +23,7 @@ import {
 import { localDbClient } from '../services/localDbClient';
 import CvGeneratorTool from './CvGeneratorTool';
 import CoverLetterGeneratorTool from './CoverLetterGeneratorTool';
+import { UserProfile } from '../types';
 
 interface CvAssistantProps {
   currentCvText: string;
@@ -32,26 +33,8 @@ interface CvAssistantProps {
   onNavigateToTracker?: () => void;
   apiKey?: string;
   hasServerKey?: boolean;
+  userProfile?: UserProfile | null;
 }
-
-const SAMPLE_BULLETS = [
-  {
-    role: 'Développeur / Tech',
-    bullet: 'Développement de nouvelles fonctionnalités et correction de bugs sur la plateforme.',
-  },
-  {
-    role: 'Product Owner / Chef de Projet',
-    bullet: 'Animation des réunions de sprint et rédaction des user stories avec les équipes.',
-  },
-  {
-    role: 'Commercial / Business Developer',
-    bullet: 'Prospection téléphonique et gestion d’un portefeuille de clients en B2B.',
-  },
-  {
-    role: 'Chargé de Clientèle / Support',
-    bullet: 'Traitement des réclamations clients et réponses aux e-mails de support.',
-  },
-];
 
 const TEMPLATES = [
   {
@@ -143,25 +126,40 @@ export default function CvAssistant({
   onNavigateToTracker,
   apiKey,
   hasServerKey,
+  userProfile,
 }: CvAssistantProps) {
   const [activeSubTab, setActiveSubTab] = useState<'generator_cv' | 'generator_letter' | 'ai_tools' | 'guide' | 'templates'>('generator_cv');
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   // Tool 1: Bullet Enhancer
-  const [bulletInput, setBulletInput] = useState(SAMPLE_BULLETS[0].bullet);
-  const [targetRole, setTargetRole] = useState(SAMPLE_BULLETS[0].role);
+  const [bulletInput, setBulletInput] = useState('');
+  const [targetRole, setTargetRole] = useState(userProfile?.targetRoles?.[0] || userProfile?.currentTitle || '');
   const [isEnhancingBullet, setIsEnhancingBullet] = useState(false);
   const [bulletResult, setBulletResult] = useState<string | null>(null);
   const [bulletCopied, setBulletCopied] = useState(false);
   const [bulletSaved, setBulletSaved] = useState(false);
 
   // Tool 2: Bio Generator
-  const [bioRole, setBioRole] = useState('Product Owner / Chef de Projet Digital');
-  const [bioExp, setBioExp] = useState('5 ans');
-  const [bioKeywords, setBioKeywords] = useState('Agile Scrum, e-commerce, data analytics, augmentation du taux de conversion');
+  const [bioRole, setBioRole] = useState(userProfile?.currentTitle || '');
+  const [bioExp, setBioExp] = useState('');
+  const [bioKeywords, setBioKeywords] = useState(() => {
+    return userProfile?.skills?.slice(0, 4).join(', ') || '';
+  });
   const [isGeneratingBio, setIsGeneratingBio] = useState(false);
   const [bioResult, setBioResult] = useState<string | null>(null);
   const [bioSaved, setBioSaved] = useState(false);
+
+  useEffect(() => {
+    if (userProfile && !targetRole) {
+      setTargetRole(userProfile.targetRoles?.[0] || userProfile.currentTitle || '');
+    }
+    if (userProfile && !bioRole) {
+      setBioRole(userProfile.currentTitle || '');
+    }
+    if (userProfile && !bioKeywords && userProfile.skills?.length) {
+      setBioKeywords(userProfile.skills.slice(0, 4).join(', '));
+    }
+  }, [userProfile]);
 
   // Save bullet to local database
   const handleSaveBulletToDb = async () => {
@@ -431,6 +429,7 @@ export default function CvAssistant({
           onNavigateToAnalyzer={onNavigateToAnalyzer}
           apiKey={apiKey}
           hasServerKey={hasServerKey}
+          userProfile={userProfile}
         />
       )}
 
@@ -444,6 +443,7 @@ export default function CvAssistant({
           apiKey={apiKey}
           hasServerKey={hasServerKey}
           onNavigateToTracker={onNavigateToTracker}
+          userProfile={userProfile}
         />
       )}
 
@@ -471,28 +471,6 @@ export default function CvAssistant({
               <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
                 Méthode STAR
               </span>
-            </div>
-
-            {/* Suggestions rapides */}
-            <div>
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                Exemples fréquents à tester en 1 clic :
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {SAMPLE_BULLETS.map((item, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setBulletInput(item.bullet);
-                      setTargetRole(item.role);
-                    }}
-                    className="text-[11px] text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-lg transition-colors text-left"
-                  >
-                    <span className="font-semibold text-gray-900">{item.role} :</span> « {item.bullet.slice(0, 40)}... »
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
