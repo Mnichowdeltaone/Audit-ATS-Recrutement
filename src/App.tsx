@@ -80,6 +80,13 @@ import { localDbClient } from './services/localDbClient';
 import { ApplicationItem, SavedCv, DatabaseStats, UserProfile, EvolutionStep, AnalysisHistoryItem } from './types';
 import { buildEvolutionStep, detectCvChanges } from './utils/cvEvolutionHelper';
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, init);
+}
+
 // Code Python à jour pour l'onglet de téléchargement et consultation
 const PYTHON_APP_CODE = `import io
 import re
@@ -689,7 +696,7 @@ export default function App() {
 
   // Vérifier la présence de la clé API côté serveur
   useEffect(() => {
-    fetch('/api/key-status')
+    apiFetch('/api/key-status')
       .then((res) => res.json())
       .then((data) => {
         if (data?.hasServerKey) {
@@ -810,7 +817,7 @@ export default function App() {
     setIsFetchingUrl(true);
 
     try {
-      const response = await fetch('/api/fetch-job-url', {
+      const response = await apiFetch('/api/fetch-job-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: targetUrl }),
@@ -1158,7 +1165,7 @@ export default function App() {
    *Piste de réponse :* Reliez vos compétences actuelles aux besoins urgents exprimés dans l'annonce.`;
         }
       } else {
-        const response = await fetch('/api/analyze', {
+        const response = await apiFetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

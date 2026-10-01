@@ -13,6 +13,12 @@ import type {
 const IDB_NAME = 'cv_move_personnel_local_db';
 const IDB_VERSION = 1;
 const IDB_STORE = 'app_state';
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, init);
+}
 
 // Helper pour ouvrir IndexedDB côté navigateur
 function openIndexedDb(): Promise<IDBDatabase> {
@@ -262,7 +268,7 @@ export const localDbClient = {
     }
 
     try {
-      const res = await fetch('/api/db/profile');
+      const res = await apiFetch('/api/db/profile');
       if (res.ok) {
         const serverProfile = (await res.json()) as UserProfile;
         if (serverProfile && (serverProfile.firstName || serverProfile.lastName) && serverProfile.firstName !== 'Alex') {
@@ -282,7 +288,7 @@ export const localDbClient = {
     const localList = this.getLocalProfiles();
 
     try {
-      const res = await fetch('/api/db/profiles');
+      const res = await apiFetch('/api/db/profiles');
       if (res.ok) {
         const serverProfiles = (await res.json()) as UserProfile[];
         const cleanServer = serverProfiles.filter((p) => !(p.firstName === 'Alex' && p.lastName === 'Martin'));
@@ -294,7 +300,7 @@ export const localDbClient = {
         for (const p of localList) {
           if (!map.has(p.id)) {
             map.set(p.id, p);
-            fetch('/api/db/profiles', {
+            apiFetch('/api/db/profiles', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(p),
@@ -364,7 +370,7 @@ export const localDbClient = {
 
     // 3. Synchronisation serveur
     try {
-      await fetch('/api/db/profiles', {
+      await apiFetch('/api/db/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -393,7 +399,7 @@ export const localDbClient = {
       await setIdbCache('user_profiles', updatedList);
 
       try {
-        await fetch(`/api/db/profiles/${id}/set-default`, { method: 'POST' });
+        await apiFetch(`/api/db/profiles/${id}/set-default`, { method: 'POST' });
       } catch (err) {
         console.warn('Erreur setDefaultProfile serveur :', err);
       }
@@ -438,7 +444,7 @@ export const localDbClient = {
     await setIdbCache('user_profiles', filtered);
 
     try {
-      await fetch(`/api/db/profiles/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/db/profiles/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteProfile serveur :', err);
     }
@@ -458,7 +464,7 @@ export const localDbClient = {
     const localCvs = this.getLocalCvs();
 
     try {
-      const res = await fetch('/api/db/cvs');
+      const res = await apiFetch('/api/db/cvs');
       if (res.ok) {
         const serverCvs = (await res.json()) as SavedCv[];
         const cleanServer = serverCvs.filter(filterOutDemoCv);
@@ -470,7 +476,7 @@ export const localDbClient = {
         for (const cv of localCvs) {
           if (!map.has(cv.id)) {
             map.set(cv.id, cv);
-            fetch('/api/db/cvs', {
+            apiFetch('/api/db/cvs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(cv),
@@ -504,7 +510,7 @@ export const localDbClient = {
     await setIdbCache('saved_cvs', updated);
 
     try {
-      await fetch('/api/db/cvs', {
+      await apiFetch('/api/db/cvs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cv),
@@ -525,7 +531,7 @@ export const localDbClient = {
     await setIdbCache('saved_cvs', updated);
 
     try {
-      await fetch(`/api/db/cvs/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/db/cvs/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteCv serveur :', err);
     }
@@ -546,7 +552,7 @@ export const localDbClient = {
     await setIdbCache('saved_cvs', updated);
 
     try {
-      await fetch(`/api/db/cvs/${id}/set-default`, { method: 'POST' });
+      await apiFetch(`/api/db/cvs/${id}/set-default`, { method: 'POST' });
     } catch (err) {
       console.warn('Erreur setDefaultCv serveur :', err);
     }
@@ -566,7 +572,7 @@ export const localDbClient = {
     const localApps = this.getLocalApplications();
 
     try {
-      const res = await fetch('/api/db/applications');
+      const res = await apiFetch('/api/db/applications');
       if (res.ok) {
         const serverApps = (await res.json()) as ApplicationItem[];
         const cleanServer = serverApps.filter(filterOutDemoApp);
@@ -580,7 +586,7 @@ export const localDbClient = {
           if (!map.has(app.id)) {
             map.set(app.id, app);
             // Sauvegarder sur le serveur les candidatures locales manquantes
-            fetch('/api/db/applications', {
+            apiFetch('/api/db/applications', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(app),
@@ -617,7 +623,7 @@ export const localDbClient = {
     await setIdbCache('applications', updated);
 
     try {
-      await fetch('/api/db/applications', {
+      await apiFetch('/api/db/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(app),
@@ -638,7 +644,7 @@ export const localDbClient = {
     await setIdbCache('applications', updated);
 
     try {
-      await fetch(`/api/db/applications/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/db/applications/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteApplication serveur :', err);
     }
@@ -658,7 +664,7 @@ export const localDbClient = {
     const local = this.getLocalAnalyses();
 
     try {
-      const res = await fetch('/api/db/analyses');
+      const res = await apiFetch('/api/db/analyses');
       if (res.ok) {
         const serverList = (await res.json()) as AnalysisHistoryItem[];
         const cleanServer = serverList.filter(filterOutDemoAnalysis);
@@ -670,7 +676,7 @@ export const localDbClient = {
         for (const item of local) {
           if (!map.has(item.id)) {
             map.set(item.id, item);
-            fetch('/api/db/analyses', {
+            apiFetch('/api/db/analyses', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(item),
@@ -701,7 +707,7 @@ export const localDbClient = {
     localStorage.setItem('cv_move_history_initialized', 'true');
 
     try {
-      await fetch('/api/db/analyses', {
+      await apiFetch('/api/db/analyses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item),
@@ -736,7 +742,7 @@ export const localDbClient = {
     localStorage.setItem('cv_move_history_initialized', 'true');
 
     try {
-      await fetch(`/api/db/analyses/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/db/analyses/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteAnalysis serveur :', err);
     }
@@ -749,7 +755,7 @@ export const localDbClient = {
     localStorage.setItem('cv_move_history_initialized', 'true');
 
     try {
-      await fetch('/api/db/analyses', { method: 'DELETE' });
+      await apiFetch('/api/db/analyses', { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur clearAnalyses serveur :', err);
     }
@@ -763,7 +769,7 @@ export const localDbClient = {
   async getSuggestions(): Promise<SavedSuggestion[]> {
     const local = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
     try {
-      const res = await fetch('/api/db/suggestions');
+      const res = await apiFetch('/api/db/suggestions');
       if (res.ok) {
         const serverList = (await res.json()) as SavedSuggestion[];
         if (serverList.length > 0 && local.length === 0) {
@@ -785,7 +791,7 @@ export const localDbClient = {
     setStorage('cv_move_suggestions', updated);
 
     try {
-      await fetch('/api/db/suggestions', {
+      await apiFetch('/api/db/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sugg),
@@ -803,7 +809,7 @@ export const localDbClient = {
     setStorage('cv_move_suggestions', updated);
 
     try {
-      await fetch(`/api/db/suggestions/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/db/suggestions/${id}`, { method: 'DELETE' });
     } catch {
       // Ignorer
     }
@@ -892,7 +898,7 @@ export const localDbClient = {
     if (local) return local;
 
     try {
-      const res = await fetch('/api/db/settings');
+      const res = await apiFetch('/api/db/settings');
       if (res.ok) {
         const s = (await res.json()) as UserSettings;
         setStorage('cv_move_user_settings', s);
@@ -915,7 +921,7 @@ export const localDbClient = {
     setStorage('cv_move_user_settings', updated);
 
     try {
-      await fetch('/api/db/settings', {
+      await apiFetch('/api/db/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -936,7 +942,7 @@ export const localDbClient = {
     if (data.suggestions) setStorage('cv_move_suggestions', data.suggestions);
     if (data.coverLetters) setStorage('cv_move_cover_letters', data.coverLetters);
 
-    const res = await fetch('/api/db/import', {
+    const res = await apiFetch('/api/db/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -983,7 +989,7 @@ export const localDbClient = {
     setStorage('cv_move_user_profile', null);
 
     // 4. Appel serveur pour réinitialiser la BDD persistée
-    const res = await fetch('/api/db/reset', { method: 'POST' });
+    const res = await apiFetch('/api/db/reset', { method: 'POST' });
     if (!res.ok) {
       throw new Error('Échec de la réinitialisation');
     }

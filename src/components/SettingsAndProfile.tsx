@@ -42,6 +42,9 @@ import { UserProfile, DatabaseStats, SavedCv } from '../types';
 import { PYTHON_APP_CODE, REQUIREMENTS_TXT } from '../utils/pythonCode';
 import { extractProfileFromCv } from '../utils/profileExtractor';
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
 interface SettingsAndProfileProps {
   apiKey: string;
   setApiKey: (key: string) => void;
@@ -60,6 +63,30 @@ interface SettingsAndProfileProps {
   onProfilesUpdated?: (profiles: UserProfile[]) => void;
   onSelectProfile?: (profileId: string) => void;
   initialSubTab?: 'profile' | 'api' | 'backup' | 'tech';
+}
+
+function normalizeProfile(profile?: Partial<UserProfile> | null): UserProfile {
+  const source = profile || {};
+
+  return {
+    ...source,
+    id: source.id || `profile-${Date.now()}`,
+    name: source.name || 'Profil Principal',
+    isDefault: source.isDefault ?? true,
+    firstName: source.firstName || '',
+    lastName: source.lastName || '',
+    email: source.email || '',
+    phone: source.phone || '',
+    location: source.location || '',
+    currentTitle: source.currentTitle || '',
+    bio: source.bio || '',
+    linkedinUrl: source.linkedinUrl || '',
+    githubUrl: source.githubUrl || '',
+    portfolioUrl: source.portfolioUrl || '',
+    targetRoles: Array.isArray(source.targetRoles) ? source.targetRoles : [],
+    skills: Array.isArray(source.skills) ? source.skills : [],
+    updatedAt: source.updatedAt || new Date().toISOString(),
+  } as UserProfile;
 }
 
 export default function SettingsAndProfile({
@@ -91,13 +118,13 @@ export default function SettingsAndProfile({
 
   // Liste Multi-Profils synchronisée
   const [profiles, setProfiles] = useState<UserProfile[]>(() => {
-    if (userProfiles && userProfiles.length > 0) return userProfiles;
-    return localDbClient.getLocalProfiles();
+    if (userProfiles && userProfiles.length > 0) return userProfiles.map(normalizeProfile);
+    return localDbClient.getLocalProfiles().map(normalizeProfile);
   });
 
   useEffect(() => {
     if (userProfiles && userProfiles.length > 0) {
-      setProfiles(userProfiles);
+      setProfiles(userProfiles.map(normalizeProfile));
     }
   }, [userProfiles]);
 
@@ -105,26 +132,9 @@ export default function SettingsAndProfile({
   const [profile, setProfile] = useState<UserProfile>(() => {
     const local = localDbClient.getLocalProfile();
     if (local && (local.firstName || local.lastName)) {
-      return local;
+      return normalizeProfile(local);
     }
-    return {
-      id: `profile-${Date.now()}`,
-      name: 'Profil Principal',
-      isDefault: true,
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      location: '',
-      currentTitle: '',
-      bio: '',
-      linkedinUrl: '',
-      githubUrl: '',
-      portfolioUrl: '',
-      targetRoles: [],
-      skills: [],
-      updatedAt: new Date().toISOString(),
-    };
+    return normalizeProfile();
   });
 
   const [newSkillInput, setNewSkillInput] = useState('');
@@ -150,12 +160,14 @@ export default function SettingsAndProfile({
       .getProfiles()
       .then((loadedList) => {
         if (loadedList && loadedList.length > 0) {
-          setProfiles(loadedList);
-          onProfilesUpdated?.(loadedList);
-          const active = loadedList.find((p) => p.isDefault) || loadedList[0];
+          const normalizedList = loadedList.map(normalizeProfile);
+          setProfiles(normalizedList);
+          onProfilesUpdated?.(normalizedList);
+          const active = normalizedList.find((p) => p.isDefault) || normalizedList[0];
           if (active) {
-            setProfile(active);
-            onProfileUpdated?.(active);
+            const normalizedActive = normalizeProfile(active);
+            setProfile(normalizedActive);
+            onProfileUpdated?.(normalizedActive);
           }
         }
       })
@@ -167,17 +179,18 @@ export default function SettingsAndProfile({
     try {
       const switched = await localDbClient.setDefaultProfile(targetId);
       if (switched) {
-        setProfile(switched);
+        const normalizedSwitched = normalizeProfile(switched);
+        setProfile(normalizedSwitched);
         setProfiles((prev) =>
           prev.map((p) => ({
             ...p,
             isDefault: p.id === targetId,
           }))
         );
-        onProfileUpdated?.(switched);
+        onProfileUpdated?.(normalizedSwitched);
         setNotice({
           type: 'success',
-          message: `Profil actif basculé sur « ${switched.name || switched.currentTitle || 'Profil'} » !`,
+          message: `Profil actif basculé sur « ${normalizedSwitched.name || normalizedSwitched.currentTitle || 'Profil'} » !`,
         });
         setTimeout(() => setNotice(null), 3000);
       }
@@ -218,9 +231,9 @@ export default function SettingsAndProfile({
         }
       }
 
-      const newP = await localDbClient.saveProfile(initialData);
+      const newP = normalizeProfile(await localDbClient.saveProfile(initialData));
       setProfile(newP);
-      const updatedList = await localDbClient.getProfiles();
+      const updatedList = (await localDbClient.getProfiles()).map(normalizeProfile);
       setProfiles(updatedList);
       onProfileUpdated?.(newP);
       onProfilesUpdated?.(updatedList);
@@ -274,11 +287,11 @@ export default function SettingsAndProfile({
   const handleDeleteProfile = async (idToDelete: string) => {
     try {
       await localDbClient.deleteProfile(idToDelete);
-      const updatedList = await localDbClient.getProfiles();
-      const cleanList = updatedList && updatedList.length > 0 ? updatedList : [];
+      const updatedList = (await localDbClient.getProfiles()).map(normalizeProfile);
+      const cleanList = updatedList.length > 0 ? updatedList : [];
       setProfiles(cleanList);
       onProfilesUpdated?.(cleanList);
-      const newActive = cleanList.find((p) => p.isDefault) || cleanList[0] || {
+      const fallbackProfile = normalizeProfile({
         id: `profile-${Date.now()}`,
         name: 'Nouveau Profil',
         firstName: '',
@@ -295,9 +308,11 @@ export default function SettingsAndProfile({
         skills: [],
         updatedAt: new Date().toISOString(),
         isDefault: true,
-      };
-      setProfile(newActive);
-      onProfileUpdated?.(newActive);
+      });
+      const newActive = cleanList.find((p) => p.isDefault) || cleanList[0] || fallbackProfile;
+      const normalizedActive = normalizeProfile(newActive);
+      setProfile(normalizedActive);
+      onProfileUpdated?.(normalizedActive);
       setNotice({ type: 'success', message: '🗑️ Profil supprimé avec succès.' });
       setTimeout(() => setNotice(null), 3000);
     } catch {
@@ -324,7 +339,7 @@ export default function SettingsAndProfile({
     try {
       const extracted = await extractProfileFromCv(textToUse, apiKey, selectedModel);
 
-      const mergedProfile: UserProfile = {
+      const mergedProfile = normalizeProfile({
         ...profile,
         firstName: extracted.firstName || profile.firstName,
         lastName: extracted.lastName || profile.lastName,
@@ -332,20 +347,23 @@ export default function SettingsAndProfile({
         phone: extracted.phone || profile.phone,
         location: extracted.location || profile.location,
         currentTitle: extracted.currentTitle || profile.currentTitle,
-        bio: extracted.bio || profile.bio,
-        linkedinUrl: extracted.linkedinUrl || profile.linkedinUrl,
-        githubUrl: extracted.githubUrl || profile.githubUrl,
-        targetRoles: extracted.targetRoles && extracted.targetRoles.length > 0 ? extracted.targetRoles : profile.targetRoles,
-        skills: extracted.skills && extracted.skills.length > 0 ? extracted.skills : profile.skills,
+        bio: extracted.bio || profile.bio || '',
+        linkedinUrl: extracted.linkedinUrl || profile.linkedinUrl || '',
+        githubUrl: extracted.githubUrl || profile.githubUrl || '',
+        targetRoles:
+          extracted.targetRoles && extracted.targetRoles.length > 0
+            ? extracted.targetRoles
+            : profile.targetRoles || [],
+        skills: extracted.skills && extracted.skills.length > 0 ? extracted.skills : profile.skills || [],
         name: profile.name && !profile.name.startsWith('Profil ') ? profile.name : extracted.currentTitle || profile.name || 'Profil Candidat',
         updatedAt: new Date().toISOString(),
-      };
+      });
 
-      await localDbClient.saveProfile(mergedProfile);
-      setProfile(mergedProfile);
-      const updatedList = await localDbClient.getProfiles();
+      const savedProfile = normalizeProfile(await localDbClient.saveProfile(mergedProfile));
+      setProfile(savedProfile);
+      const updatedList = (await localDbClient.getProfiles()).map(normalizeProfile);
       setProfiles(updatedList);
-      onProfileUpdated?.(mergedProfile);
+      onProfileUpdated?.(savedProfile);
       onProfilesUpdated?.(updatedList);
 
       confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
@@ -368,15 +386,15 @@ export default function SettingsAndProfile({
     setIsSavingProfile(true);
     setNotice(null);
     try {
-      const updated: UserProfile = {
+      const updated = normalizeProfile({
         ...profile,
         updatedAt: new Date().toISOString(),
-      };
-      await localDbClient.saveProfile(updated);
-      setProfile(updated);
-      const updatedList = await localDbClient.getProfiles();
+      });
+      const savedProfile = normalizeProfile(await localDbClient.saveProfile(updated));
+      setProfile(savedProfile);
+      const updatedList = (await localDbClient.getProfiles()).map(normalizeProfile);
       setProfiles(updatedList);
-      onProfileUpdated?.(updated);
+      onProfileUpdated?.(savedProfile);
       onProfilesUpdated?.(updatedList);
       confetti({ particleCount: 35, spread: 50, origin: { y: 0.6 } });
       setNotice({ type: 'success', message: `Profil « ${updated.name || 'Candidat'} » enregistré avec succès dans la base locale !` });
@@ -403,7 +421,7 @@ export default function SettingsAndProfile({
       profile.portfolioUrl ? profile.portfolioUrl.replace(/^https?:\/\//, '') : '',
     ].filter(Boolean);
 
-    const header = `${fullName}\n${title}${contactParts.join(' | ')}\n\nRÉSUMÉ PROFESSIONNEL\n${profile.bio || ''}\n\nCOMPÉTENCES CLÉS\n${profile.skills.map((s) => `- ${s}`).join('\n')}\n\n`;
+    const header = `${fullName}\n${title}${contactParts.join(' | ')}\n\nRÉSUMÉ PROFESSIONNEL\n${profile.bio || ''}\n\nCOMPÉTENCES CLÉS\n${(profile.skills || []).map((s) => `- ${s}`).join('\n')}\n\n`;
 
     onInjectProfileToCv(header);
     setNotice({ type: 'success', message: 'Coordonnées & résumé injectés avec succès en en-tête de votre CV actif !' });
@@ -416,10 +434,10 @@ export default function SettingsAndProfile({
   // Ajouter une compétence
   const handleAddSkill = () => {
     const trimmed = newSkillInput.trim();
-    if (trimmed && !profile.skills.includes(trimmed)) {
+    if (trimmed && !(profile.skills || []).includes(trimmed)) {
       setProfile((prev) => ({
         ...prev,
-        skills: [...prev.skills, trimmed],
+        skills: [...(prev.skills || []), trimmed],
       }));
       setNewSkillInput('');
     }
@@ -429,17 +447,17 @@ export default function SettingsAndProfile({
   const handleRemoveSkill = (skillToRemove: string) => {
     setProfile((prev) => ({
       ...prev,
-      skills: prev.skills.filter((s) => s !== skillToRemove),
+      skills: (prev.skills || []).filter((s) => s !== skillToRemove),
     }));
   };
 
   // Ajouter un rôle ciblé
   const handleAddRole = () => {
     const trimmed = newRoleInput.trim();
-    if (trimmed && !profile.targetRoles.includes(trimmed)) {
+    if (trimmed && !(profile.targetRoles || []).includes(trimmed)) {
       setProfile((prev) => ({
         ...prev,
-        targetRoles: [...prev.targetRoles, trimmed],
+        targetRoles: [...(prev.targetRoles || []), trimmed],
       }));
       setNewRoleInput('');
     }
@@ -449,7 +467,7 @@ export default function SettingsAndProfile({
   const handleRemoveRole = (roleToRemove: string) => {
     setProfile((prev) => ({
       ...prev,
-      targetRoles: prev.targetRoles.filter((r) => r !== roleToRemove),
+      targetRoles: (prev.targetRoles || []).filter((r) => r !== roleToRemove),
     }));
   };
 
@@ -459,7 +477,7 @@ export default function SettingsAndProfile({
     setApiTestResult(null);
 
     try {
-      const res = await fetch('/api/test-key', {
+      const res = await fetch(`${API_BASE_URL}/api/test-key`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1047,7 +1065,7 @@ export default function SettingsAndProfile({
                   </label>
                   <input
                     type="url"
-                    value={profile.linkedinUrl}
+                    value={profile.linkedinUrl || ''}
                     onChange={(e) => setProfile({ ...profile, linkedinUrl: e.target.value })}
                     placeholder="https://linkedin.com/in/mon-profil"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1061,7 +1079,7 @@ export default function SettingsAndProfile({
                   </label>
                   <input
                     type="url"
-                    value={profile.githubUrl}
+                    value={profile.githubUrl || ''}
                     onChange={(e) => setProfile({ ...profile, githubUrl: e.target.value })}
                     placeholder="https://github.com/mon-profil"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1075,7 +1093,7 @@ export default function SettingsAndProfile({
                   </label>
                   <input
                     type="url"
-                    value={profile.portfolioUrl}
+                    value={profile.portfolioUrl || ''}
                     onChange={(e) => setProfile({ ...profile, portfolioUrl: e.target.value })}
                     placeholder="https://mon-portfolio.fr"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1091,12 +1109,12 @@ export default function SettingsAndProfile({
                   Résumé Professionnel & Pitch d&apos;accroche
                 </label>
                 <span className="text-[11px] text-gray-400">
-                  {profile.bio.length} caractères (Idéal : 250 - 450 caractères)
+                  {(profile.bio || '').length} caractères (Idéal : 250 - 450 caractères)
                 </span>
               </div>
               <textarea
                 rows={4}
-                value={profile.bio}
+                value={profile.bio || ''}
                 onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
                 placeholder="Rédigez un résumé percutant de votre valeur ajoutée, de vos réalisations phares et de vos domaines d'excellence..."
                 className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-sans text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
@@ -1107,7 +1125,7 @@ export default function SettingsAndProfile({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider">
-                  Compétences Clés & Mots-clés ATS Majeurs ({profile.skills.length})
+                  Compétences Clés & Mots-clés ATS Majeurs ({(profile.skills || []).length})
                 </label>
                 <span className="text-[11px] text-gray-500">
                   Appuyez sur Entrée ou cliquez sur Ajouter
@@ -1140,7 +1158,7 @@ export default function SettingsAndProfile({
 
               {/* Tags de compétences */}
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {profile.skills.map((skill) => (
+                {(profile.skills || []).map((skill) => (
                   <span
                     key={skill}
                     className="inline-flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-800 text-xs px-2.5 py-1 rounded-lg font-medium"
@@ -1163,7 +1181,7 @@ export default function SettingsAndProfile({
             <div className="space-y-3 pt-2 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider">
-                  Postes et Métiers Recherchés ({profile.targetRoles.length})
+                  Postes et Métiers Recherchés ({(profile.targetRoles || []).length})
                 </label>
               </div>
 
@@ -1192,7 +1210,7 @@ export default function SettingsAndProfile({
               </div>
 
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {profile.targetRoles.map((role) => (
+                {(profile.targetRoles || []).map((role) => (
                   <span
                     key={role}
                     className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs px-2.5 py-1 rounded-lg font-medium"

@@ -24,6 +24,13 @@ import { localDbClient } from '../services/localDbClient';
 
 import { UserProfile } from '../types';
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, init);
+}
+
 interface CoverLetterGeneratorToolProps {
   currentCvText?: string;
   currentJobText?: string;
@@ -117,7 +124,7 @@ export default function CoverLetterGeneratorTool({
     setActionNotice(null);
 
     try {
-      const res = await fetch('/api/assist-cv', {
+      const res = await apiFetch('/api/assist-cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

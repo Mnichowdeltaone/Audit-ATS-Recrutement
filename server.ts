@@ -1086,7 +1086,7 @@ app.post('/api/db/reset', async (_req: Request, res: Response) => {
 
 // Configure Vite middleware in development or serve static in production
 async function startServer() {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = process.env.NODE_ENV === 'production' || process.env.ELECTRON_RUN_AS_NODE === '1';
 
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
@@ -1096,7 +1096,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(__dirname);
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(distPath, 'index.html'));

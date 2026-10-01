@@ -16,8 +16,10 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const DATA_DIR = path.join(ROOT_DIR, 'data');
+const BUNDLED_DATA_DIR = path.join(ROOT_DIR, 'data');
+const DATA_DIR = process.env.CV_MOVE_DATA_DIR || BUNDLED_DATA_DIR;
 const DB_FILE_PATH = path.join(DATA_DIR, 'local_database.json');
+const BUNDLED_DB_FILE_PATH = path.join(BUNDLED_DATA_DIR, 'local_database.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
 // Données initiales par défaut (Vierge pour l'espace personnel de l'utilisateur)
@@ -55,22 +57,29 @@ const DEFAULT_DATABASE: DatabaseSchema = {
   },
 };
 
-// Cache en mémoire pour garantir la disponibilité permanente et la résilience
-let inMemoryDbCache: DatabaseSchema | null = null;
-let saveQueue: Promise<void> = Promise.resolve();
+function normalizeProfile(profile?: Partial<UserProfile> | null): UserProfile {
+  const source = profile || {};
 
-// Écriture atomique synchrone sécurisée
-function writeAtomicSync(targetPath: string, content: string): void {
-  const tempPath = `${targetPath}.${process.pid}.${Date.now()}-${Math.random().toString(36).substring(2, 8)}.tmp`;
-  try {
-    fs.writeFileSync(tempPath, content, 'utf-8');
-    fs.renameSync(tempPath, targetPath);
-  } catch {
-    try {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-    } catch {}
-    fs.writeFileSync(targetPath, content, 'utf-8');
-  }
+  return {
+    ...DEFAULT_DATABASE.profile,
+    ...source,
+    id: source.id || `profile-${Date.now()}`,
+    name: source.name || source.currentTitle || `${source.firstName || ''} ${source.lastName || ''}`.trim() || 'Profil Principal',
+    isDefault: source.isDefault ?? true,
+    firstName: source.firstName || '',
+    lastName: source.lastName || '',
+    email: source.email || '',
+    phone: source.phone || '',
+    location: source.location || '',
+    currentTitle: source.currentTitle || '',
+    bio: source.bio || '',
+    linkedinUrl: source.linkedinUrl || '',
+    githubUrl: source.githubUrl || '',
+    portfolioUrl: source.portfolioUrl || '',
+    targetRoles: Array.isArray(source.targetRoles) ? source.targetRoles : [],
+    skills: Array.isArray(source.skills) ? source.skills : [],
+    updatedAt: source.updatedAt || new Date().toISOString(),
+  };
 }
 
 // Vérification et initialisation synchrone du répertoire et du fichier
@@ -81,48 +90,25 @@ function ensureDbExists(): void {
   if (!fs.existsSync(BACKUP_DIR)) {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
   }
-
-  let needsInit = false;
   if (!fs.existsSync(DB_FILE_PATH)) {
-    needsInit = true;
-  } else {
-    try {
-      const stats = fs.statSync(DB_FILE_PATH);
-      if (stats.size === 0) {
-        needsInit = true;
-      }
-    } catch {
-      needsInit = true;
+    if (DB_FILE_PATH !== BUNDLED_DB_FILE_PATH && fs.existsSync(BUNDLED_DB_FILE_PATH)) {
+      fs.copyFileSync(BUNDLED_DB_FILE_PATH, DB_FILE_PATH);
+    } else {
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
     }
-  }
-
-  if (needsInit) {
-    writeAtomicSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2));
   }
 }
 
-// Lecture de la base de données avec tolérance aux pannes et auto-réparation
+// Lecture de la base de données
 export function getDatabase(): DatabaseSchema {
   ensureDbExists();
   try {
     const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-    if (!raw || !raw.trim()) {
-      // Fichier vide ou tronqué : réparer immédiatement avec le cache ou le schéma par défaut
-      const fallback = inMemoryDbCache || DEFAULT_DATABASE;
-      writeAtomicSync(DB_FILE_PATH, JSON.stringify(fallback, null, 2));
-      inMemoryDbCache = fallback;
-      return fallback;
-    }
-
     const parsed = JSON.parse(raw) as DatabaseSchema;
-    if (!parsed || typeof parsed !== 'object') {
-      throw new Error('Format de base de données invalide (non-objet)');
-    }
-
-    const profile = { ...DEFAULT_DATABASE.profile, ...(parsed.profile || {}) };
+    const profile = normalizeProfile(parsed.profile);
 
     let profiles: UserProfile[] = Array.isArray(parsed.profiles) && parsed.profiles.length > 0
-      ? parsed.profiles
+      ? parsed.profiles.map(normalizeProfile)
       : [];
 
     // Migration transparente si profiles est vide mais qu'un profil principal existe
@@ -137,7 +123,7 @@ export function getDatabase(): DatabaseSchema {
     }
 
     // Rétrocompatibilité et fusion avec les champs manquants
-    const sanitizedDb: DatabaseSchema = {
+    return {
       version: parsed.version || 1,
       lastUpdated: parsed.lastUpdated || new Date().toISOString(),
       profile,
@@ -149,44 +135,21 @@ export function getDatabase(): DatabaseSchema {
       coverLetters: Array.isArray(parsed.coverLetters) ? parsed.coverLetters : (DEFAULT_DATABASE.coverLetters || []),
       settings: { ...DEFAULT_DATABASE.settings, ...(parsed.settings || {}) },
     };
-
-    inMemoryDbCache = sanitizedDb;
-    return sanitizedDb;
   } catch (err) {
-    console.warn('Notice lecture BDD locale, réinitialisation sécurisée appliquée :', err instanceof Error ? err.message : String(err));
-    const fallback = inMemoryDbCache || DEFAULT_DATABASE;
-    try {
-      writeAtomicSync(DB_FILE_PATH, JSON.stringify(fallback, null, 2));
-    } catch {}
-    inMemoryDbCache = fallback;
-    return fallback;
+    console.error('Erreur lecture BDD locale, réinitialisation sécurisée :', err);
+    return DEFAULT_DATABASE;
   }
 }
 
-// Écriture atomique et sérialisée avec file d'attente pour zéro corruption
-export function saveDatabase(data: DatabaseSchema): Promise<void> {
+// Écriture atomique avec fichier temporaire pour zéro corruption
+export async function saveDatabase(data: DatabaseSchema): Promise<void> {
+  ensureDbExists();
   data.lastUpdated = new Date().toISOString();
-  inMemoryDbCache = data;
+  const tempPath = `${DB_FILE_PATH}.tmp`;
+  const jsonStr = JSON.stringify(data, null, 2);
 
-  saveQueue = saveQueue.then(async () => {
-    ensureDbExists();
-    const tempPath = `${DB_FILE_PATH}.${process.pid}.${Date.now()}-${Math.random().toString(36).substring(2, 8)}.tmp`;
-    const jsonStr = JSON.stringify(data, null, 2);
-
-    try {
-      await fs.promises.writeFile(tempPath, jsonStr, 'utf-8');
-      await fs.promises.rename(tempPath, DB_FILE_PATH);
-    } catch {
-      try {
-        if (fs.existsSync(tempPath)) {
-          await fs.promises.unlink(tempPath);
-        }
-      } catch {}
-      writeAtomicSync(DB_FILE_PATH, jsonStr);
-    }
-  });
-
-  return saveQueue;
+  await fs.promises.writeFile(tempPath, jsonStr, 'utf-8');
+  await fs.promises.rename(tempPath, DB_FILE_PATH);
 }
 
 // =============================================================================
@@ -204,11 +167,11 @@ export async function getProfiles(): Promise<UserProfile[]> {
 
 export async function updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
   const db = getDatabase();
-  const updatedProfile: UserProfile = {
+  const updatedProfile: UserProfile = normalizeProfile({
     ...db.profile,
     ...updates,
     updatedAt: new Date().toISOString(),
-  };
+  });
   db.profile = updatedProfile;
 
   // Mettre également à jour dans la liste des profils
@@ -229,13 +192,13 @@ export async function saveProfileToDb(profileToSave: UserProfile): Promise<UserP
   if (!db.profiles) db.profiles = [];
 
   const now = new Date().toISOString();
-  const cleanProfile: UserProfile = {
+  const cleanProfile: UserProfile = normalizeProfile({
     ...profileToSave,
     id: profileToSave.id || `profile-${Date.now()}`,
     name: profileToSave.name || profileToSave.currentTitle || `${profileToSave.firstName} ${profileToSave.lastName}`.trim() || 'Profil Candidat',
     updatedAt: now,
     createdAt: profileToSave.createdAt || now,
-  };
+  });
 
   const existingIndex = db.profiles.findIndex((p) => p.id === cleanProfile.id);
 
@@ -618,10 +581,12 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
 
 export async function importDatabase(importedData: Partial<DatabaseSchema>): Promise<DatabaseSchema> {
   const currentDb = getDatabase();
+  const profile = importedData.profile ? normalizeProfile({ ...currentDb.profile, ...importedData.profile }) : currentDb.profile;
   const merged: DatabaseSchema = {
     version: importedData.version || currentDb.version || 1,
     lastUpdated: new Date().toISOString(),
-    profile: importedData.profile ? { ...currentDb.profile, ...importedData.profile } : currentDb.profile,
+    profile,
+    profiles: Array.isArray(importedData.profiles) ? importedData.profiles.map(normalizeProfile) : currentDb.profiles,
     cvs: Array.isArray(importedData.cvs) ? importedData.cvs : currentDb.cvs,
     applications: Array.isArray(importedData.applications) ? importedData.applications : currentDb.applications,
     analyses: Array.isArray(importedData.analyses) ? importedData.analyses : currentDb.analyses,

@@ -21,6 +21,13 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, init);
+}
+
 interface CvOptimizationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -104,7 +111,7 @@ export default function CvOptimizationModal({
     setSuccessNotice(null);
 
     try {
-      const res = await fetch('/api/assist-cv', {
+      const res = await apiFetch('/api/assist-cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,5 +1,8 @@
 import { UserProfile } from '../types';
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
 /**
  * Nettoie une chaîne de texte
  */
@@ -175,7 +178,7 @@ export async function extractProfileFromCv(
   const localExtracted = extractProfileFromCvTextLocal(cvText);
 
   try {
-    const res = await fetch('/api/extract-profile', {
+    const res = await fetch(`${API_BASE_URL}/api/extract-profile`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
