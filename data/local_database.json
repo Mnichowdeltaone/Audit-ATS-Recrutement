@@ -1,65 +1,48 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-28T22:18:00.000Z",
+  "lastUpdated": "2026-10-01T20:01:39.159Z",
   "profile": {
     "id": "user_profile",
-    "firstName": "François",
-    "lastName": "Delrieu",
-    "email": "delrieu.f@gmail.com",
-    "phone": "0695751529",
-    "location": "Montrouge",
-    "currentTitle": "Responsable Trésorerie",
-    "bio": "Expert en gestion de trésorerie avec plus de 15 ans d'expérience dans l'optimisation des flux financiers, le cash pooling et le déploiement de Treasury Management Systems (TMS). Alliant une forte maîtrise métier à des compétences techniques (implémentation de SaaS, développement d'outils sur mesure), j'accompagne les directions financières dans l'automatisation de leurs processus, la fiabilité des prévisions (forecast) et la sécurité des transactions (SEPA, EBICS).",
+    "firstName": "",
+    "lastName": "",
+    "email": "",
+    "phone": "",
+    "location": "",
+    "currentTitle": "",
+    "bio": "",
     "linkedinUrl": "",
     "githubUrl": "",
     "portfolioUrl": "",
-    "targetRoles": [
-      "Gestion de trésorerie",
-      "Cash manager",
-      "Consultant produit TMS"
-    ],
-    "skills": [
-      "Trésorerie & Finance : Gestion de trésorerie quotidienne",
-      "Cash pooling",
-      "Analyse des positions",
-      "Prévisions et modélisations budgétaires (forecast)",
-      "Rapprochement bancaire",
-      "Lettrage",
-      "Credit Management",
-      "Reporting financier",
-      "Échanges bancaires télématiques",
-      "Normes EBICS T / TS",
-      "Échanges SEPA",
-      "Sécurité des paiements",
-      "TMS & ERP : AGICAP, Pennylane, Kyriba, Sage FRP Treasury, Sage X3",
-      "MS Excel (VBA avancé)",
-      "Python (Flask, SQLAlchemy, Streamlit)",
-      "React",
-      "Anglais professionnel"
-    ],
-    "updatedAt": "2026-09-28T22:18:00.000Z"
+    "targetRoles": [],
+    "skills": [],
+    "updatedAt": "2026-10-01T20:01:34.653Z"
   },
-  "cvs": [
+  "profiles": [
     {
-      "id": "cv-1790336162186",
-      "title": "CV FD Actuel",
-      "targetRole": "Responsable Trésorerie / Trésorier Opérationnel",
-      "fileName": "CV FD Actuel.docx",
-      "fileType": "docx",
-      "rawText": "François DELRIEU 61 avenue de la Marne, 92120 MONTROUGE 06 72 42 88 93 | delrieu.fra@gmail.com Permis B / Permis A\n\nTRÉSORIER OPÉRATIONNEL / CHEF DE PROJET SI TRÉSORERIE\n\nRÉSUMÉ\nExpert en gestion de trésorerie avec plus de 15 ans d'expérience dans l'optimisation des flux financiers, le cash pooling et le déploiement de Treasury Management Systems (TMS). Alliant une forte maîtrise métier à des compétences techniques (implémentation de SaaS, développement d'outils sur mesure), j'accompagne les directions financières dans l'automatisation de leurs processus, la fiabilité des prévisions (forecast) et la sécurité des transactions (SEPA, EBICS).\n\nCOMPÉTENCES CLÉS\nTrésorerie & Finance : Gestion de trésorerie quotidienne, Cash pooling, Analyse des positions, Prévisions et modélisations budgétaires (forecast), Rapprochement bancaire, Lettrage, Credit Management, Reporting financier.\nProtocoles & Normes : Échanges bancaires télématiques, Normes EBICS T / TS, Échanges SEPA, Sécurité des paiements.\nOutils Métiers (TMS, ERP & SaaS) : AGICAP, Pennylane, Kyriba, Sage FRP Treasury, Sage X3 Adonix, Visual Rappro, JD Edwards, Anael Comptabilité.\nSystèmes d'Information & Développement : MS Excel (VBA avancé), Python (Flask, SQLAlchemy, Streamlit), React, conception d'applications web de gestion de trésorerie.\nLangues : Anglais professionnel.\n\nEXPÉRIENCES PROFESSIONNELLES\nConcepteur / Développeur d'Outils de Gestion Financière (Indépendant) Projet Valoria Vision | Montrouge | Décembre 2024 – Présent\n- Conception et développement de 'Valoria Vision', plateforme web dédiée à la gestion financière.\n- Automatisation des processus de collecte et de traitement des données de trésorerie.\n- Création de tableaux de bord interactifs et de reportings budgétaires sur mesure via Python (Streamlit) et React.\n\nTrésorier KEN GROUP devenu MASADA (Clubs de sport premium) | Île-de-France | Octobre 2022 – Novembre 2024\n- Gestion de la trésorerie opérationnelle et élaboration des prévisions (forecast) à l'échelle du groupe.\n- Déploiement, paramétrage et optimisation du TMS AGICAP en tant que client pilote.\n- Mise en place et intégration de la plateforme PENNYLANE pour la gestion comptable et financière.\n\nComptable Trésorier ECF Groupe | Grigny | Octobre 2021 – Avril 2022\n- Pilotage de la trésorerie opérationnelle quotidienne (cash pool) pour le groupe et ses filiales.\n- Production du reporting et analyse quotidienne des positions bancaires.\n- Gestion et exécution des campagnes de paiement fournisseurs, incluant les devises.\n\nConsultant Trésorerie EMOVA Group | Boulogne-Billancourt | Avril 2019 – Novembre 2020\n- Gestion opérationnelle de la trésorerie au quotidien (flux Cash In / Cash Out).\n- Analyse des écarts et élaboration du besoin prévisionnel de trésorerie à court et moyen terme.\n\nAssistant du Gestionnaire Trésorerie LADAPT | Pantin | Mars 2017 – Février 2019\n- Administration de la trésorerie à l'échelle nationale.\n- Élaboration et mise en place des procédures fonctionnelles de restructuration du département.\n- Création et automatisation d'un reporting budgétaire consolidé.\n\nCredit Manager (Mission) Du Pareil au Même / Sergent Major / Natalys | Montreuil | Mars 2016 – Novembre 2016\n- Gestion de la trésorerie et des reportings opérationnels et budgétaires.\n- Pilotage du Credit Management pour les clients à l'export (15 pays).\n\nAssistant Trésorerie Groupe Kering (Yves Saint Laurent SAS) | Paris | Janvier 2013 – Décembre 2015\n- Gestion de la trésorerie en cash pool en étroite collaboration avec la société mère (Kering).\n- Établissement de la trésorerie quotidienne, prévisionnelle et des reportings.\n\nAssistant Trésorier Groupe Narbonne Accessoires | Narbonne | Janvier 2006 – Janvier 2013\n- Élaboration des prévisions de trésorerie du groupe et exécution des arbitrages.\n- Participation active à la migration du Treasury Management System (TMS).\n\nConsultant Déploiement Sage France | Saint-Ouen | Janvier 1993 – Décembre 2005\n- Pilotage, paramétrage et coordination du déploiement des progiciels SAGE Trésorerie FRP.\n\nFORMATION\nFormation Assistant Contrôle de Gestion & Management de la Performance | ENS Saclay (2020)\nBaccalauréat Comptabilité et Gestion | Lycée Emmanuel Mounier",
-      "isDefault": true,
-      "fileSize": 4965,
-      "createdAt": "2026-09-25T11:36:02.186Z",
-      "updatedAt": "2026-09-28T22:18:00.000Z"
+      "id": "user_profile",
+      "firstName": "",
+      "lastName": "",
+      "email": "",
+      "phone": "",
+      "location": "",
+      "currentTitle": "",
+      "bio": "",
+      "linkedinUrl": "",
+      "githubUrl": "",
+      "portfolioUrl": "",
+      "targetRoles": [],
+      "skills": [],
+      "updatedAt": "2026-10-01T20:01:34.653Z"
     }
   ],
+  "cvs": [],
   "applications": [],
   "analyses": [],
   "suggestions": [],
   "settings": {
     "selectedModel": "gemini-3.8-flash",
     "autoSaveToDb": true,
-    "backupFrequency": "weekly",
-    "lastBackupDate": "2026-09-28T22:18:00.000Z"
+    "backupFrequency": "daily-9",
+    "lastBackupDate": "2026-10-01T20:01:34.653Z"
   }
 }

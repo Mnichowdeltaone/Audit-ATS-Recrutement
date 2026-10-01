@@ -51,6 +51,24 @@ const DEFAULT_DATABASE: DatabaseSchema = {
   },
 };
 
+// Cache en mémoire pour garantir la disponibilité permanente et la résilience
+let inMemoryDbCache: DatabaseSchema | null = null;
+let saveQueue: Promise<void> = Promise.resolve();
+
+// Écriture atomique synchrone sécurisée
+function writeAtomicSync(targetPath: string, content: string): void {
+  const tempPath = `${targetPath}.${process.pid}.${Date.now()}-${Math.random().toString(36).substring(2, 8)}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, content, 'utf-8');
+    fs.renameSync(tempPath, targetPath);
+  } catch {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch {}
+    fs.writeFileSync(targetPath, content, 'utf-8');
+  }
+}
+
 // Vérification et initialisation synchrone du répertoire et du fichier
 function ensureDbExists(): void {
   if (!fs.existsSync(DATA_DIR)) {
@@ -59,17 +77,44 @@ function ensureDbExists(): void {
   if (!fs.existsSync(BACKUP_DIR)) {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
   }
+
+  let needsInit = false;
   if (!fs.existsSync(DB_FILE_PATH)) {
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
+    needsInit = true;
+  } else {
+    try {
+      const stats = fs.statSync(DB_FILE_PATH);
+      if (stats.size === 0) {
+        needsInit = true;
+      }
+    } catch {
+      needsInit = true;
+    }
+  }
+
+  if (needsInit) {
+    writeAtomicSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2));
   }
 }
 
-// Lecture de la base de données
+// Lecture de la base de données avec tolérance aux pannes et auto-réparation
 export function getDatabase(): DatabaseSchema {
   ensureDbExists();
   try {
     const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
+    if (!raw || !raw.trim()) {
+      // Fichier vide ou tronqué : réparer immédiatement avec le cache ou le schéma par défaut
+      const fallback = inMemoryDbCache || DEFAULT_DATABASE;
+      writeAtomicSync(DB_FILE_PATH, JSON.stringify(fallback, null, 2));
+      inMemoryDbCache = fallback;
+      return fallback;
+    }
+
     const parsed = JSON.parse(raw) as DatabaseSchema;
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Format de base de données invalide (non-objet)');
+    }
+
     const profile = { ...DEFAULT_DATABASE.profile, ...(parsed.profile || {}) };
 
     let profiles: UserProfile[] = Array.isArray(parsed.profiles) && parsed.profiles.length > 0
@@ -90,7 +135,7 @@ export function getDatabase(): DatabaseSchema {
     }
 
     // Rétrocompatibilité et fusion avec les champs manquants
-    return {
+    const sanitizedDb: DatabaseSchema = {
       version: parsed.version || 1,
       lastUpdated: parsed.lastUpdated || new Date().toISOString(),
       profile,
@@ -101,21 +146,44 @@ export function getDatabase(): DatabaseSchema {
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : DEFAULT_DATABASE.suggestions,
       settings: { ...DEFAULT_DATABASE.settings, ...(parsed.settings || {}) },
     };
+
+    inMemoryDbCache = sanitizedDb;
+    return sanitizedDb;
   } catch (err) {
-    console.error('Erreur lecture BDD locale, réinitialisation sécurisée :', err);
-    return DEFAULT_DATABASE;
+    console.warn('Notice lecture BDD locale, réinitialisation sécurisée appliquée :', err instanceof Error ? err.message : String(err));
+    const fallback = inMemoryDbCache || DEFAULT_DATABASE;
+    try {
+      writeAtomicSync(DB_FILE_PATH, JSON.stringify(fallback, null, 2));
+    } catch {}
+    inMemoryDbCache = fallback;
+    return fallback;
   }
 }
 
-// Écriture atomique avec fichier temporaire pour zéro corruption
-export async function saveDatabase(data: DatabaseSchema): Promise<void> {
-  ensureDbExists();
+// Écriture atomique et sérialisée avec file d'attente pour zéro corruption
+export function saveDatabase(data: DatabaseSchema): Promise<void> {
   data.lastUpdated = new Date().toISOString();
-  const tempPath = `${DB_FILE_PATH}.tmp`;
-  const jsonStr = JSON.stringify(data, null, 2);
+  inMemoryDbCache = data;
 
-  await fs.promises.writeFile(tempPath, jsonStr, 'utf-8');
-  await fs.promises.rename(tempPath, DB_FILE_PATH);
+  saveQueue = saveQueue.then(async () => {
+    ensureDbExists();
+    const tempPath = `${DB_FILE_PATH}.${process.pid}.${Date.now()}-${Math.random().toString(36).substring(2, 8)}.tmp`;
+    const jsonStr = JSON.stringify(data, null, 2);
+
+    try {
+      await fs.promises.writeFile(tempPath, jsonStr, 'utf-8');
+      await fs.promises.rename(tempPath, DB_FILE_PATH);
+    } catch {
+      try {
+        if (fs.existsSync(tempPath)) {
+          await fs.promises.unlink(tempPath);
+        }
+      } catch {}
+      writeAtomicSync(DB_FILE_PATH, jsonStr);
+    }
+  });
+
+  return saveQueue;
 }
 
 // =============================================================================

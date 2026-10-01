@@ -70,7 +70,7 @@ async function getIdbCache<T>(key: string): Promise<T | null> {
 function getStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
-    if (item !== null) {
+    if (item !== null && item.trim() !== '' && item !== 'undefined' && item !== 'null') {
       return JSON.parse(item) as T;
     }
   } catch (err) {
