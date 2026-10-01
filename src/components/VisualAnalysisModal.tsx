@@ -256,9 +256,12 @@ export default function VisualAnalysisModal({
           <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-8 bg-gray-50/50">
             {/* Bannière Découverte de l'évolution si plusieurs versions */}
             {evolutionSteps.length > 1 && (
-              <div className="bg-linear-to-r from-purple-900 via-indigo-900 to-emerald-900 border border-purple-400/30 rounded-3xl p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+              <div
+                onClick={() => setActiveModalTab('evolution')}
+                className="bg-linear-to-r from-purple-900 via-indigo-900 to-emerald-900 border border-purple-400/30 rounded-3xl p-4 sm:p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm cursor-pointer hover:border-emerald-400/50 transition-all group"
+              >
                 <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform">
                     📈
                   </div>
                   <div>
@@ -267,7 +270,7 @@ export default function VisualAnalysisModal({
                         Historique Actif
                       </span>
                       <span className="text-xs text-purple-200">
-                        Version courante : <strong>V{currentVersion}</strong> ({evolutionSteps.length} étapes de traitement)
+                        Version courante : <strong>V{currentVersion}</strong> ({evolutionSteps.length} étapes)
                       </span>
                     </div>
                     <h4 className="text-sm font-black text-white mt-0.5">
@@ -276,15 +279,10 @@ export default function VisualAnalysisModal({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveModalTab('evolution')}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
-                >
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Consulter le suivi d&apos;évolution</span>
+                <div className="text-xs text-emerald-300 font-bold flex items-center gap-1.5 shrink-0 group-hover:translate-x-1 transition-transform">
+                  <span>Accéder à la frise</span>
                   <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                </div>
               </div>
             )}
 
@@ -827,26 +825,6 @@ export default function VisualAnalysisModal({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Bouton pour basculer rapidement entre rapport et évolution */}
-            {activeModalTab === 'report' ? (
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('evolution')}
-                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Voir le Suivi des Évolutions (V{currentVersion})</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setActiveModalTab('report')}
-                className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <Trophy className="w-3.5 h-3.5 text-purple-600" />
-                <span>Voir le Rapport Visuel & Graphiques</span>
-              </button>
-            )}
             {onAddToTracker && (
               <button
                 type="button"
@@ -859,20 +837,6 @@ export default function VisualAnalysisModal({
               >
                 <Briefcase className="w-3.5 h-3.5" />
                 <span>+ Suivre dans mon Kanban</span>
-              </button>
-            )}
-
-            {onOpenCvOptimization && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenCvOptimization();
-                }}
-                className="px-4 py-2 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:scale-102"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Adapter mon CV</span>
               </button>
             )}
 

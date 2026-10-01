@@ -21,6 +21,7 @@ import {
   Award,
   Trophy,
   Target,
+  TrendingUp,
   ShieldAlert,
   Lightbulb,
   MessageSquareQuote,
@@ -72,7 +73,8 @@ import VisualAnalysisModal from './components/VisualAnalysisModal';
 import { parseAnalysisResult } from './utils/analysisParser';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from './utils/sampleData';
 import { localDbClient } from './services/localDbClient';
-import { ApplicationItem, SavedCv, DatabaseStats, UserProfile } from './types';
+import { ApplicationItem, SavedCv, DatabaseStats, UserProfile, EvolutionStep, AnalysisHistoryItem } from './types';
+import { buildEvolutionStep, detectCvChanges } from './utils/cvEvolutionHelper';
 
 // Code Python à jour pour l'onglet de téléchargement et consultation
 const PYTHON_APP_CODE = `import io
@@ -300,21 +302,6 @@ beautifulsoup4>=4.12.0
 requests>=2.31.0
 `;
 
-export interface AnalysisHistoryItem {
-  id: string;
-  timestamp: string;
-  title: string;
-  jobSnippet: string;
-  cvSnippet: string;
-  cvText: string;
-  jobText: string;
-  analysisResult: string;
-  score: number | null;
-  fileName?: string;
-  fileType?: string;
-  jobUrl?: string;
-}
-
 interface UrlFetchErrorInfo {
   message: string;
   isProtected?: boolean;
@@ -344,6 +331,11 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
   const [isVisualModalOpen, setIsVisualModalOpen] = useState(false);
+  const [visualModalDefaultTab, setVisualModalDefaultTab] = useState<'report' | 'evolution'>('report');
+
+  // Suivi des étapes d'évolution CV <-> Offre (V1, modifications, re-analyse V2...)
+  const [evolutionSteps, setEvolutionSteps] = useState<EvolutionStep[]>([]);
+  const [currentEvolutionVersion, setCurrentEvolutionVersion] = useState<number>(1);
 
   // Suivi des candidatures persistant
   const [applications, setApplications] = useState<ApplicationItem[]>(() => {
@@ -889,6 +881,8 @@ export default function App() {
     setUrlFetchSuccess(null);
     setUploadedFileInfo(null);
     setSelectedHistoryId(null);
+    setEvolutionSteps([]);
+    setCurrentEvolutionVersion(1);
   };
 
   // Charger un élément d'historique dans l'éditeur
@@ -899,6 +893,25 @@ export default function App() {
     setAnalysisResult(item.analysisResult);
     setSelectedHistoryId(item.id);
     setErrorMessage(null);
+
+    // Restaurer l'historique d'évolution ou créer le palier V1
+    if (item.evolutionSteps && item.evolutionSteps.length > 0) {
+      setEvolutionSteps(item.evolutionSteps);
+      setCurrentEvolutionVersion(item.currentVersion || item.evolutionSteps.length);
+    } else {
+      const v1Step = buildEvolutionStep({
+        version: 1,
+        type: 'initial_analysis',
+        title: "1. Première analyse (Audit Initial)",
+        cvText: item.cvText,
+        score: item.score,
+        analysisResult: item.analysisResult,
+        summaryNote: "Audit initial extrait de votre historique d'analyse.",
+      });
+      setEvolutionSteps([v1Step]);
+      setCurrentEvolutionVersion(1);
+    }
+
     setActiveTab('app');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1027,6 +1040,61 @@ export default function App() {
       const firstLineJob = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 50);
       const title = firstLineJob.length > 5 ? firstLineJob : "Analyse d'adéquation";
 
+      // Calcul des étapes d'évolution (V1 -> Traitement -> V2...)
+      let newSteps: EvolutionStep[] = [];
+      let newVersion = 1;
+
+      if (evolutionSteps.length > 0) {
+        // C'est une ré-analyse (V2, V3...) après modifications
+        const previousScore = evolutionSteps.slice().reverse().find((s) => s.score !== null)?.score ?? null;
+        const lastCv = evolutionSteps.slice().reverse().find((s) => s.cvText)?.cvText || cvText;
+        const diff = detectCvChanges(lastCv, cvText);
+        const nextVer = (currentEvolutionVersion || 1) + 1;
+        newVersion = nextVer;
+
+        const customChanges: string[] = [];
+        if (diff.addedKeywords.length > 0) {
+          customChanges.push(`Mots-clés détectés : ${diff.addedKeywords.join(', ')}`);
+        }
+        if (diff.linesAddedCount > 0) {
+          customChanges.push(`${diff.linesAddedCount} ligne(s) ajoutée(s) ou enrichie(s)`);
+        }
+        if (customChanges.length === 0) {
+          customChanges.push('Réévaluation de conformité ATS après modifications du CV');
+        }
+
+        const newStep = buildEvolutionStep({
+          version: nextVer,
+          type: 're_analysis',
+          title: `3. Nouvelle analyse (Version optimisée V${nextVer})`,
+          cvText: cvText.trim(),
+          score,
+          previousScore,
+          analysisResult: finalResult,
+          customChanges,
+          summaryNote: previousScore !== null && score !== null
+            ? `Gain net de score : ${score - previousScore >= 0 ? '+' : ''}${score - previousScore} points par rapport à la version précédente.`
+            : 'Nouvelle analyse générée avec succès.',
+        });
+
+        newSteps = [...evolutionSteps, newStep];
+      } else {
+        const v1Step = buildEvolutionStep({
+          version: 1,
+          type: 'initial_analysis',
+          title: "1. Première analyse (Audit Initial)",
+          cvText: cvText.trim(),
+          score,
+          analysisResult: finalResult,
+          summaryNote: "Audit initial de compatibilité ATS avec calcul des 5 piliers recruteur.",
+        });
+        newSteps = [v1Step];
+        newVersion = 1;
+      }
+
+      setEvolutionSteps(newSteps);
+      setCurrentEvolutionVersion(newVersion);
+
       const newHistoryItem: AnalysisHistoryItem = {
         id: Date.now().toString(),
         timestamp: new Date().toLocaleString('fr-FR', {
@@ -1046,6 +1114,8 @@ export default function App() {
         fileName: uploadedFileInfo?.fileName,
         fileType: uploadedFileInfo?.fileType,
         jobUrl: jobUrl.trim() || undefined,
+        currentVersion: newVersion,
+        evolutionSteps: newSteps,
       };
 
       setHistory((prev) => [newHistoryItem, ...prev]);
@@ -1058,6 +1128,37 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Traitement des recommandations dans le CV (Étape 2 de l'évolution)
+  const handleAppliedOptimization = (modifiedCv: string, summaryBullets: string[]) => {
+    setCvText(modifiedCv);
+    const diff = detectCvChanges(cvText, modifiedCv);
+    const changes = [...summaryBullets];
+    if (diff.addedKeywords.length > 0) {
+      changes.push(`Mots-clés intégrés : ${diff.addedKeywords.join(', ')}`);
+    }
+
+    const step = buildEvolutionStep({
+      version: currentEvolutionVersion,
+      type: 'recommendations_applied',
+      title: '2. Traitement des recommandations dans le CV',
+      cvText: modifiedCv,
+      score: null,
+      customChanges: changes,
+      summaryNote: "Le CV a été enrichi avec les recommandations de l'IA (mots-clés, réalisations chiffrées, méthode STAR).",
+    });
+
+    setEvolutionSteps((prev) => [...prev, step]);
+    setCvSaveSuccess("✨ Recommandations appliquées ! Cliquez sur « Re-analyser ce CV » pour mesurer votre gain de score.");
+    setTimeout(() => setCvSaveSuccess(null), 4000);
+  };
+
+  // Restaurer le CV depuis une étape d'évolution
+  const handleRestoreCvFromStep = (restoredCvText: string, stepTitle: string) => {
+    setCvText(restoredCvText);
+    setCvSaveSuccess(`✅ Version « ${stepTitle} » chargée dans la zone de texte du CV !`);
+    setTimeout(() => setCvSaveSuccess(null), 3500);
   };
 
   // Ajouter l'analyse actuelle directement au Suivi des candidatures
@@ -1197,38 +1298,11 @@ export default function App() {
 
           {/* Raccourcis et statut en en-tête */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            {/* Bouton Mode d'emploi interactif */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('guide')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer shadow-xs ${
-                activeTab === 'guide'
-                  ? 'bg-amber-400 text-gray-950 ring-2 ring-amber-300 scale-102'
-                  : 'bg-linear-to-r from-amber-400 to-orange-400 text-gray-950 hover:brightness-105 hover:scale-105 active:scale-95'
-              }`}
-              title="Consulter le mode d'emploi interactif & les astuces pro"
-            >
-              <BookOpen className="w-3.5 h-3.5 fill-current" />
-              <span className="hidden sm:inline">Mode d&apos;emploi interactif 💡</span>
-              <span className="sm:hidden">Guide 💡</span>
-            </button>
-
-            {/* Bouton Visite Guidée Animée */}
-            <button
-              type="button"
-              onClick={() => setIsTourModalOpen(true)}
-              className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-all cursor-pointer hover:scale-102"
-              title="Démarrer la visite guidée en 5 étapes"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Visite guidée ✨</span>
-            </button>
-
-            {/* Statut Clé API */}
+            {/* Statut Clé API & Modèle */}
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
-              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
                 apiKey.trim()
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                   : hasServerKey
@@ -1255,39 +1329,17 @@ export default function App() {
               )}
             </button>
 
-            {/* Profil Candidat Sélecteur / Pill */}
-            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full pl-2 pr-2.5 py-1 text-xs font-semibold text-gray-800">
-              <button
-                type="button"
-                onClick={() => setActiveTab('settings')}
-                className="flex items-center gap-1.5 hover:text-purple-700 cursor-pointer"
-                title="Accéder à la gestion des profils"
-              >
-                <div className="w-6 h-6 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
-                  {userProfile && (userProfile.firstName || userProfile.lastName)
-                    ? `${userProfile.firstName?.[0] || ''}${userProfile.lastName?.[0] || ''}`.toUpperCase() || 'CV'
-                    : '👤'}
-                </div>
-                <span className="hidden sm:inline">
-                  {userProfile?.name || (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName}` : 'Mon Profil')}
-                </span>
-              </button>
-
-              {userProfiles.length > 1 && (
-                <select
-                  value={userProfile?.id || ''}
-                  onChange={(e) => handleSelectProfile(e.target.value)}
-                  className="bg-transparent text-[11px] font-bold text-purple-700 border-none outline-none cursor-pointer pl-1"
-                  title="Changer de profil actif"
-                >
-                  {userProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil'}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            {/* Bouton d'Aide & Guide discret */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('guide')}
+              className={`p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer ${
+                activeTab === 'guide' ? 'bg-amber-50 text-amber-900 ring-1 ring-amber-300' : ''
+              }`}
+              title="Centre d'aide & Mode d'emploi"
+            >
+              <HelpCircle className="w-5 h-5 text-gray-600" />
+            </button>
           </div>
         </header>
 
@@ -1326,7 +1378,7 @@ export default function App() {
                       <span>Prêt à propulser votre candidature vers le succès ?</span>
                     </h2>
                     <p className="text-xs text-purple-100 mt-0.5">
-                      Testez en 1 clic notre exemple complet, suivez le mode d&apos;emploi interactif ou lancez un audit personnalisé !
+                      Testez en 1 clic notre exemple complet de démonstration (CV Trésorier + Offre) pour découvrir l&apos;analyseur.
                     </p>
                   </div>
                 </div>
@@ -1342,29 +1394,10 @@ export default function App() {
                       setCvSaveSuccess("🚀 Données d'essai (CV Trésorier + Offre) chargées en 1 clic ! Vous pouvez lancer l'analyse ci-dessous.");
                       setTimeout(() => setCvSaveSuccess(null), 4000);
                     }}
-                    className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+                    className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
                   >
-                    <Zap className="w-3.5 h-3.5 fill-current text-purple-900" />
-                    <span>Charger Démo 1-Clic</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('guide')}
-                    className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white border border-white/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer hover:scale-102"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Mode d&apos;emploi 💡</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsTourModalOpen(true)}
-                    className="px-3 py-2 bg-purple-500/30 hover:bg-purple-500/50 text-purple-100 border border-purple-400/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer hover:scale-102"
-                    title="Démarrer la visite guidée pas à pas"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Visite ✨</span>
+                    <Zap className="w-4 h-4 fill-current text-purple-900" />
+                    <span>⚡ Charger Démo 1-Clic</span>
                   </button>
                 </div>
               </div>
@@ -1405,38 +1438,6 @@ export default function App() {
                         <User className="w-3.5 h-3.5 text-purple-600" />
                         <span>Injecter mon profil</span>
                       </button>
-                    )}
-
-                    {/* Charger un CV sauvegardé dans la base locale */}
-                    {savedCvs.length > 0 && (
-                      <div className="relative group">
-                        <button
-                          type="button"
-                          className="text-xs flex items-center gap-1.5 px-3 py-1.5 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer font-medium"
-                        >
-                          <Database className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Mes CVs ({savedCvs.length})</span>
-                          <ChevronDown className="w-3 h-3 text-emerald-600" />
-                        </button>
-                        <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 hidden group-hover:block z-30 max-h-60 overflow-y-auto">
-                          {savedCvs.map((cv) => (
-                            <button
-                              key={cv.id}
-                              type="button"
-                              onClick={() => {
-                                setCvText(cv.rawText);
-                                setSelectedCvId(cv.id);
-                                setCvSaveSuccess(`✅ CV "${cv.title}" chargé avec succès !`);
-                                setTimeout(() => setCvSaveSuccess(null), 3000);
-                              }}
-                              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-gray-900 flex flex-col cursor-pointer"
-                            >
-                              <span className="font-semibold truncate">{cv.title}</span>
-                              <span className="text-[10px] text-gray-400">{cv.targetRole} • {cv.fileType}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                     )}
 
                     {/* Bouton Réinitialiser */}
@@ -1848,31 +1849,20 @@ export default function App() {
                     placeholder="Collez ici le texte intégral de votre CV ou importez un fichier PDF/DOCX ci-dessus..."
                     className="w-full p-3.5 text-xs sm:text-sm font-sans border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#FF4B4B] focus:border-[#FF4B4B] resize-y bg-gray-50/30 leading-relaxed text-gray-800 placeholder-gray-400 flex-1 min-h-[260px]"
                   />
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsCvOptimizationModalOpen(true)}
-                      disabled={!cvText.trim()}
-                      className="text-xs px-3 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                      title="Créer une version optimisée de votre CV intégrant les mots-clés et compétences de l'offre"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      <span>✨ Optimiser / Adapter ce CV</span>
-                    </button>
-
-                    {cvText && (
+                  {cvText && (
+                    <div className="flex items-center justify-end mt-2 pt-2 border-t border-gray-100">
                       <button
                         type="button"
                         onClick={() => {
                           setCvText('');
                           setUploadedFileInfo(null);
                         }}
-                        className="text-[11px] text-gray-400 hover:text-red-500"
+                        className="text-[11px] text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                       >
                         Effacer le CV
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Zone 2 : Offre d'emploi */}
@@ -2009,42 +1999,32 @@ export default function App() {
                  ================================================================= */}
               {analysisResult && !isLoading && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-0">
-                  <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="bg-emerald-50 border-b border-emerald-200 px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 text-emerald-900">
                       <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <span className="font-bold text-sm sm:text-base">
-                        ✅ Analyse complétée avec succès !
+                      <span className="font-extrabold text-sm sm:text-base">
+                        Analyse complétée avec succès !
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Bouton pour ouvrir dans une autre fenêtre avec graphiques et KPIs */}
-                      <button
-                        type="button"
-                        onClick={() => setIsVisualModalOpen(true)}
-                        className="px-3.5 py-1.5 bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105 active:scale-95 ring-2 ring-emerald-300"
-                        title="Ouvrir le rapport d'analyse dans une fenêtre dédiée avec graphiques et KPIs"
-                      >
-                        <Trophy className="w-4 h-4 text-amber-300" />
-                        <span>📊 Autre fenêtre (Graphiques & KPIs)</span>
-                      </button>
-
-                      <div className="flex items-center bg-white border border-emerald-300 rounded-lg p-0.5 text-xs">
+                      {/* Bascule Synthèse Visuelle / Texte brut */}
+                      <div className="flex items-center bg-white border border-emerald-300 rounded-xl p-0.5 text-xs shadow-2xs">
                         <button
                           type="button"
                           onClick={() => setResultView('cards')}
-                          className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
+                          className={`px-3 py-1 rounded-lg transition-colors font-bold cursor-pointer ${
                             resultView === 'cards'
                               ? 'bg-emerald-600 text-white'
                               : 'text-emerald-900 hover:bg-emerald-50'
                           }`}
                         >
-                          Fiche Visuelle & Graphiques
+                          Synthèse
                         </button>
                         <button
                           type="button"
                           onClick={() => setResultView('raw')}
-                          className={`px-2.5 py-1 rounded-md transition-colors font-medium cursor-pointer ${
+                          className={`px-3 py-1 rounded-lg transition-colors font-bold cursor-pointer ${
                             resultView === 'raw'
                               ? 'bg-emerald-600 text-white'
                               : 'text-emerald-900 hover:bg-emerald-50'
@@ -2054,64 +2034,69 @@ export default function App() {
                         </button>
                       </div>
 
+                      {/* Bouton d'accès au rapport visuel & suivi des versions */}
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(analysisResult, 'result')}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                        title="Copier le rapport"
+                        onClick={() => {
+                          setVisualModalDefaultTab('report');
+                          setIsVisualModalOpen(true);
+                        }}
+                        className="px-3.5 py-1.5 bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer hover:scale-102"
+                        title="Ouvrir le rapport visuel complet, les graphiques et le suivi des évolutions"
                       >
-                        {copiedStatus === 'result' ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Copié !</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Copier</span>
-                          </>
+                        <Trophy className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Rapport Visuel & Suivi ↗</span>
+                        {evolutionSteps.length > 1 && (
+                          <span className="bg-white/20 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+                            V{currentEvolutionVersion}
+                          </span>
                         )}
                       </button>
 
+                      {/* Bouton Unique : Adapter mon CV */}
                       <button
                         type="button"
                         onClick={() => setIsCvOptimizationModalOpen(true)}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white flex items-center gap-1.5 font-bold shadow-xs transition-colors cursor-pointer"
+                        className="text-xs px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 font-bold shadow-xs transition-colors cursor-pointer"
                         title="Créer un nouveau CV ou modifier l'actuel en intégrant les modifications proposées par l'audit"
                       >
                         <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                        <span>✨ Adapter mon CV</span>
+                        <span>Adapter mon CV</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={handleAddAnalysisToTracker}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 font-bold shadow-xs transition-colors cursor-pointer"
-                        title="Ajouter cette opportunité à mon tableau de suivi des candidatures"
-                      >
-                        <Briefcase className="w-3.5 h-3.5" />
-                        <span>➕ Suivre</span>
-                      </button>
+                      {/* Raccourcis discrets avec tooltips : Suivre Kanban, Copier, Télécharger */}
+                      <div className="flex items-center gap-1 pl-1 border-l border-emerald-200">
+                        <button
+                          type="button"
+                          onClick={handleAddAnalysisToTracker}
+                          className="p-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center transition-colors cursor-pointer"
+                          title="Ajouter cette opportunité à mon Kanban"
+                        >
+                          <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('cv-assistant')}
-                        className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 flex items-center gap-1.5 font-bold transition-colors cursor-pointer"
-                        title="Optimiser mon CV avec les méthodes STAR et l'IA"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Lettre & STAR</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(analysisResult, 'result')}
+                          className="p-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center transition-colors cursor-pointer"
+                          title="Copier le rapport"
+                        >
+                          {copiedStatus === 'result' ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => downloadFile('rapport_cv_move_personnel.md', analysisResult)}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center gap-1 font-medium transition-colors cursor-pointer"
-                        title="Télécharger en fichier .md"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Télécharger</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadFile('rapport_cv_move_personnel.md', analysisResult)}
+                          className="p-1.5 rounded-lg border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-50 flex items-center justify-center transition-colors cursor-pointer"
+                          title="Télécharger en fichier Markdown"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2167,31 +2152,6 @@ export default function App() {
                       const p = parseAnalysisResult(analysisResult, cvText, jobText);
                       return (
                         <div className="p-6 sm:p-8 space-y-7">
-                          {/* Bannière d'accès à la fenêtre visuelle dédiée */}
-                          <div className="bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 rounded-3xl p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-3.5">
-                              <div className="w-11 h-11 bg-white/20 rounded-2xl backdrop-blur-xs flex items-center justify-center text-2xl shadow-inner shrink-0">
-                                📊
-                              </div>
-                              <div>
-                                <h4 className="font-black text-sm sm:text-base leading-tight">
-                                  Rapport Visuel & KPIs disponible dans une autre fenêtre !
-                                </h4>
-                                <p className="text-xs text-emerald-100 mt-0.5">
-                                  Pour une vue immersive plein écran avec jauge, matrice de compétences et questions d&apos;entretien.
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setIsVisualModalOpen(true)}
-                              className="px-4 py-2.5 bg-white text-emerald-950 hover:bg-emerald-50 rounded-xl text-xs font-black shadow-xs shrink-0 transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center gap-1.5"
-                            >
-                              <Trophy className="w-4 h-4 text-emerald-600" />
-                              <span>Ouvrir dans une autre fenêtre ↗</span>
-                            </button>
-                          </div>
-
                           {/* 4 KPIs Clés */}
                           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                             <div className="p-4 bg-indigo-50/80 border border-indigo-100 rounded-2xl shadow-2xs">
@@ -2259,17 +2219,117 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Bouton d'ouverture fenêtre complète */}
-                          <div className="pt-2 flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => setIsVisualModalOpen(true)}
-                              className="px-6 py-3 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black shadow-md flex items-center gap-2 transition-all cursor-pointer hover:scale-105 active:scale-95"
-                            >
-                              <Trophy className="w-4 h-4 text-amber-300" />
-                              <span>Afficher tout le rapport dans une autre fenêtre (Graphiques, Matrice & Entretien)</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
+                          {/* =========================================================
+                              BLOC SUIVI DES ÉVOLUTIONS DU CV & DE L'ANALYSE (ÉTAPES DE TRAITEMENT)
+                             ========================================================= */}
+                          <div className="bg-linear-to-r from-gray-900 via-indigo-950 to-purple-950 rounded-3xl p-6 text-white space-y-5 border border-purple-500/20 shadow-md">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                                    Parcours d&apos;Amélioration Continue
+                                  </span>
+                                  <span className="text-xs text-gray-400">•</span>
+                                  <span className="text-xs font-bold text-amber-300">
+                                    Version active : V{currentEvolutionVersion}
+                                  </span>
+                                </div>
+                                <h4 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                                  <span>📈 Suivi des Évolutions du CV & de l&apos;Analyse</span>
+                                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold">
+                                    {evolutionSteps.length} étape(s)
+                                  </span>
+                                </h4>
+                                <p className="text-xs text-purple-200">
+                                  Chaque étape est conservée : 1. Première analyse ➔ 2. Traitement des recommandations ➔ 3. Nouvelle analyse optimisée.
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVisualModalDefaultTab('evolution');
+                                    setIsVisualModalOpen(true);
+                                  }}
+                                  className="text-xs text-purple-200 hover:text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-3 py-1.5 font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Consulter l'historique complet des versions et des écarts"
+                                >
+                                  <History className="w-3.5 h-3.5 text-amber-300" />
+                                  <span>Détail des étapes</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Stepper horizontal visuel des étapes */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {/* Étape 1 */}
+                              <div className="bg-white/10 backdrop-blur-xs border border-white/10 rounded-2xl p-3.5 space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-black text-blue-300 flex items-center gap-1.5">
+                                    <span>1️⃣</span>
+                                    <span>Première analyse</span>
+                                  </span>
+                                  <span className="bg-blue-500/30 text-blue-200 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                    Audit Initial
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-300 leading-snug">
+                                  Détection des lacunes, score ATS de départ et calcul des 5 piliers.
+                                </div>
+                              </div>
+
+                              {/* Étape 2 */}
+                              <div className="bg-white/10 backdrop-blur-xs border border-white/10 rounded-2xl p-3.5 space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-black text-purple-300 flex items-center gap-1.5">
+                                    <span>2️⃣</span>
+                                    <span>Traitement recos</span>
+                                  </span>
+                                  <span className="bg-purple-500/30 text-purple-200 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                    Optimisation CV
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-300 leading-snug">
+                                  Intégration des mots-clés, méthodes STAR et ajustements recommandés.
+                                </div>
+                              </div>
+
+                              {/* Étape 3 */}
+                              <div className="bg-white/10 backdrop-blur-xs border border-white/10 rounded-2xl p-3.5 space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-black text-emerald-300 flex items-center gap-1.5">
+                                    <span>3️⃣</span>
+                                    <span>Nouvelle analyse</span>
+                                  </span>
+                                  <span className="bg-emerald-500/30 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                    Score augmenté
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-300 leading-snug">
+                                  Calcul du gain de score (+pts) et comparatif direct avant / après.
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action de re-analyse */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-white/10">
+                              <div className="text-xs text-purple-200 flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                                <span>Après avoir adapté votre CV, recalculez instantanément votre nouveau score.</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRunAnalysis(!apiKey && !hasServerKey)}
+                                disabled={isLoading}
+                                className="px-4 py-2 bg-linear-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 active:scale-95 shrink-0"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                                <span>{isLoading ? 'Analyse en cours...' : '🔄 Re-analyser ce CV (Créer V' + (currentEvolutionVersion + 1) + ')'}</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -2673,6 +2733,7 @@ export default function App() {
           setDbStats(updatedStats);
         }}
         onNavigateToTab={(t) => setActiveTab(t as any)}
+        onAppliedOptimization={handleAppliedOptimization}
       />
 
       {/* Modal Visite Guidée Interactive en 5 Étapes */}
@@ -2697,31 +2758,16 @@ export default function App() {
           rawAnalysisText={analysisResult}
           cvText={cvText}
           jobText={jobText}
+          defaultTab={visualModalDefaultTab}
+          evolutionSteps={evolutionSteps}
+          currentVersion={currentEvolutionVersion}
           onOpenCvOptimization={() => setIsCvOptimizationModalOpen(true)}
           onAddToTracker={handleAddAnalysisToTracker}
           onNavigateToCvAssistant={() => setActiveTab('cv-assistant')}
+          onTriggerReAnalysis={() => handleRunAnalysis(!apiKey && !hasServerKey)}
+          onRestoreCv={handleRestoreCvFromStep}
         />
       )}
-
-      {/* Bouton Flottant d'Aide & Mode d'Emploi Interactif */}
-      <div className="fixed bottom-5 right-5 z-40">
-        <button
-          type="button"
-          onClick={() => {
-            if (activeTab === 'guide') {
-              setIsTourModalOpen(true);
-            } else {
-              setActiveTab('guide');
-            }
-          }}
-          className="group px-4 py-2.5 bg-linear-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-700 hover:to-amber-600 text-white rounded-full shadow-xl flex items-center gap-2 font-black text-xs transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer ring-2 ring-white/60 hover:shadow-purple-500/25"
-          title="Ouvrir le Mode d'emploi interactif & Guide astuces"
-        >
-          <Sparkles className="w-4 h-4 text-amber-300 animate-spin-slow" />
-          <span className="hidden sm:inline">Mode d&apos;emploi interactif 💡</span>
-          <span className="sm:hidden">Guide 💡</span>
-        </button>
-      </div>
     </div>
   );
 }

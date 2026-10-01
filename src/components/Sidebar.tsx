@@ -167,9 +167,8 @@ export default function Sidebar({
           label: 'Mode d\'emploi interactif',
           icon: BookOpen,
           color: 'text-amber-500',
-          activeBg: 'bg-amber-50 text-amber-950 border-amber-300 font-black',
-          badge: 'Tuto 💡',
-          badgeColor: 'bg-linear-to-r from-amber-400 to-orange-400 text-gray-950 font-black shadow-2xs',
+          activeBg: 'bg-amber-50 text-amber-950 border-amber-300 font-bold',
+          badge: null,
         },
       ],
     },
@@ -367,20 +366,6 @@ export default function Sidebar({
             <p className="text-[10px] text-amber-950 leading-relaxed font-medium">
               &laquo; {RECRUITER_TIPS[tipIndex]} &raquo;
             </p>
-          </div>
-        )}
-
-        {/* Bouton Visite Guidée */}
-        {!isCollapsed && onOpenTour && (
-          <div className="mx-2 mb-2">
-            <button
-              type="button"
-              onClick={onOpenTour}
-              className="w-full py-1.5 px-2 bg-linear-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 border border-purple-200 text-purple-800 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>✨ Visite guidée interactive</span>
-            </button>
           </div>
         )}
 
