@@ -429,34 +429,99 @@ export default function App() {
           localDbClient.getProfile(),
           localDbClient.getProfiles(),
         ]);
+        setSavedCvs(cvList || []);
         if (cvList && cvList.length > 0) {
-          setSavedCvs(cvList);
           const defaultCv = cvList.find((c) => c.isDefault) || cvList[0];
           if (defaultCv) {
             setSelectedCvId(defaultCv.id);
             setCvText((prev) => (prev.trim() ? prev : defaultCv.rawText));
           }
+        } else {
+          setSelectedCvId('');
         }
-        if (appList) {
-          setApplications(appList);
-        }
-        if (analysesList) {
-          setHistory(analysesList);
-        }
-        if (stats) {
-          setDbStats(stats);
-        }
-        if (profileData) {
-          setUserProfile(profileData);
-        }
-        if (profilesList && profilesList.length > 0) {
-          setUserProfiles(profilesList);
-        }
+        setApplications(appList || []);
+        setHistory(analysesList || []);
+        setDbStats(stats || null);
+        setUserProfile(profileData || null);
+        setUserProfiles(profilesList || []);
       } catch (err) {
         console.warn('Initialisation BDD locale :', err);
       }
     };
     initDb();
+  }, []);
+
+  // Réinitialisation complète en mémoire de l'application
+  const handleDatabaseReset = () => {
+    setApplications([]);
+    setHistory([]);
+    setSavedCvs([]);
+    setSelectedCvId('');
+    setCvText('');
+    setJobText('');
+    setJobUrl('');
+    setUploadedFileInfo(null);
+    setFileError(null);
+    setEvolutionSteps([]);
+    setCurrentEvolutionVersion(1);
+    setAnalysisResult(null);
+    setSelectedHistoryId(null);
+    setUserProfile(null);
+    setUserProfiles([]);
+    setDbStats({
+      cvsCount: 0,
+      applicationsCount: 0,
+      analysesCount: 0,
+      suggestionsCount: 0,
+      coverLettersCount: 0,
+      dbSizeBytes: 0,
+      lastUpdated: new Date().toISOString(),
+    });
+    try {
+      localStorage.removeItem('cv_move_current_cv_text');
+      localStorage.removeItem('cv_move_current_job_text');
+      localStorage.removeItem('cv_move_current_job_url');
+      localStorage.removeItem('cv_move_applications');
+      localStorage.removeItem('cv_move_saved_cvs');
+      localStorage.removeItem('cv_move_history');
+      localStorage.removeItem('cv_move_suggestions');
+      localStorage.removeItem('cv_move_cover_letters');
+      localStorage.removeItem('cv_move_user_profile');
+      localStorage.removeItem('cv_move_user_profiles');
+    } catch {}
+  };
+
+  // Re-synchronisation globale après modification dans le gestionnaire de BDD
+  const handleDatabaseUpdated = async () => {
+    try {
+      const [cvList, appList, analysesList, stats, profileData, profilesList] = await Promise.all([
+        localDbClient.getCvs(),
+        localDbClient.getApplications(),
+        localDbClient.getAnalyses(),
+        localDbClient.fetchStats(),
+        localDbClient.getProfile(),
+        localDbClient.getProfiles(),
+      ]);
+      setSavedCvs(cvList || []);
+      setApplications(appList || []);
+      setHistory(analysesList || []);
+      setDbStats(stats || null);
+      setUserProfile(profileData || null);
+      setUserProfiles(profilesList || []);
+    } catch (err) {
+      console.warn('Erreur synchronisation BDD :', err);
+    }
+  };
+
+  // Écouteur global pour la réinitialisation de la BDD
+  useEffect(() => {
+    const onResetEvent = () => {
+      handleDatabaseReset();
+    };
+    window.addEventListener('cv_move_database_reset', onResetEvent);
+    return () => {
+      window.removeEventListener('cv_move_database_reset', onResetEvent);
+    };
   }, []);
 
   // Injecter l'en-tête du profil utilisateur dans le CV actif
@@ -469,19 +534,19 @@ export default function App() {
     setTimeout(() => setCvSaveSuccess(null), 3500);
   };
 
-  // Enregistrer le CV actuellement affiché dans la base locale
+  // Enregistrer le CV actuellement affiché dans la base locale (CV original)
   const handleSaveCurrentCvToDb = async () => {
     if (!cvText.trim()) return;
     const title = uploadedFileInfo?.fileName
       ? uploadedFileInfo.fileName.replace(/\.[^/.]+$/, '')
-      : `CV Personnel (${new Date().toLocaleDateString('fr-FR')})`;
+      : (userProfile?.currentTitle ? `CV - ${userProfile.currentTitle}` : `CV Original (${new Date().toLocaleDateString('fr-FR')})`);
 
     try {
       const newCv: SavedCv = {
         id: `cv-${Date.now()}`,
         title,
-        targetRole: 'Poste visé',
-        fileName: uploadedFileInfo?.fileName || 'cv_texte.txt',
+        targetRole: userProfile?.targetRoles?.[0] || userProfile?.currentTitle || 'CV Original',
+        fileName: uploadedFileInfo?.fileName || `${title.replace(/\s+/g, '_')}.txt`,
         fileType:
           uploadedFileInfo?.fileType === 'pdf' ||
           uploadedFileInfo?.fileType === 'docx' ||
@@ -500,7 +565,7 @@ export default function App() {
       setSelectedCvId(saved.id);
       const updatedStats = await localDbClient.fetchStats();
       setDbStats(updatedStats);
-      setCvSaveSuccess('✅ CV enregistré avec succès dans votre base locale !');
+      setCvSaveSuccess(`✅ CV original « ${title} » enregistré avec succès dans votre base locale !`);
       setTimeout(() => setCvSaveSuccess(null), 3500);
     } catch {
       setCvSaveSuccess("❌ Erreur lors de l'enregistrement du CV.");
@@ -651,15 +716,7 @@ export default function App() {
 
   // État de l'historique persistant
   const [history, setHistory] = useState<AnalysisHistoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('cv_move_history');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch {
-      // ignore
-    }
-    return [];
+    return localDbClient.getLocalAnalyses();
   });
 
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
@@ -936,21 +993,40 @@ export default function App() {
   };
 
   // Vider tout l'historique
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     setHistory([]);
     setSelectedHistoryId(null);
     setConfirmClearHistory(false);
+    try {
+      await localDbClient.clearAnalyses();
+      const updatedStats = await localDbClient.fetchStats();
+      setDbStats(updatedStats);
+    } catch (err) {
+      console.warn('Erreur clearAnalyses :', err);
+    }
   };
 
-  // Lancer l'analyse Gemini
-  const handleRunAnalysis = async (useDemoFallback = false) => {
+  // Lancer l'analyse Gemini (Initiale ou Ré-analyse)
+  const handleRunAnalysis = async (
+    useDemoFallback = false,
+    options?: {
+      openModal?: boolean;
+      cvToUse?: string;
+      isReAnalysis?: boolean;
+    }
+  ): Promise<string | void> => {
     setErrorMessage(null);
+
+    const activeCvText = (options?.cvToUse !== undefined ? options.cvToUse : cvText).trim();
+    if (options?.cvToUse !== undefined) {
+      setCvText(options.cvToUse);
+    }
 
     const missing: string[] = [];
     if (!apiKey.trim() && !hasServerKey && !useDemoFallback) {
       missing.push('la Clé API Google (dans la barre latérale)');
     }
-    if (!cvText.trim()) {
+    if (!activeCvText) {
       missing.push('le texte du CV (ou importez un fichier)');
     }
     if (!jobText.trim()) {
@@ -965,58 +1041,111 @@ export default function App() {
     }
 
     setIsLoading(true);
-    setAnalysisResult(null);
 
     try {
       let finalResult = '';
+      const isReAnalysisCall = options?.isReAnalysis || evolutionSteps.length > 0;
+      const previousScore = evolutionSteps.slice().reverse().find((s) => s.score !== null)?.score ?? null;
 
       if (useDemoFallback) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        finalResult = `### Score de compatibilité
-**88 / 100** (Excellente adéquation avec le poste)
+        await new Promise((resolve) => setTimeout(resolve, 1400));
+        
+        if (isReAnalysisCall) {
+          // Score dynamique pour la ré-analyse
+          const initScore = evolutionSteps[0]?.score || 64;
+          const diffCheck = detectCvChanges(evolutionSteps[0]?.cvText || '', activeCvText);
+          const pointsGain = Math.min(28, Math.max(18, 20 + diffCheck.addedKeywords.length * 2));
+          const calculatedScore = Math.min(95, Math.max(88, initScore + pointsGain));
+
+          const firstLine = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 45) || 'Poste Cible';
+
+          finalResult = `### Score de compatibilité
+**${calculatedScore} / 100** (Excellente adéquation - Version optimisée V${(currentEvolutionVersion || 1) + 1})
 
 ---
 
 ### Points forts
-1. **Compétences clés directement alignées** : Maîtrise solide et concrète des technologies et exigences mentionnées dans l'offre.
-2. **Niveau d'expérience et autonomie prouvés** : Parcours avec réalisations chiffrées et livrables récents en adéquation directe avec les attentes.
-3. **Méthodologie collaborative et communication** : Pratique démontrée de travail en équipe agile et gestion de projets transverses.
+1. **Intégration réussie des compétences cibles** : Le CV modifié répond désormais directement aux termes techniques, outils et protocoles clés attendus pour « ${firstLine} ».
+2. **Impact opérationnel chiffré (Méthode STAR)** : Les expériences intègrent des métriques de résultat concrètes (gains de temps, pourcentages d'amélioration et volumes gérés).
+3. **Optimisation lexicale pour les filtres ATS** : Structure d'en-tête et puces d'activités alignées sur les critères des recruteurs.
 
 ---
 
-### Points faibles / Manques
-1. **Outils ou méthodologies cloud spécifiques** : Certains services ou environnements mentionnés dans l'annonce ne figurent pas explicitement sous ces intitulés exacts dans votre CV.
-2. **Métriques d'impact business à accentuer** : Davantage valoriser l'impact financier, le gain de temps ou le ROI sur vos missions passées.
+### Points faibles / Manques résolus
+1. **Écarts de conformité comblés** : Les compétences et progiciels qui faisaient défaut lors de l'audit initial sont maintenant contextualisés dans le parcours.
+2. **Axe de perfectionnement** : Continuer à illustrer ces compétences lors de l'entretien avec des cas d'usage concrets de votre expérience.
 
 ---
 
 ### Stratégie de CV
-1. **Harmonisation ATS des mots-clés** : Intégrez les intitulés exacts de l'offre directement dans votre en-tête et dans les puces de descriptions de postes.
-2. **Titre de CV miroir** : Reprenez dans le titre de votre CV l'intitulé exact de l'offre d'emploi pour maximiser le score de parsing ATS dès la première seconde.
+1. **Positionnement validé** : L'adéquation est maximale pour franchir les filtres ATS et retenir l'attention du recruteur dès les premières secondes.
+2. **Diffusion recommandée** : Ce CV optimisé est prêt pour soumission immédiate sur les portails de recrutement et candidatures directes.
 
 ---
 
 ### Lettre de motivation
-> *"Passionné par les défis d'ingénierie et fort de plusieurs années d'expérience en conception de solutions performantes, c'est avec un très grand intérêt que je vous soumets ma candidature pour ce rôle. Votre culture axée sur l'excellence technique fait écho à mes récentes réalisations, et je serais ravi de mettre mon expertise au service de vos objectifs."*
+> "Fort d'une solide expérience directement en phase avec les missions clés de ${firstLine}, c'est avec un vif enthousiasme que je vous transmets ma candidature pour apporter une valeur ajoutée mesurable à votre organisation."
 
 ---
 
 ### Préparation entretien
-1. **Question :** *"Comment priorisez-vous vos tâches face à des échéances serrées et des demandes imprévues ?"*  
-   *Piste de réponse :* Citez une situation réelle avec la méthode STAR (Situation, Tâche, Action, Résultat), en insistant sur la communication proactive avec l'équipe.
-2. **Question :** *"Parlez-moi d'une divergence technique que vous avez eue avec un collègue et de la manière dont vous l'avez résolue."*  
-   *Piste de réponse :* Mettez l'accent sur les faits, les tests comparatifs (benchmarks) et l'alignement sur l'intérêt du produit.
-3. **Question :** *"Sur quelles technologies de notre stack avez-vous le moins d'expérience et comment comptez-vous monter en compétence rapidement ?"*  
-   *Piste de réponse :* Démontrez votre curiosité continue et donnez un exemple concret d'outil que vous avez appris en quelques jours.`;
+1. **Question :** *"Pouvez-vous illustrer une situation où vos compétences ont généré un impact direct chiffré ?"*  
+   *Piste de réponse :* Reprenez les réalisations avec la méthode STAR (Situation, Tâche, Action, Résultat) enrichies dans cette version optimisée.
+2. **Question :** *"Comment vous positionnez-vous par rapport aux outils requis pour ce poste ?"*  
+   *Piste de réponse :* Mettez en avant votre maîtrise des solutions citées dans l'offre et votre rapidité d'adaptation.
+3. **Question :** *"Qu'est-ce qui vous motive le plus dans notre offre d'emploi ?"*  
+   *Piste de réponse :* Valorisez votre compréhension des enjeux stratégiques et opérationnels du rôle.`;
+        } else {
+          // Audit initial (Score de départ réaliste avec marge d'optimisation)
+          finalResult = `### Score de compatibilité
+**64 / 100** (Adéquation modérée - Optimisation ciblée recommandée)
+
+---
+
+### Points forts
+1. **Base de compétences solide** : Le parcours présente les fondamentaux requis pour le poste ciblé.
+2. **Expérience métier pertinente** : Les fonctions occupées s'inscrivent dans la trajectoire recherchée par l'entreprise.
+3. **Polyvalence professionnelle** : Profil adaptable avec des bases techniques exploitables.
+
+---
+
+### Points faibles / Manques
+1. **Mots-clés et compétences spécifiques absents** : Plusieurs outils, logiciels et termes techniques essentiels de l'annonce ne figurent pas explicitement dans votre CV.
+2. **Réalisations peu quantifiées** : Les descriptions de postes manquent de métriques d'impact chiffrées (pourcentages de gain, volumes gérés, livrables concrets).
+3. **Alignement du titre de CV** : L'en-tête ne reprend pas exactement l'intitulé du poste recherché par l'ATS.
+
+---
+
+### Stratégie de CV
+1. **Harmonisation lexicale ATS** : Intégrez les mots-clés exacts de l'offre dans votre section compétences et au sein des puces d'expériences.
+2. **Adopter la méthode STAR** : Reformulez au moins 3 réalisations clés en précisant la situation, vos actions et les résultats obtenus.
+
+---
+
+### Lettre de motivation
+> "Passionné par les défis de votre secteur et fort de plusieurs années d'expérience, je souhaite mettre mon expertise au service de vos objectifs de développement."
+
+---
+
+### Préparation entretien
+1. **Question :** *"Comment compensez-vous votre manque de pratique sur certains outils cités dans l'annonce ?"*  
+   *Piste de réponse :* Démontrez votre agilité d'apprentissage en citant un progiciel équivalent déjà maîtrisé.
+2. **Question :** *"Donnez-moi un exemple concret d'un résultat mesurable obtenu dans votre dernier poste."*  
+   *Piste de réponse :* Préparez un chiffre clé (temps économisé, budget géré, taux de satisfaction).
+3. **Question :** *"Pourquoi postulez-vous à ce poste précisément aujourd'hui ?"*  
+   *Piste de réponse :* Reliez vos compétences actuelles aux besoins urgents exprimés dans l'annonce.`;
+        }
       } else {
         const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            cvText: cvText.trim(),
+            cvText: activeCvText,
             jobText: jobText.trim(),
             apiKey: apiKey.trim() || undefined,
             model: selectedModel,
+            isReAnalysis: isReAnalysisCall,
+            previousScore,
           }),
         });
 
@@ -1034,7 +1163,11 @@ export default function App() {
       }
 
       setAnalysisResult(finalResult);
-      setIsVisualModalOpen(true);
+
+      // Ouvrir la modale uniquement si explicitement demandé (sinon rester fluide dans le tunnel)
+      if (options?.openModal) {
+        setIsVisualModalOpen(true);
+      }
       confetti({ particleCount: 90, spread: 65, origin: { y: 0.6 } });
 
       const score = extractScore(finalResult);
@@ -1045,30 +1178,29 @@ export default function App() {
       let newSteps: EvolutionStep[] = [];
       let newVersion = 1;
 
-      if (evolutionSteps.length > 0) {
+      if (isReAnalysisCall && evolutionSteps.length > 0) {
         // C'est une ré-analyse (V2, V3...) après modifications
-        const previousScore = evolutionSteps.slice().reverse().find((s) => s.score !== null)?.score ?? null;
-        const lastCv = evolutionSteps.slice().reverse().find((s) => s.cvText)?.cvText || cvText;
-        const diff = detectCvChanges(lastCv, cvText);
+        const lastCv = evolutionSteps.slice().reverse().find((s) => s.cvText)?.cvText || activeCvText;
+        const diff = detectCvChanges(lastCv, activeCvText);
         const nextVer = (currentEvolutionVersion || 1) + 1;
         newVersion = nextVer;
 
         const customChanges: string[] = [];
         if (diff.addedKeywords.length > 0) {
-          customChanges.push(`Mots-clés détectés : ${diff.addedKeywords.join(', ')}`);
+          customChanges.push(`Mots-clés intégrés : ${diff.addedKeywords.join(', ')}`);
         }
         if (diff.linesAddedCount > 0) {
-          customChanges.push(`${diff.linesAddedCount} ligne(s) ajoutée(s) ou enrichie(s)`);
+          customChanges.push(`${diff.linesAddedCount} réalisation(s) ou ligne(s) enrichie(s)`);
         }
         if (customChanges.length === 0) {
-          customChanges.push('Réévaluation de conformité ATS après modifications du CV');
+          customChanges.push('Réévaluation complète après modification du CV par rapport à l’offre');
         }
 
         const newStep = buildEvolutionStep({
           version: nextVer,
           type: 're_analysis',
-          title: `3. Nouvelle analyse (Version optimisée V${nextVer})`,
-          cvText: cvText.trim(),
+          title: `V${nextVer} - Note d'analyse finale (${score}% ATS)`,
+          cvText: activeCvText,
           score,
           previousScore,
           analysisResult: finalResult,
@@ -1083,11 +1215,11 @@ export default function App() {
         const v1Step = buildEvolutionStep({
           version: 1,
           type: 'initial_analysis',
-          title: "1. Première analyse (Audit Initial)",
-          cvText: cvText.trim(),
+          title: "V1 - Audit initial d'adéquation",
+          cvText: activeCvText,
           score,
           analysisResult: finalResult,
-          summaryNote: "Audit initial de compatibilité ATS avec calcul des 5 piliers recruteur.",
+          summaryNote: "Audit initial de conformité ATS et identification des écarts par rapport à l'offre.",
         });
         newSteps = [v1Step];
         newVersion = 1;
@@ -1107,8 +1239,8 @@ export default function App() {
         }),
         title,
         jobSnippet: jobText.trim().slice(0, 120),
-        cvSnippet: cvText.trim().slice(0, 120),
-        cvText: cvText.trim(),
+        cvSnippet: activeCvText.slice(0, 120),
+        cvText: activeCvText,
         jobText: jobText.trim(),
         analysisResult: finalResult,
         score,
@@ -1123,6 +1255,8 @@ export default function App() {
       setSelectedHistoryId(newHistoryItem.id);
       localDbClient.saveAnalysis(newHistoryItem).catch((e) => console.warn('Erreur sauvegarde analyse BDD', e));
       localDbClient.fetchStats().then((st) => setDbStats(st)).catch(() => {});
+
+      return finalResult;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Une erreur est survenue lors de l'appel à l'API : ${message}`);
@@ -1163,13 +1297,25 @@ export default function App() {
   };
 
   // Ajouter l'analyse actuelle directement au Suivi des candidatures
-  const handleAddAnalysisToTracker = (customNotes?: string) => {
-    const score = analysisResult ? extractScore(analysisResult) : null;
-    const firstLineJob = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 60);
-    const inferredRole = firstLineJob.length > 5 ? firstLineJob : 'Poste analysé';
+  const handleAddAnalysisToTracker = (optionsOrNotes?: string | {
+    customNotes?: string;
+    company?: string;
+    role?: string;
+    score?: number | null;
+    coverLetter?: string;
+    coverLetterTitle?: string;
+  }) => {
+    const opts = typeof optionsOrNotes === 'string'
+      ? { customNotes: optionsOrNotes }
+      : (optionsOrNotes || {});
 
-    let inferredCompany = 'Entreprise';
-    if (jobUrl) {
+    const baseScore = analysisResult ? extractScore(analysisResult) : null;
+    const finalScore = opts.score !== undefined ? opts.score : baseScore;
+    const firstLineJob = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 60);
+    const inferredRole = opts.role || (firstLineJob.length > 5 ? firstLineJob : 'Poste analysé');
+
+    let inferredCompany = opts.company || 'Entreprise';
+    if (!opts.company && jobUrl) {
       try {
         const host = new URL(jobUrl).hostname.replace(/^www\./, '').split('.')[0];
         if (host && !['indeed', 'linkedin', 'hellowork', 'francetravail', 'apec'].includes(host.toLowerCase())) {
@@ -1179,29 +1325,34 @@ export default function App() {
         // ignore
       }
     }
-    const matchCompany = jobText.match(/(?:chez|entreprise|société|groupe)\s+([A-Z][a-zA-Z0-9éèàîôùç\s]{2,20})/i);
-    if (matchCompany && matchCompany[1]) {
-      inferredCompany = matchCompany[1].trim();
+    if (!opts.company) {
+      const matchCompany = jobText.match(/(?:chez|entreprise|société|groupe)\s+([A-Z][a-zA-Z0-9éèàîôùç\s]{2,20})/i);
+      if (matchCompany && matchCompany[1]) {
+        inferredCompany = matchCompany[1].trim();
+      }
     }
 
     const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const newAppId = 'app-' + Date.now();
 
     const newApp: ApplicationItem = {
-      id: 'app-' + Date.now(),
+      id: newAppId,
       company: inferredCompany,
       role: inferredRole,
-      status: 'to_apply',
+      status: opts.coverLetter ? 'applied' : 'to_apply',
       appliedDate: new Date().toISOString().split('T')[0],
       followUpDate: nextWeek,
       location: 'France / Hybride',
       contractType: 'CDI',
       jobUrl: jobUrl.trim(),
-      score,
+      score: finalScore,
       analysisId: selectedHistoryId || (history[0]?.id ?? null),
-      notes: customNotes || `Analyse ATS générée le ${new Date().toLocaleDateString('fr-FR')} (Score : ${score ?? 'N/A'}%).`,
+      coverLetter: opts.coverLetter || undefined,
+      coverLetterTitle: opts.coverLetterTitle || (opts.coverLetter ? `Lettre - ${inferredCompany}` : undefined),
+      notes: opts.customNotes || `Dossier complet généré le ${new Date().toLocaleDateString('fr-FR')} (Score ATS : ${finalScore ?? 'N/A'}%).`,
       checklist: {
-        cvSent: false,
-        coverLetterSent: false,
+        cvSent: true,
+        coverLetterSent: !!opts.coverLetter,
         portfolioSent: false,
         followUpDone: false,
       },
@@ -1211,6 +1362,18 @@ export default function App() {
 
     setApplications((prev) => [newApp, ...prev]);
     localDbClient.saveApplication(newApp).catch((e) => console.warn('Erreur sauvegarde candidature BDD', e));
+    if (opts.coverLetter) {
+      localDbClient.saveCoverLetter({
+        id: `letter-${newAppId}`,
+        title: newApp.coverLetterTitle || `Lettre - ${newApp.company}`,
+        company: newApp.company,
+        role: newApp.role,
+        content: opts.coverLetter,
+        applicationId: newApp.id,
+        createdAt: newApp.createdAt,
+        updatedAt: newApp.updatedAt,
+      }).catch(() => {});
+    }
     localDbClient.fetchStats().then((st) => setDbStats(st)).catch(() => {});
     setActiveTab('tracker');
   };
@@ -1409,7 +1572,7 @@ export default function App() {
                 const updatedStats = await localDbClient.fetchStats();
                 setDbStats(updatedStats);
               }}
-              onAddToTracker={(notes) => handleAddAnalysisToTracker(notes)}
+              onAddToTracker={(options) => handleAddAnalysisToTracker(options)}
               onOpenVisualModal={() => setIsVisualModalOpen(true)}
               userProfile={userProfile}
               userProfiles={userProfiles}
@@ -1497,6 +1660,8 @@ export default function App() {
             onNavigateToTab={(tab) => {
               setActiveTab(tab as any);
             }}
+            onDatabaseReset={handleDatabaseReset}
+            onDatabaseUpdated={handleDatabaseUpdated}
           />
         )}
 

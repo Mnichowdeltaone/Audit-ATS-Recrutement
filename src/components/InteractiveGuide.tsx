@@ -183,6 +183,23 @@ export default function InteractiveGuide({
     } catch {}
   }, [checklist]);
 
+  // Écouteur global pour la réinitialisation de la BDD
+  useEffect(() => {
+    const handleReset = () => {
+      setChecklist({
+        step1: false,
+        step2: false,
+        step3: false,
+        step4: false,
+        step5: false,
+      });
+      setQuizAnswers({ 1: null, 2: null, 3: null });
+      localStorage.removeItem('cv_move_interactive_checklist');
+    };
+    window.addEventListener('cv_move_database_reset', handleReset);
+    return () => window.removeEventListener('cv_move_database_reset', handleReset);
+  }, []);
+
   const toggleChecklistItem = (key: string) => {
     const nextVal = !checklist[key];
     const updated = { ...checklist, [key]: nextVal };

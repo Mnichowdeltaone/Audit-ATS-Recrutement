@@ -7,9 +7,14 @@ export interface CvDiffSummary {
   lengthDifference: number; // in characters
   titleChanged: boolean;
   newTitle?: string;
+  addedLines: string[];
 }
 
-export function detectCvChanges(oldCv: string, newCv: string): CvDiffSummary {
+export function detectCvChanges(
+  oldCv: string,
+  newCv: string,
+  targetKeywords: string[] = []
+): CvDiffSummary {
   if (!oldCv || !newCv) {
     return {
       addedKeywords: [],
@@ -17,6 +22,7 @@ export function detectCvChanges(oldCv: string, newCv: string): CvDiffSummary {
       linesRemovedCount: 0,
       lengthDifference: (newCv?.length || 0) - (oldCv?.length || 0),
       titleChanged: false,
+      addedLines: [],
     };
   }
 
@@ -26,40 +32,37 @@ export function detectCvChanges(oldCv: string, newCv: string): CvDiffSummary {
   const oldSet = new Set(oldLines);
   const newSet = new Set(newLines);
 
-  const addedLines = newLines.filter((l) => !oldSet.has(l));
+  const addedLines = newLines.filter((l) => !oldSet.has(l) && l.length > 15);
   const removedLines = oldLines.filter((l) => !newSet.has(l));
 
-  // Outils et mots-clés courants
-  const keywordsPool = [
+  // Pool de mots-clés de base
+  const basePool = [
     'AGICAP',
     'Kyriba',
     'Pennylane',
     'Cash pooling',
     'EBICS',
     'EBICS TS',
-    'EBICS T',
     'SEPA',
     'Excel VBA',
-    'VBA',
     'Python',
-    'Forecast 13 semaines',
-    'Lettrage bancaire',
-    'Rapprochement bancaire',
-    'Gestion de trésorerie',
     'Power BI',
-    'Sage FRP Treasury',
-    'Sage X3',
-    'SAP',
     'STAR',
     'KPIs',
     'Dashboard',
+    'Agile',
+    'Scrum',
+    'Management',
+    'Reporting',
   ];
+
+  const combinedPool = Array.from(new Set([...targetKeywords, ...basePool]));
 
   const lowerOld = oldCv.toLowerCase();
   const lowerNew = newCv.toLowerCase();
 
-  const addedKeywords = keywordsPool.filter(
-    (kw) => lowerNew.includes(kw.toLowerCase()) && !lowerOld.includes(kw.toLowerCase())
+  const addedKeywords = combinedPool.filter(
+    (kw) => kw && kw.length > 2 && lowerNew.includes(kw.toLowerCase()) && !lowerOld.includes(kw.toLowerCase())
   );
 
   // Vérifier si la première ligne non-vide (souvent titre ou contact) a changé
@@ -74,6 +77,7 @@ export function detectCvChanges(oldCv: string, newCv: string): CvDiffSummary {
     lengthDifference: newCv.length - oldCv.length,
     titleChanged,
     newTitle: titleChanged ? newTitleLine : undefined,
+    addedLines: addedLines.slice(0, 6),
   };
 }
 

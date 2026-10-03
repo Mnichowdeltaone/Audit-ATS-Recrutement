@@ -5,6 +5,7 @@ import type {
   ApplicationItem,
   AnalysisHistoryItem,
   SavedSuggestion,
+  SavedCoverLetter,
   UserSettings,
   DatabaseStats,
 } from '../types';
@@ -43,6 +44,20 @@ async function setIdbCache(key: string, value: unknown): Promise<void> {
     });
   } catch {
     // Fallback localStorage
+  }
+}
+
+async function clearIdbCache(): Promise<void> {
+  try {
+    const db = await openIndexedDb();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).clear();
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = reject;
+    });
+  } catch {
+    // Fallback
   }
 }
 
@@ -92,7 +107,7 @@ function filterOutDemoCv(cv: SavedCv): boolean {
   if (!cv || !cv.id) return false;
   if (cv.id === 'cv-default-1' || cv.id === 'cv-tech-2' || cv.id.startsWith('demo-')) return false;
   const raw = (cv.rawText || '').toUpperCase();
-  if (raw.includes('THOMAS DUPONT') || raw.includes('CLARA MARTIN') || raw.includes('CIGDEM ROUSSEAU') || raw.includes('MAXIME LEROY')) {
+  if (raw.includes('THOMAS DUPONT') || raw.includes('CLARA MARTIN') || raw.includes('MAXIME LEROY')) {
     return false;
   }
   return true;
@@ -173,13 +188,15 @@ export const localDbClient = {
     const applications = this.getLocalApplications();
     const analyses = this.getLocalAnalyses();
     const suggestions = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
+    const coverLetters = this.getLocalCoverLetters();
 
     return {
       cvsCount: cvs.length,
       applicationsCount: applications.length,
       analysesCount: analyses.length,
       suggestionsCount: suggestions.length,
-      dbSizeBytes: JSON.stringify({ cvs, applications, analyses, suggestions }).length,
+      coverLettersCount: coverLetters.length,
+      dbSizeBytes: JSON.stringify({ cvs, applications, analyses, suggestions, coverLetters }).length,
       lastUpdated: new Date().toISOString(),
     };
   },
@@ -191,6 +208,7 @@ export const localDbClient = {
     const applications = await this.getApplications();
     const analyses = await this.getAnalyses();
     const suggestions = await this.getSuggestions();
+    const coverLetters = await this.getCoverLetters();
     const settings = await this.getSettings();
 
     return {
@@ -216,6 +234,7 @@ export const localDbClient = {
       applications,
       analyses,
       suggestions,
+      coverLetters,
       settings,
     };
   },
@@ -385,19 +404,37 @@ export const localDbClient = {
 
   async deleteProfile(id: string): Promise<boolean> {
     const allProfiles = this.getLocalProfiles();
-    if (allProfiles.length <= 1) {
-      return false; // Impossible de supprimer le dernier profil
-    }
-
     const filtered = allProfiles.filter((p) => p.id !== id);
-    let newDefault = filtered.find((p) => p.isDefault) || filtered[0];
-    if (newDefault) {
+
+    let newDefault: UserProfile;
+    if (filtered.length > 0) {
+      newDefault = filtered.find((p) => p.isDefault) || filtered[0];
       newDefault = { ...newDefault, isDefault: true };
-      setStorage('cv_move_user_profile', newDefault);
-      await setIdbCache('user_profile', newDefault);
+    } else {
+      newDefault = {
+        id: `profile-${Date.now()}`,
+        name: 'Nouveau Profil',
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        location: '',
+        currentTitle: '',
+        bio: '',
+        linkedinUrl: '',
+        githubUrl: '',
+        portfolioUrl: '',
+        targetRoles: [],
+        skills: [],
+        updatedAt: new Date().toISOString(),
+        isDefault: true,
+      };
+      filtered.push(newDefault);
     }
 
+    setStorage('cv_move_user_profile', newDefault);
     setStorage('cv_move_user_profiles', filtered);
+    await setIdbCache('user_profile', newDefault);
     await setIdbCache('user_profiles', filtered);
 
     try {
@@ -759,6 +796,80 @@ export const localDbClient = {
   },
 
   // ==========================================
+  // LETTRES DE MOTIVATION (COVER LETTERS)
+  // ==========================================
+  getLocalCoverLetters(): SavedCoverLetter[] {
+    return getStorage<SavedCoverLetter[]>('cv_move_cover_letters', []);
+  },
+
+  async getCoverLetters(): Promise<SavedCoverLetter[]> {
+    const local = this.getLocalCoverLetters();
+    try {
+      const res = await fetch('/api/db/cover-letters');
+      if (res.ok) {
+        const serverList = (await res.json()) as SavedCoverLetter[];
+        const map = new Map<string, SavedCoverLetter>();
+        for (const l of serverList) map.set(l.id, l);
+        for (const l of local) {
+          if (!map.has(l.id)) {
+            map.set(l.id, l);
+            fetch('/api/db/cover-letters', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(l),
+            }).catch(() => {});
+          }
+        }
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime()
+        );
+        setStorage('cv_move_cover_letters', merged);
+        await setIdbCache('cover_letters', merged);
+        return merged;
+      }
+    } catch (err) {
+      console.warn('Erreur getCoverLetters serveur :', err);
+    }
+    return local;
+  },
+
+  async saveCoverLetter(letter: SavedCoverLetter): Promise<SavedCoverLetter> {
+    const current = this.getLocalCoverLetters();
+    const filtered = current.filter((l) => l.id !== letter.id);
+    const updated = [letter, ...filtered];
+
+    setStorage('cv_move_cover_letters', updated);
+    await setIdbCache('cover_letters', updated);
+
+    try {
+      await fetch('/api/db/cover-letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(letter),
+      });
+    } catch (err) {
+      console.warn('Erreur saveCoverLetter serveur :', err);
+    }
+
+    return letter;
+  },
+
+  async deleteCoverLetter(id: string): Promise<boolean> {
+    const current = this.getLocalCoverLetters();
+    const updated = current.filter((l) => l.id !== id);
+    setStorage('cv_move_cover_letters', updated);
+    await setIdbCache('cover_letters', updated);
+
+    try {
+      await fetch(`/api/db/cover-letters/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Erreur deleteCoverLetter serveur :', err);
+    }
+
+    return true;
+  },
+
+  // ==========================================
   // PARAMÈTRES
   // ==========================================
   async getSettings(): Promise<UserSettings> {
@@ -808,6 +919,7 @@ export const localDbClient = {
     if (data.profile) setStorage('cv_move_user_profile', data.profile);
     if (data.analyses) setStorage('cv_move_history', data.analyses);
     if (data.suggestions) setStorage('cv_move_suggestions', data.suggestions);
+    if (data.coverLetters) setStorage('cv_move_cover_letters', data.coverLetters);
 
     const res = await fetch('/api/db/import', {
       method: 'POST',
@@ -822,19 +934,51 @@ export const localDbClient = {
   },
 
   async resetDatabase(): Promise<DatabaseSchema> {
-    localStorage.removeItem('cv_move_saved_cvs');
-    localStorage.removeItem('cv_move_applications');
-    localStorage.removeItem('cv_move_user_profile');
-    localStorage.removeItem('cv_move_history');
-    localStorage.removeItem('cv_move_suggestions');
-    localStorage.setItem('cv_move_apps_initialized', 'true');
-    localStorage.setItem('cv_move_cvs_initialized', 'true');
+    // 1. Vider le cache IndexedDB
+    await clearIdbCache();
 
+    // 2. Vider toutes les clés localStorage
+    const keysToRemove = [
+      'cv_move_saved_cvs',
+      'cv_move_applications',
+      'cv_move_user_profile',
+      'cv_move_user_profiles',
+      'cv_move_history',
+      'cv_move_suggestions',
+      'cv_move_cover_letters',
+      'cv_move_current_cv_text',
+      'cv_move_current_job_text',
+      'cv_move_current_job_url',
+      'cv_move_interactive_checklist',
+      'cv_move_apps_initialized',
+      'cv_move_cvs_initialized',
+      'cv_move_history_initialized',
+    ];
+    for (const k of keysToRemove) {
+      localStorage.removeItem(k);
+    }
+
+    // 3. Forcer les collections locales à un tableau vide synchrone
+    setStorage('cv_move_saved_cvs', []);
+    setStorage('cv_move_applications', []);
+    setStorage('cv_move_history', []);
+    setStorage('cv_move_suggestions', []);
+    setStorage('cv_move_cover_letters', []);
+    setStorage('cv_move_user_profiles', []);
+    setStorage('cv_move_user_profile', null);
+
+    // 4. Appel serveur pour réinitialiser la BDD persistée
     const res = await fetch('/api/db/reset', { method: 'POST' });
     if (!res.ok) {
       throw new Error('Échec de la réinitialisation');
     }
     const json = await res.json();
+
+    // 5. Diffuser l'événement global pour avertir tous les composants
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cv_move_database_reset'));
+    }
+
     return json.data;
   },
 };

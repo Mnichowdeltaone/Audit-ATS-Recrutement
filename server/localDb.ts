@@ -8,6 +8,7 @@ import type {
   ApplicationItem,
   AnalysisHistoryItem,
   SavedSuggestion,
+  SavedCoverLetter,
   UserSettings,
   DatabaseStats,
 } from '../src/types';
@@ -38,11 +39,14 @@ const DEFAULT_DATABASE: DatabaseSchema = {
     targetRoles: [],
     skills: [],
     updatedAt: new Date().toISOString(),
+    isDefault: true,
   },
+  profiles: [],
   cvs: [],
   applications: [],
   analyses: [],
   suggestions: [],
+  coverLetters: [],
   settings: {
     selectedModel: 'gemini-3.8-flash',
     autoSaveToDb: true,
@@ -130,8 +134,6 @@ export function getDatabase(): DatabaseSchema {
           isDefault: true,
         },
       ];
-    } else if (profiles.length === 0) {
-      profiles = [profile];
     }
 
     // Rétrocompatibilité et fusion avec les champs manquants
@@ -144,6 +146,7 @@ export function getDatabase(): DatabaseSchema {
       applications: Array.isArray(parsed.applications) ? parsed.applications : DEFAULT_DATABASE.applications,
       analyses: Array.isArray(parsed.analyses) ? parsed.analyses : DEFAULT_DATABASE.analyses,
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : DEFAULT_DATABASE.suggestions,
+      coverLetters: Array.isArray(parsed.coverLetters) ? parsed.coverLetters : (DEFAULT_DATABASE.coverLetters || []),
       settings: { ...DEFAULT_DATABASE.settings, ...(parsed.settings || {}) },
     };
 
@@ -283,24 +286,43 @@ export async function setDefaultProfile(id: string): Promise<UserProfile | null>
 
 export async function deleteProfileFromDb(id: string): Promise<boolean> {
   const db = getDatabase();
-  if (!db.profiles || db.profiles.length <= 1) {
-    return false; // Garder au moins 1 profil
-  }
+  if (!db.profiles) db.profiles = [];
 
   const initialLen = db.profiles.length;
   db.profiles = db.profiles.filter((p) => p.id !== id);
 
-  if (db.profiles.length < initialLen) {
+  const blankProfile: UserProfile = {
+    id: `profile-${Date.now()}`,
+    name: 'Nouveau Profil',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    location: '',
+    currentTitle: '',
+    bio: '',
+    linkedinUrl: '',
+    githubUrl: '',
+    portfolioUrl: '',
+    targetRoles: [],
+    skills: [],
+    updatedAt: new Date().toISOString(),
+    isDefault: true,
+  };
+
+  if (db.profiles.length === 0) {
+    db.profiles = [blankProfile];
+    db.profile = blankProfile;
+  } else {
     // Si on a supprimé le profil actif, désigner le premier restant
-    if (db.profile.id === id && db.profiles.length > 0) {
+    if (db.profile.id === id) {
       db.profiles[0].isDefault = true;
       db.profile = db.profiles[0];
     }
-    await saveDatabase(db);
-    return true;
   }
 
-  return false;
+  await saveDatabase(db);
+  return true;
 }
 
 // =============================================================================
@@ -493,6 +515,65 @@ export async function deleteSuggestion(id: string): Promise<boolean> {
 }
 
 // =============================================================================
+// GESTION DES LETTRES DE MOTIVATION (COVER LETTERS)
+// =============================================================================
+export async function getCoverLetters(): Promise<SavedCoverLetter[]> {
+  const db = getDatabase();
+  return db.coverLetters || [];
+}
+
+export async function saveCoverLetter(letter: SavedCoverLetter): Promise<SavedCoverLetter> {
+  const db = getDatabase();
+  if (!db.coverLetters) db.coverLetters = [];
+
+  const now = new Date().toISOString();
+  const letterToSave: SavedCoverLetter = {
+    ...letter,
+    id: letter.id || `letter-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    title: letter.title || `Lettre - ${letter.company || 'Candidature'}`,
+    company: letter.company || 'Entreprise',
+    role: letter.role || 'Poste Cible',
+    content: letter.content || '',
+    updatedAt: now,
+    createdAt: letter.createdAt || now,
+  };
+
+  const existingIndex = db.coverLetters.findIndex((l) => l.id === letterToSave.id);
+
+  if (existingIndex >= 0) {
+    db.coverLetters[existingIndex] = letterToSave;
+  } else {
+    db.coverLetters.unshift(letterToSave);
+  }
+
+  // Si liée à une candidature, mettre également à jour la candidature
+  if (letterToSave.applicationId && db.applications) {
+    const appIndex = db.applications.findIndex((a) => a.id === letterToSave.applicationId);
+    if (appIndex >= 0) {
+      db.applications[appIndex].coverLetter = letterToSave.content;
+      db.applications[appIndex].coverLetterTitle = letterToSave.title;
+      db.applications[appIndex].checklist.coverLetterSent = true;
+      db.applications[appIndex].updatedAt = now;
+    }
+  }
+
+  await saveDatabase(db);
+  return letterToSave;
+}
+
+export async function deleteCoverLetter(id: string): Promise<boolean> {
+  const db = getDatabase();
+  if (!db.coverLetters) return false;
+  const initialLen = db.coverLetters.length;
+  db.coverLetters = db.coverLetters.filter((l) => l.id !== id);
+  if (db.coverLetters.length < initialLen) {
+    await saveDatabase(db);
+    return true;
+  }
+  return false;
+}
+
+// =============================================================================
 // GESTION DES PARAMÈTRES (SETTINGS)
 // =============================================================================
 export async function getSettings(): Promise<UserSettings> {
@@ -529,6 +610,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     applicationsCount: db.applications.length,
     analysesCount: db.analyses.length,
     suggestionsCount: db.suggestions.length,
+    coverLettersCount: (db.coverLetters || []).length,
     dbSizeBytes: fileSize,
     lastUpdated: db.lastUpdated,
   };
@@ -544,6 +626,7 @@ export async function importDatabase(importedData: Partial<DatabaseSchema>): Pro
     applications: Array.isArray(importedData.applications) ? importedData.applications : currentDb.applications,
     analyses: Array.isArray(importedData.analyses) ? importedData.analyses : currentDb.analyses,
     suggestions: Array.isArray(importedData.suggestions) ? importedData.suggestions : currentDb.suggestions,
+    coverLetters: Array.isArray(importedData.coverLetters) ? importedData.coverLetters : (currentDb.coverLetters || []),
     settings: importedData.settings ? { ...currentDb.settings, ...importedData.settings } : currentDb.settings,
   };
 
@@ -553,8 +636,37 @@ export async function importDatabase(importedData: Partial<DatabaseSchema>): Pro
 
 export async function resetDatabase(): Promise<DatabaseSchema> {
   const freshDb: DatabaseSchema = {
-    ...DEFAULT_DATABASE,
+    version: 1,
     lastUpdated: new Date().toISOString(),
+    profile: {
+      id: 'user_profile',
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      location: '',
+      currentTitle: '',
+      bio: '',
+      linkedinUrl: '',
+      githubUrl: '',
+      portfolioUrl: '',
+      targetRoles: [],
+      skills: [],
+      updatedAt: new Date().toISOString(),
+      isDefault: true,
+    },
+    profiles: [],
+    cvs: [],
+    applications: [],
+    analyses: [],
+    suggestions: [],
+    coverLetters: [],
+    settings: {
+      selectedModel: 'gemini-3.8-flash',
+      autoSaveToDb: true,
+      backupFrequency: 'weekly',
+      lastBackupDate: new Date().toISOString(),
+    },
   };
   await saveDatabase(freshDb);
   return freshDb;

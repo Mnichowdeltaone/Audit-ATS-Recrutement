@@ -81,6 +81,22 @@ export default function CoverLetterGeneratorTool({
       setKeyArguments(userProfile.skills.slice(0, 3).join(', '));
     }
   }, [userProfile]);
+
+  // Écouteur global pour la réinitialisation de la base de données
+  useEffect(() => {
+    const handleReset = () => {
+      setGeneratedLetter('');
+      setCandidateName('');
+      setTargetRole('');
+      setCompanyName('');
+      setKeyArguments('');
+      setCvSnippet('');
+      setJobSnippet('');
+      setActionNotice(null);
+    };
+    window.addEventListener('cv_move_database_reset', handleReset);
+    return () => window.removeEventListener('cv_move_database_reset', handleReset);
+  }, []);
   
   // Contenus de référence
   const [cvSnippet, setCvSnippet] = useState(currentCvText ? currentCvText.slice(0, 1500) : '');
@@ -153,22 +169,22 @@ export default function CoverLetterGeneratorTool({
     }
   };
 
-  // Sauvegarder dans la boîte à suggestions de la base locale
+  // Sauvegarder dans la section Lettres de motivation de la base locale
   const handleSaveToDb = async () => {
     if (!generatedLetter.trim()) return;
     setIsSaving(true);
     try {
-      const title = `Lettre de Motivation - ${companyName} (${targetRole})`;
-      await localDbClient.saveSuggestion({
-        id: `sugg-${Date.now()}`,
-        type: 'cover_letter_hook',
+      const title = `Lettre de Motivation - ${companyName || 'Entreprise'} (${targetRole || 'Poste'})`;
+      await localDbClient.saveCoverLetter({
+        id: `letter-${Date.now()}`,
         title,
-        originalText: `Candidature ${targetRole} chez ${companyName}`,
-        generatedContent: generatedLetter,
-        targetRole,
+        company: companyName || 'Entreprise Cible',
+        role: targetRole || 'Poste Cible',
+        content: generatedLetter,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
-      setActionNotice({ type: 'success', message: `⭐ Lettre enregistrée dans vos suggestions locales sous « ${title} » !` });
+      setActionNotice({ type: 'success', message: `⭐ Lettre enregistrée dans votre base locale sous « ${title} » !` });
       setTimeout(() => setActionNotice(null), 3500);
     } catch {
       setActionNotice({ type: 'error', message: 'Erreur lors de l\'enregistrement dans la base locale.' });
@@ -181,8 +197,9 @@ export default function CoverLetterGeneratorTool({
   const handleCreateApplication = async () => {
     try {
       const now = new Date().toISOString().split('T')[0];
+      const appId = `app-${Date.now()}`;
       await localDbClient.saveApplication({
-        id: `app-${Date.now()}`,
+        id: appId,
         company: companyName || 'Entreprise Cible',
         role: targetRole || 'Poste Cible',
         status: 'applied',
@@ -191,6 +208,8 @@ export default function CoverLetterGeneratorTool({
         location: 'France',
         contractType: 'CDI',
         notes: `Lettre de motivation générée le ${now}.`,
+        coverLetter: generatedLetter,
+        coverLetterTitle: `Lettre - ${companyName || 'Candidature'}`,
         checklist: {
           cvSent: true,
           coverLetterSent: true,
@@ -200,7 +219,19 @@ export default function CoverLetterGeneratorTool({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-      setActionNotice({ type: 'success', message: `💼 Candidature créée pour "${companyName}" avec lettre cochée !` });
+
+      await localDbClient.saveCoverLetter({
+        id: `letter-${Date.now()}`,
+        title: `Lettre de Motivation - ${companyName || 'Entreprise'} (${targetRole || 'Poste'})`,
+        company: companyName || 'Entreprise Cible',
+        role: targetRole || 'Poste Cible',
+        content: generatedLetter,
+        applicationId: appId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      setActionNotice({ type: 'success', message: `💼 Candidature créée pour "${companyName}" avec lettre de motivation rattachée !` });
       setTimeout(() => {
         if (onNavigateToTracker) onNavigateToTracker();
       }, 1500);

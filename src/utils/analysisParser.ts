@@ -270,7 +270,18 @@ export function parseAnalysisResult(
   }
 
   // 10. Extraction dynamique des compétences et comparaison
-  const skillsPool = [
+  // Pool généraliste de compétences courantes + extraction depuis l'offre et l'analyse
+  const basePool = [
+    'Gestion de projet',
+    'Agile / Scrum',
+    'Management d’équipe',
+    'Communication',
+    'KPIs & Reporting',
+    'Excel / Tableaux croisés',
+    'Power BI / Data',
+    'Anglais professionnel',
+    'Résolution de problèmes',
+    'Autonomie & Rigueur',
     'Cash pooling',
     'AGICAP',
     'Kyriba',
@@ -279,23 +290,32 @@ export function parseAnalysisResult(
     'SEPA',
     'EBICS TS',
     'Python',
-    'Forecast 13 semaines',
+    'Forecast',
     'Rapprochement bancaire',
     'Gestion de trésorerie',
     'Reporting financier',
     'Sage FRP Treasury',
     'Sage X3',
-    'Power BI',
-    'Management d’équipe',
     'Audit financier',
     'Contrôle de gestion',
   ];
 
+  // Extraire les compétences citées dans les points forts et faibles identifiés
+  const dynamicFromAnalysis: string[] = [];
+  weaknesses.forEach((w) => {
+    if (w.title && w.title.length < 35) dynamicFromAnalysis.push(w.title);
+  });
+  strengths.forEach((s) => {
+    if (s.title && s.title.length < 35) dynamicFromAnalysis.push(s.title);
+  });
+
   const fullCv = (cvText + ' ' + rawText).toLowerCase();
   const fullJob = (jobText + ' ' + rawText).toLowerCase();
 
+  const combinedPool = Array.from(new Set([...dynamicFromAnalysis, ...basePool]));
   const skillsBreakdown: SkillMatch[] = [];
-  skillsPool.forEach((skill) => {
+
+  combinedPool.forEach((skill) => {
     const isJobReq = fullJob.includes(skill.toLowerCase());
     const isCvPresent = fullCv.includes(skill.toLowerCase());
 
@@ -310,15 +330,14 @@ export function parseAnalysisResult(
     }
   });
 
-  // Garantir au moins quelques éléments visuels
-  if (skillsBreakdown.length < 5) {
+  // Garantir au moins quelques éléments visuels cohérents
+  if (skillsBreakdown.length < 4) {
     skillsBreakdown.push(
-      { name: 'Cash pooling', status: 'matched', importance: 'haute' },
-      { name: 'AGICAP / TMS', status: 'matched', importance: 'haute' },
-      { name: 'Protocoles EBICS & SEPA', status: 'matched', importance: 'haute' },
-      { name: 'Excel VBA & Modélisation', status: 'matched', importance: 'haute' },
-      { name: 'Forecast glissant', status: 'partial', importance: 'moyenne' },
-      { name: 'Python / Automatisation', status: 'missing', importance: 'haute' }
+      { name: 'Compétences clés du poste', status: 'matched', importance: 'haute' },
+      { name: 'Outils et progiciels requis', status: 'matched', importance: 'haute' },
+      { name: 'Méthodologie opérationnelle', status: 'matched', importance: 'haute' },
+      { name: 'Réalisations chiffrées STAR', status: 'partial', importance: 'moyenne' },
+      { name: 'Mots-clés spécifiques ATS', status: 'missing', importance: 'haute' }
     );
   }
 
@@ -326,14 +345,14 @@ export function parseAnalysisResult(
   const base = globalScore;
   const axisScores = [
     {
-      axis: 'Compétences Techniques & TMS',
+      axis: 'Compétences Techniques & Métier',
       score: Math.min(100, Math.max(50, Math.round(base * 1.04))),
-      description: 'Couverture des progiciels, protocoles et savoir-faire clés.',
+      description: 'Couverture des compétences, outils et savoir-faire clés exigés.',
     },
     {
       axis: 'Mots-Clés & Filtres ATS',
       score: Math.min(100, Math.max(40, Math.round(base * 0.96))),
-      description: 'Reconnaissance lexicale par les algorithmes de tri.',
+      description: 'Reconnaissance lexicale par les algorithmes de tri ATS.',
     },
     {
       axis: 'Niveau d’Expérience & Séniorité',
@@ -343,12 +362,12 @@ export function parseAnalysisResult(
     {
       axis: 'Réalisations Chiffrées (STAR)',
       score: Math.min(100, Math.max(40, Math.round(base * 0.92))),
-      description: 'Présence de métriques d’impact mesurables (%, M€, gains).',
+      description: 'Présence d’indicateurs d’impact quantifiables (%, M€, délais).',
     },
     {
-      axis: 'Cohérence du Titre & Métier',
+      axis: 'Cohérence du Titre & En-tête',
       score: Math.min(100, Math.max(50, Math.round(base * 0.98))),
-      description: 'Alignement immédiat entre votre intitulé et l’annonce.',
+      description: 'Alignement direct entre votre intitulé de profil et l’offre visée.',
     },
   ];
 

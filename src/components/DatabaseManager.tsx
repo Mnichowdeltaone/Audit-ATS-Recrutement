@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Database,
   User,
@@ -21,7 +21,10 @@ import {
   Lock,
   Save,
   CheckCircle2,
+  Mail,
+  Copy,
 } from 'lucide-react';
+import { parseCvFile } from '../utils/fileExtractor';
 import type {
   DatabaseSchema,
   UserProfile,
@@ -29,6 +32,7 @@ import type {
   ApplicationItem,
   AnalysisHistoryItem,
   SavedSuggestion,
+  SavedCoverLetter,
   DatabaseStats,
 } from '../types';
 import { localDbClient } from '../services/localDbClient';
@@ -37,14 +41,18 @@ interface DatabaseManagerProps {
   onLoadCvToAnalyzer: (cvText: string, cvTitle: string) => void;
   onOpenAnalysis: (analysisId: string) => void;
   onNavigateToTab: (tab: 'app' | 'tracker' | 'cv-assistant' | 'history' | 'database') => void;
+  onDatabaseReset?: () => void;
+  onDatabaseUpdated?: () => void;
 }
 
 export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   onLoadCvToAnalyzer,
   onOpenAnalysis,
   onNavigateToTab,
+  onDatabaseReset,
+  onDatabaseUpdated,
 }) => {
-  const [subTab, setSubTab] = useState<'profile' | 'cvs' | 'applications' | 'analyses' | 'suggestions' | 'backup'>('profile');
+  const [subTab, setSubTab] = useState<'profile' | 'cvs' | 'coverLetters' | 'applications' | 'analyses' | 'suggestions' | 'backup'>('profile');
   const [dbData, setDbData] = useState<DatabaseSchema | null>(null);
   const [stats, setStats] = useState<DatabaseStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,15 +70,31 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   const [cvFormRole, setCvFormRole] = useState('');
   const [cvFormText, setCvFormText] = useState('');
 
+  // Cover Letter modal/form state
+  const [isAddingLetter, setIsAddingLetter] = useState(false);
+  const [editingLetter, setEditingLetter] = useState<SavedCoverLetter | null>(null);
+  const [letterFormTitle, setLetterFormTitle] = useState('');
+  const [letterFormCompany, setLetterFormCompany] = useState('');
+  const [letterFormRole, setLetterFormRole] = useState('');
+  const [letterFormContent, setLetterFormContent] = useState('');
+  const [letterFormAppId, setLetterFormAppId] = useState('');
+  const [copiedLetterId, setCopiedLetterId] = useState<string | null>(null);
+  const [confirmDeleteLetterId, setConfirmDeleteLetterId] = useState<string | null>(null);
+
   // Suggestion modal/filter
   const [selectedSuggestionType, setSelectedSuggestionType] = useState<string>('all');
 
   // Confirmation states for deletions (sans window.confirm pour compatibilité iframe)
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
   const [confirmDeleteCvId, setConfirmDeleteCvId] = useState<string | null>(null);
   const [confirmDeleteSuggId, setConfirmDeleteSuggId] = useState<string | null>(null);
   const [confirmDeleteAppId, setConfirmDeleteAppId] = useState<string | null>(null);
   const [confirmDeleteAnalysisId, setConfirmDeleteAnalysisId] = useState<string | null>(null);
+
+  // Import direct de fichier CV dans la bibliothèque
+  const [isImportingCv, setIsImportingCv] = useState(false);
+  const importCvFileRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -127,9 +151,12 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
       if (dbData) {
         setDbData({ ...dbData, profile: saved });
       }
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       showNotification('✅ Profil personnel enregistré dans la base locale !');
     } catch {
-      alert('Erreur lors de la sauvegarde du profil.');
+      showNotification('❌ Erreur lors de la sauvegarde du profil.');
     }
   };
 
@@ -137,7 +164,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   const handleSaveCv = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cvFormTitle.trim() || !cvFormText.trim()) {
-      alert('Veuillez renseigner au moins un titre et le contenu du CV.');
+      showNotification('❌ Veuillez renseigner au moins un titre et le contenu du CV.');
       return;
     }
 
@@ -157,6 +184,9 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
 
       await localDbClient.saveCv(newCv);
       await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       setIsAddingCv(false);
       setEditingCv(null);
       setCvFormTitle('');
@@ -164,7 +194,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
       setCvFormText('');
       showNotification('✅ CV enregistré dans votre bibliothèque locale !');
     } catch {
-      alert("Erreur lors de l'enregistrement du CV.");
+      showNotification("❌ Erreur lors de l'enregistrement du CV.");
     }
   };
 
@@ -173,6 +203,9 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     try {
       await localDbClient.deleteCv(id);
       await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       setConfirmDeleteCvId(null);
       showNotification('🗑️ CV supprimé de la base locale.');
     } catch {
@@ -185,6 +218,9 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     try {
       await localDbClient.setDefaultCv(id);
       await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       showNotification('⭐ CV défini comme CV principal par défaut !');
     } catch {
       showNotification('❌ Erreur lors de la mise à jour.');
@@ -196,6 +232,9 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     try {
       await localDbClient.deleteSuggestion(id);
       await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       setConfirmDeleteSuggId(null);
       showNotification('🗑️ Suggestion retirée de la base.');
     } catch {
@@ -208,6 +247,9 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     try {
       await localDbClient.deleteApplication(id);
       await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       setConfirmDeleteAppId(null);
       showNotification('🗑️ Candidature supprimée de la base locale.');
     } catch {
@@ -220,11 +262,68 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
     try {
       await localDbClient.deleteAnalysis(id);
       await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
       setConfirmDeleteAnalysisId(null);
       showNotification('🗑️ Analyse archivée supprimée.');
     } catch {
       showNotification('❌ Erreur lors de la suppression.');
     }
+  };
+
+  // Sauvegarder ou modifier une lettre de motivation
+  const handleSaveLetter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!letterFormContent.trim()) return;
+    try {
+      const toSave: SavedCoverLetter = {
+        id: editingLetter ? editingLetter.id : `letter-${Date.now()}`,
+        title: letterFormTitle.trim() || `Lettre - ${letterFormCompany || 'Candidature'}`,
+        company: letterFormCompany.trim() || 'Entreprise Cible',
+        role: letterFormRole.trim() || 'Poste Cible',
+        content: letterFormContent.trim(),
+        applicationId: letterFormAppId || undefined,
+        createdAt: editingLetter ? editingLetter.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await localDbClient.saveCoverLetter(toSave);
+      await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
+      setIsAddingLetter(false);
+      setEditingLetter(null);
+      showNotification('✅ Lettre de motivation enregistrée dans la base locale !');
+    } catch {
+      showNotification("❌ Erreur lors de l'enregistrement de la lettre.");
+    }
+  };
+
+  // Supprimer une lettre de motivation
+  const handleDeleteLetter = async (id: string) => {
+    try {
+      await localDbClient.deleteCoverLetter(id);
+      await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
+      setConfirmDeleteLetterId(null);
+      showNotification('🗑️ Lettre de motivation supprimée de la base.');
+    } catch {
+      showNotification('❌ Erreur lors de la suppression.');
+    }
+  };
+
+  const handleDownloadLetterDoc = (letter: SavedCoverLetter) => {
+    const blob = new Blob([letter.content], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Lettre_Motivation_${(letter.company || 'Candidature').replace(/\s+/g, '_')}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification('📥 Lettre téléchargée au format Word (.doc) !');
   };
 
   // Export complet de la BDD locale
@@ -256,24 +355,119 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
         }
         await localDbClient.importDatabase(parsed);
         await loadData();
+        if (onDatabaseUpdated) {
+          onDatabaseUpdated();
+        }
         showNotification('✅ Base de données locale restaurée avec succès !');
       } catch (err) {
-        alert(`Échec de l'importation : ${err instanceof Error ? err.message : 'Fichier non reconnu'}`);
+        showNotification(`❌ Échec de l'importation : ${err instanceof Error ? err.message : 'Fichier non reconnu'}`);
       }
     };
     reader.readAsText(file);
     e.target.value = '';
   };
 
+  // Supprimer le profil actuellement affiché
+  const handleDeleteProfile = async () => {
+    if (!profileForm?.id) return;
+    try {
+      await localDbClient.deleteProfile(profileForm.id);
+      await loadData();
+      if (onDatabaseUpdated) {
+        onDatabaseUpdated();
+      }
+      setConfirmDeleteProfile(false);
+      showNotification('🗑️ Profil supprimé avec succès de la base locale.');
+    } catch {
+      showNotification('❌ Erreur lors de la suppression du profil.');
+    }
+  };
+
+  // Import direct d'un fichier CV depuis la bibliothèque de CVs
+  const handleImportCvFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImportingCv(true);
+    try {
+      const result = await parseCvFile(file);
+      setCvFormTitle(result.fileName.replace(/\.[^/.]+$/, ''));
+      setCvFormRole(profileForm?.currentTitle || 'Général');
+      setCvFormText(result.text);
+      setIsAddingCv(true);
+      showNotification(`📥 CV « ${result.fileName} » extrait ! Vous pouvez l'enregistrer dans votre base locale.`);
+    } catch (err: unknown) {
+      showNotification(`❌ Erreur lors de l'extraction : ${err instanceof Error ? err.message : 'Fichier non supporté'}`);
+    } finally {
+      setIsImportingCv(false);
+      e.target.value = '';
+    }
+  };
+
   // Réinitialisation de la BDD
   const handleResetDatabase = async () => {
     try {
       await localDbClient.resetDatabase();
-      await loadData();
+      const emptyDb: DatabaseSchema = {
+        version: 1,
+        lastUpdated: new Date().toISOString(),
+        profile: {
+          id: 'user_profile',
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          location: '',
+          currentTitle: '',
+          bio: '',
+          linkedinUrl: '',
+          githubUrl: '',
+          portfolioUrl: '',
+          targetRoles: [],
+          skills: [],
+          updatedAt: new Date().toISOString(),
+          isDefault: true,
+        },
+        profiles: [],
+        cvs: [],
+        applications: [],
+        analyses: [],
+        suggestions: [],
+        coverLetters: [],
+        settings: {
+          selectedModel: 'gemini-3.8-flash',
+          autoSaveToDb: true,
+          backupFrequency: 'weekly',
+          lastBackupDate: new Date().toISOString(),
+        },
+      };
+      setDbData(emptyDb);
+      setProfileForm(emptyDb.profile);
+      setSkillsInput('');
+      setTargetRolesInput('');
+      setStats({
+        cvsCount: 0,
+        applicationsCount: 0,
+        analysesCount: 0,
+        suggestionsCount: 0,
+        coverLettersCount: 0,
+        dbSizeBytes: 0,
+        lastUpdated: new Date().toISOString(),
+      });
+      setIsAddingCv(false);
+      setEditingCv(null);
+      setEditingLetter(null);
+      setCvFormTitle('');
+      setCvFormText('');
+      setCvFormRole('');
+      setLetterFormTitle('');
+      setLetterFormContent('');
       setConfirmReset(false);
-      showNotification('🔄 Base de données réinitialisée aux paramètres initiaux.');
+      if (onDatabaseReset) {
+        onDatabaseReset();
+      }
+      showNotification('🔄 Base de données réinitialisée aux paramètres initiaux. Tout est à zéro.');
     } catch {
-      alert('Erreur lors de la réinitialisation.');
+      showNotification('❌ Erreur lors de la réinitialisation.');
     }
   };
 
@@ -349,6 +543,15 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
           </span>
         </div>
 
+        <div className="p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl flex flex-col">
+          <span className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider flex items-center gap-1">
+            <Mail className="w-3 h-3" /> Lettres Rédigées
+          </span>
+          <span className="text-xl font-black text-rose-900 mt-1">
+            {stats?.coverLettersCount ?? dbData?.coverLetters?.length ?? 0}
+          </span>
+        </div>
+
         <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex flex-col">
           <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider flex items-center gap-1">
             <Briefcase className="w-3 h-3" /> Candidatures
@@ -373,15 +576,6 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
           </span>
           <span className="text-xl font-black text-amber-900 mt-1">
             {stats?.suggestionsCount ?? dbData?.suggestions.length ?? 0}
-          </span>
-        </div>
-
-        <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex flex-col">
-          <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1">
-            <HardDrive className="w-3 h-3" /> Taille BDD
-          </span>
-          <span className="text-xl font-black text-gray-900 mt-1">
-            {stats ? formatBytes(stats.dbSizeBytes) : 'Local'}
           </span>
         </div>
 
@@ -428,15 +622,15 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
 
         <button
           type="button"
-          onClick={() => setSubTab('suggestions')}
+          onClick={() => setSubTab('coverLetters')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-            subTab === 'suggestions'
+            subTab === 'coverLetters'
               ? 'border-purple-600 text-purple-700 bg-purple-50/30'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
           }`}
         >
-          <Sparkles className="w-4 h-4" />
-          <span>💡 Suggestions & STAR ({dbData?.suggestions.length || 0})</span>
+          <Mail className="w-4 h-4" />
+          <span>📄 Lettres de Motivation ({dbData?.coverLetters?.length || 0})</span>
         </button>
 
         <button
@@ -463,6 +657,19 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
         >
           <History className="w-4 h-4" />
           <span>📊 Analyses ({dbData?.analyses.length || 0})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSubTab('suggestions')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
+            subTab === 'suggestions'
+              ? 'border-purple-600 text-purple-700 bg-purple-50/30'
+              : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>💡 Boîte STAR ({dbData?.suggestions.length || 0})</span>
         </button>
 
         <button
@@ -637,19 +844,61 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-            <span className="text-xs text-gray-500">
-              Dernière mise à jour : {new Date(profileForm.updatedAt).toLocaleString('fr-FR')}
-            </span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-t border-gray-200 pt-4 gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">
+                Dernière mise à jour : {new Date(profileForm.updatedAt).toLocaleString('fr-FR')}
+              </span>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteProfile(true)}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Supprimer ce profil de candidat de la base locale"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Supprimer ce profil</span>
+              </button>
+            </div>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>Enregistrer le Profil dans la BDD</span>
             </button>
           </div>
         </form>
+      )}
+
+      {/* Confirmation Suppression Profil */}
+      {confirmDeleteProfile && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600 font-bold text-base">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <span>Supprimer ce profil candidat ?</span>
+            </div>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer ce profil candidat de votre base locale ? S&apos;il s&apos;agit de votre unique profil, il sera remis à zéro.
+            </p>
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteProfile(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteProfile}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+              >
+                Confirmer la suppression
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* =====================================================================
@@ -661,24 +910,55 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
             <div>
               <h3 className="text-sm font-bold text-gray-900">Bibliothèque Multi-CVs</h3>
               <p className="text-xs text-gray-500">
-                Stockez plusieurs variantes de vos CVs (Tech, Management, Freelance, Anglais). Choisissez le CV actif en 1 clic.
+                Stockez vos CVs originaux et variantes (Tech, Management, etc.). Choisissez le CV actif en 1 clic.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditingCv(null);
-                setCvFormTitle('');
-                setCvFormRole('');
-                setCvFormText('');
-                setIsAddingCv(true);
-              }}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>➕ Ajouter un nouveau CV</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Input fichier masqué pour l'import de CV */}
+              <input
+                type="file"
+                ref={importCvFileRef}
+                onChange={handleImportCvFile}
+                accept=".pdf,.docx,.txt"
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                disabled={isImportingCv}
+                onClick={() => importCvFileRef.current?.click()}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
+                title="Importer un fichier CV (PDF, Word DOCX ou Texte)"
+              >
+                {isImportingCv ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Extraction...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>📥 Importer un CV (PDF/Word/TXT)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCv(null);
+                  setCvFormTitle('');
+                  setCvFormRole('');
+                  setCvFormText('');
+                  setIsAddingCv(true);
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>➕ Saisie manuelle</span>
+              </button>
+            </div>
           </div>
 
           {/* Formulaire Modal / En ligne d'ajout de CV */}
@@ -866,6 +1146,337 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          CONTENU DU SOUS-ONGLET : LETTRES DE MOTIVATION ENREGISTRÉES
+         ===================================================================== */}
+      {subTab === 'coverLetters' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-50/60 border border-rose-200/80 p-4 rounded-xl">
+            <div>
+              <h3 className="text-sm font-bold text-rose-900 flex items-center gap-1.5">
+                <Mail className="w-4 h-4 text-rose-600" />
+                <span>Lettres de Motivation Enregistrées en BDD Locale</span>
+              </h3>
+              <p className="text-xs text-rose-800/80 mt-0.5">
+                Consultez, retouchez, copiez ou téléchargez toutes les lettres rédigées pour vos candidatures.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingLetter(null);
+                  setLetterFormTitle('');
+                  setLetterFormCompany('');
+                  setLetterFormRole('');
+                  setLetterFormContent('');
+                  setLetterFormAppId('');
+                  setIsAddingLetter(true);
+                }}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nouvelle Lettre</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onNavigateToTab('cv-assistant')}
+                className="px-3 py-1.5 bg-white border border-rose-200 hover:bg-rose-50 text-rose-800 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+              >
+                ✨ Générateur Assisté
+              </button>
+            </div>
+          </div>
+
+          {/* Formulaire Modal Ajouter / Éditer Lettre */}
+          {isAddingLetter && (
+            <div className="p-5 bg-white border border-rose-200 rounded-2xl shadow-sm space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h4 className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-rose-600" />
+                  <span>{editingLetter ? 'Modifier la Lettre de Motivation' : 'Enregistrer une Nouvelle Lettre'}</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingLetter(false);
+                    setEditingLetter(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-sm font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveLetter} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Titre de la lettre
+                    </label>
+                    <input
+                      type="text"
+                      value={letterFormTitle}
+                      onChange={(e) => setLetterFormTitle(e.target.value)}
+                      placeholder="ex: Lettre - Trésorier Senior"
+                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Entreprise ciblée
+                    </label>
+                    <input
+                      type="text"
+                      value={letterFormCompany}
+                      onChange={(e) => setLetterFormCompany(e.target.value)}
+                      placeholder="ex: Agicap / TotalEnergies"
+                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Poste visé
+                    </label>
+                    <input
+                      type="text"
+                      value={letterFormRole}
+                      onChange={(e) => setLetterFormRole(e.target.value)}
+                      placeholder="ex: Trésorier Opérationnel"
+                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {dbData?.applications && dbData.applications.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Rattacher à une candidature existante du Kanban (optionnel)
+                    </label>
+                    <select
+                      value={letterFormAppId}
+                      onChange={(e) => setLetterFormAppId(e.target.value)}
+                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                    >
+                      <option value="">-- Aucune candidature rattachée pour le moment --</option>
+                      {dbData.applications.map((app) => (
+                        <option key={app.id} value={app.id}>
+                          {app.company} — {app.role} ({app.appliedDate || 'En cours'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Texte complet de la lettre de motivation *
+                    </label>
+                    <span className="text-[11px] text-gray-400">
+                      {letterFormContent.split(/\s+/).filter(Boolean).length} mots
+                    </span>
+                  </div>
+                  <textarea
+                    rows={12}
+                    value={letterFormContent}
+                    onChange={(e) => setLetterFormContent(e.target.value)}
+                    placeholder="Madame, Monsieur,..."
+                    className="w-full text-xs p-3.5 border border-gray-300 rounded-xl font-sans text-gray-800 leading-relaxed focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingLetter(false);
+                      setEditingLetter(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs"
+                  >
+                    {editingLetter ? 'Enregistrer les modifications' : 'Sauvegarder dans la BDD'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Liste des lettres */}
+          {(!dbData?.coverLetters || dbData.coverLetters.length === 0) ? (
+            <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                <Mail className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-gray-800">Aucune lettre de motivation dans votre base locale</h4>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Générez votre première lettre sur-mesure depuis le parcours d&apos;analyse (Étape 4) ou depuis l&apos;Assistant IA, et enregistrez-la ici en 1 clic.
+              </p>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('cv-assistant')}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  ✨ Rédiger avec l&apos;IA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingLetter(true)}
+                  className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Coller une lettre existante
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {dbData.coverLetters.map((letter) => {
+                const associatedApp = letter.applicationId
+                  ? dbData.applications.find((a) => a.id === letter.applicationId)
+                  : null;
+                const isCopied = copiedLetterId === letter.id;
+
+                return (
+                  <div
+                    key={letter.id}
+                    className="p-5 rounded-2xl border border-rose-200/80 bg-white hover:border-rose-300 shadow-2xs flex flex-col justify-between transition-all space-y-3"
+                  >
+                    <div>
+                      {/* En-tête de la lettre */}
+                      <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-2.5">
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block truncate">
+                            {letter.company || 'Entreprise Cible'}
+                          </span>
+                          <h4 className="font-extrabold text-sm text-gray-900 leading-snug truncate mt-0.5">
+                            {letter.title || `Lettre - ${letter.role}`}
+                          </h4>
+                          <span className="text-[11px] text-gray-500 font-medium">
+                            Poste : {letter.role || 'Poste Cible'}
+                          </span>
+                        </div>
+
+                        {associatedApp ? (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToTab('tracker')}
+                            className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold flex items-center gap-1 hover:bg-blue-100 cursor-pointer shrink-0"
+                            title="Ouvrir dans le Kanban"
+                          >
+                            <Briefcase className="w-2.5 h-2.5" />
+                            <span>Liée Kanban</span>
+                          </button>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium shrink-0">
+                            Non liée
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Aperçu du texte */}
+                      <p className="text-xs text-gray-700 font-sans bg-rose-50/30 p-3 rounded-xl border border-rose-100/70 line-clamp-4 mt-3 leading-relaxed whitespace-pre-line">
+                        {letter.content}
+                      </p>
+                    </div>
+
+                    {/* Pied de carte avec actions */}
+                    <div className="border-t border-gray-100 pt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-gray-400 text-[11px]">
+                        {letter.content.split(/\s+/).filter(Boolean).length} mots • {new Date(letter.updatedAt || letter.createdAt).toLocaleDateString('fr-FR')}
+                      </span>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(letter.content);
+                            setCopiedLetterId(letter.id);
+                            setTimeout(() => setCopiedLetterId(null), 2000);
+                            showNotification('📋 Lettre copiée dans le presse-papier !');
+                          }}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          {isCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          <span>{isCopied ? 'Copié !' : 'Copier'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadLetterDoc(letter)}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Télécharger en document Word .doc"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>.doc</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingLetter(letter);
+                            setLetterFormTitle(letter.title);
+                            setLetterFormCompany(letter.company);
+                            setLetterFormRole(letter.role);
+                            setLetterFormContent(letter.content);
+                            setLetterFormAppId(letter.applicationId || '');
+                            setIsAddingLetter(true);
+                          }}
+                          className="p-1 rounded-md border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors cursor-pointer"
+                          title="Modifier cette lettre"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {confirmDeleteLetterId === letter.id ? (
+                          <div className="flex items-center gap-1 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
+                            <span className="text-[10px] text-red-700 font-bold">Supprimer ?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLetter(letter.id)}
+                              className="px-1.5 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                            >
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteLetterId(null)}
+                              className="px-1.5 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-[10px] font-bold cursor-pointer"
+                            >
+                              Non
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteLetterId(letter.id)}
+                            className="p-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Supprimer cette lettre de la base"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

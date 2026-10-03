@@ -29,6 +29,7 @@ import {
   ExternalLink,
   ChevronRight,
   Maximize2,
+  Mail,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -38,6 +39,7 @@ import {
   AnalysisHistoryItem,
   ApplicationItem,
 } from '../types';
+import { localDbClient } from '../services/localDbClient';
 import { parseAnalysisResult } from '../utils/analysisParser';
 import { detectCvChanges, buildEvolutionStep } from '../utils/cvEvolutionHelper';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from '../utils/sampleData';
@@ -79,7 +81,14 @@ interface OptimizationFunnelProps {
   currentEvolutionVersion: number;
   setCurrentEvolutionVersion: React.Dispatch<React.SetStateAction<number>>;
   onSaveCvToDb: (title: string, cvText: string) => Promise<void>;
-  onAddToTracker: (customNotes?: string) => void;
+  onAddToTracker: (options?: {
+    customNotes?: string;
+    company?: string;
+    role?: string;
+    score?: number | null;
+    coverLetter?: string;
+    coverLetterTitle?: string;
+  }) => void;
   onOpenVisualModal: () => void;
   userProfile: UserProfile | null;
   userProfiles: UserProfile[];
@@ -150,16 +159,43 @@ export default function OptimizationFunnel({
   const [optimizationDiff, setOptimizationDiff] = useState<ReturnType<typeof detectCvChanges> | null>(null);
   const [viewCompareMode, setViewCompareMode] = useState<'side_by_side' | 'editor'>('side_by_side');
 
-  // États Étape 4 (Candidature finale)
+  // États Étape 4 (Candidature finale & Dossier complet)
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [isCalculatingFinalScore, setIsCalculatingFinalScore] = useState(false);
-  const [copiedState, setCopiedState] = useState<'cv' | 'hook' | 'report' | null>(null);
+  const [copiedState, setCopiedState] = useState<'cv' | 'hook' | 'report' | 'letter' | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [isSavingNewCv, setIsSavingNewCv] = useState(false);
   const [newCvTitle, setNewCvTitle] = useState('CV Optimisé Final');
+  const [activeDossierTab, setActiveDossierTab] = useState<'cv' | 'letter'>('cv');
+  const [finalCoverLetter, setFinalCoverLetter] = useState<string>('');
+  const [coverLetterTitle, setCoverLetterTitle] = useState<string>('Lettre de Motivation Sur-Mesure');
+  const [coverLetterTone, setCoverLetterTone] = useState<'professionnel' | 'dynamique' | 'concis'>('professionnel');
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [coverLetterNotice, setCoverLetterNotice] = useState<string | null>(null);
+  const [isSavingLetter, setIsSavingLetter] = useState(false);
+  const [funnelError, setFunnelError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // Reset global lors d'une remise à zéro de la BDD
+  useEffect(() => {
+    const handleReset = () => {
+      setCurrentStep(1);
+      setOptimizedCvDraft('');
+      setFinalCoverLetter('');
+      setOptimizationSummaryBullets([]);
+      setOptimizationDiff(null);
+      setCustomInstructions('');
+      setFinalScore(null);
+      setCopiedState(null);
+      setSaveSuccessMsg(null);
+      setCoverLetterNotice(null);
+      setFunnelError(null);
+    };
+    window.addEventListener('cv_move_database_reset', handleReset);
+    return () => window.removeEventListener('cv_move_database_reset', handleReset);
+  }, []);
 
   // Parsing de l'analyse actuelle si disponible
   const parsedAnalysis = analysisResult ? parseAnalysisResult(analysisResult, cvText, jobText) : null;
@@ -174,16 +210,17 @@ export default function OptimizationFunnel({
     }
   }, [analysisResult]);
 
-  // Titre par défaut pour le CV final
+  // Titres par défaut pour le CV final et la lettre de motivation
   useEffect(() => {
     if (parsedAnalysis?.targetRole) {
       const companyPart = parsedAnalysis.targetCompany ? ` - ${parsedAnalysis.targetCompany}` : '';
       setNewCvTitle(`CV Optimisé - ${parsedAnalysis.targetRole}${companyPart}`);
+      setCoverLetterTitle(`Lettre de Motivation - ${parsedAnalysis.targetRole}${companyPart}`);
     }
   }, [parsedAnalysis?.targetRole, parsedAnalysis?.targetCompany]);
 
   // Copier dans le presse-papier avec feedback
-  const handleCopy = (text: string, type: 'cv' | 'hook' | 'report') => {
+  const handleCopy = (text: string, type: 'cv' | 'hook' | 'report' | 'letter') => {
     navigator.clipboard.writeText(text);
     setCopiedState(type);
     setTimeout(() => setCopiedState(null), 2000);
@@ -204,9 +241,10 @@ export default function OptimizationFunnel({
   // Passer à l'étape 2 (Lancement du diagnostic)
   const handleGoToStep2 = async () => {
     if (!cvText.trim() || !jobText.trim()) {
-      alert("Veuillez renseigner à la fois votre CV et l'offre d'emploi avant de lancer le diagnostic.");
+      setFunnelError("Veuillez renseigner à la fois votre CV et l'offre d'emploi avant de lancer le diagnostic.");
       return;
     }
+    setFunnelError(null);
     await onRunAnalysis(!apiKey && !hasServerKey);
     setCurrentStep(2);
   };
@@ -273,7 +311,7 @@ export default function OptimizationFunnel({
 
       confetti({ particleCount: 45, spread: 60, origin: { y: 0.6 } });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erreur lors de la génération.');
+      setFunnelError(err instanceof Error ? err.message : 'Erreur lors de la génération.');
     } finally {
       setIsGeneratingOptimizedCv(false);
     }
@@ -282,9 +320,10 @@ export default function OptimizationFunnel({
   // Passer à l'étape 4 (Validation de la version et calcul du gain)
   const handleValidateAndGoToStep4 = async () => {
     if (!optimizedCvDraft) {
-      alert('Veuillez d\'abord générer la version optimisée avec le bouton ci-dessus.');
+      setFunnelError('Veuillez d\'abord générer la version optimisée avec le bouton ci-dessus.');
       return;
     }
+    setFunnelError(null);
 
     setIsCalculatingFinalScore(true);
     const newVersion = currentEvolutionVersion + 1;
@@ -320,19 +359,98 @@ export default function OptimizationFunnel({
   const handleSaveFinalToDb = async () => {
     if (!optimizedCvDraft && !cvText) return;
     setIsSavingNewCv(true);
+    setFunnelError(null);
     try {
       await onSaveCvToDb(newCvTitle, optimizedCvDraft || cvText);
       setSaveSuccessMsg(`⭐ « ${newCvTitle} » sauvegardé avec succès dans votre base locale !`);
       setTimeout(() => setSaveSuccessMsg(null), 3500);
     } catch {
-      alert('Erreur lors de la sauvegarde du CV.');
+      setFunnelError('Erreur lors de la sauvegarde du CV.');
     } finally {
       setIsSavingNewCv(false);
     }
   };
 
+  // Étape 4 : Rédiger la lettre de motivation sur-mesure avec l'IA
+  const handleGenerateFinalCoverLetter = async () => {
+    setIsGeneratingCoverLetter(true);
+    setFunnelError(null);
+    try {
+      const res = await fetch('/api/assist-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_cover_letter',
+          input: cvText,
+          jobText: jobText || '',
+          targetRole: parsedAnalysis?.targetRole || 'Poste Cible',
+          companyName: parsedAnalysis?.targetCompany || 'Entreprise Cible',
+          candidateName: userProfile ? `${userProfile.firstName} ${userProfile.lastName}`.trim() : undefined,
+          tone: coverLetterTone,
+          style: 'convaincant',
+          keyArguments: parsedAnalysis?.coverLetterHook || undefined,
+          apiKey: apiKey || undefined,
+          demoFallback: !apiKey && !hasServerKey,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Erreur lors de la rédaction de la lettre.');
+      }
+      setFinalCoverLetter(data.result || '');
+      setCoverLetterNotice('✨ Lettre de motivation sur-mesure rédigée avec succès !');
+      setTimeout(() => setCoverLetterNotice(null), 3500);
+      confetti({ particleCount: 45, spread: 65 });
+    } catch (err: unknown) {
+      setFunnelError(err instanceof Error ? err.message : 'Erreur lors de la génération de la lettre.');
+    } finally {
+      setIsGeneratingCoverLetter(false);
+    }
+  };
+
+  // Étape 4 : Sauvegarder la lettre de motivation dans la BDD locale
+  const handleSaveLetterToDb = async () => {
+    if (!finalCoverLetter.trim()) return;
+    setIsSavingLetter(true);
+    setFunnelError(null);
+    try {
+      await localDbClient.saveCoverLetter({
+        id: `letter-${Date.now()}`,
+        title: coverLetterTitle || `Lettre - ${parsedAnalysis?.targetCompany || 'Candidature'}`,
+        company: parsedAnalysis?.targetCompany || 'Entreprise Cible',
+        role: parsedAnalysis?.targetRole || 'Poste Cible',
+        content: finalCoverLetter.trim(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      setCoverLetterNotice('⭐ Lettre de motivation enregistrée dans votre Base Locale !');
+      setTimeout(() => setCoverLetterNotice(null), 3500);
+    } catch {
+      setFunnelError('Erreur lors de la sauvegarde de la lettre en BDD.');
+    } finally {
+      setIsSavingLetter(false);
+    }
+  };
+
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in">
+      {/* Alerte d'erreur éventuelle */}
+      {funnelError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{funnelError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFunnelError(null)}
+            className="text-red-500 hover:text-red-800 text-xs font-bold cursor-pointer px-2 py-1"
+          >
+            Fermer ✕
+          </button>
+        </div>
+      )}
+
       {/* =========================================================================
           BARRE DE PROGRESSION GUIDÉE EN 4 ÉTAPES (LE TUNNEL D'OPTIMISATION)
          ========================================================================= */}
@@ -584,21 +702,34 @@ export default function OptimizationFunnel({
                       </p>
                     </div>
                   ) : uploadedFileInfo ? (
-                    <div className="text-left bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <FileCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                        <div className="truncate">
-                          <p className="text-xs font-bold text-emerald-900 truncate">
-                            {uploadedFileInfo.fileName}
-                          </p>
-                          <p className="text-[10px] text-emerald-700">
-                            {uploadedFileInfo.fileType.toUpperCase()} • {(uploadedFileInfo.fileSize / 1024).toFixed(1)} Ko
-                          </p>
+                    <div className="space-y-2">
+                      <div className="text-left bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <FileCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                          <div className="truncate">
+                            <p className="text-xs font-bold text-emerald-900 truncate">
+                              {uploadedFileInfo.fileName}
+                            </p>
+                            <p className="text-[10px] text-emerald-700">
+                              {uploadedFileInfo.fileType.toUpperCase()} • {(uploadedFileInfo.fileSize / 1024).toFixed(1)} Ko
+                            </p>
+                          </div>
                         </div>
+                        <span className="text-[11px] text-emerald-800 font-semibold underline shrink-0">
+                          Changer
+                        </span>
                       </div>
-                      <span className="text-[11px] text-emerald-800 font-semibold underline shrink-0">
-                        Changer
-                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSaveCurrentCvToDb();
+                        }}
+                        className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-700 active:scale-98 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>💾 Sauvegarder dans la base locale (CV original)</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-1 space-y-1">
@@ -695,9 +826,22 @@ export default function OptimizationFunnel({
                   <FileText className="w-4 h-4 text-[#FF4B4B]" />
                   <span>1. Texte de votre CV (éditable)</span>
                 </label>
-                <span className="text-xs text-gray-400">
-                  {cvText.length > 0 ? `${cvText.length} car.` : 'Requis'}
-                </span>
+                <div className="flex items-center gap-2">
+                  {cvText.trim().length > 30 && (
+                    <button
+                      type="button"
+                      onClick={onSaveCurrentCvToDb}
+                      className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-md text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Sauvegarder ce CV dans votre base locale comme CV original"
+                    >
+                      <Save className="w-3 h-3 text-purple-700" />
+                      <span>💾 Sauvegarder CV original</span>
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {cvText.length > 0 ? `${cvText.length} car.` : 'Requis'}
+                  </span>
+                </div>
               </div>
 
               {/* Sélecteur de BDD locale */}
@@ -1302,119 +1446,367 @@ export default function OptimizationFunnel({
             )}
           </div>
 
-          {/* Espace CV Optimisé Final avec actions directes */}
-          <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
-              <div>
-                <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
-                  <FileCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Texte Final du CV Optimisé</span>
-                </h4>
-                <p className="text-xs text-gray-500">
-                  Prêt à être envoyé, copié dans votre traitement de texte ou téléchargé.
-                </p>
-              </div>
+          {/* =========================================================================
+              SÉLECTEUR DE PIÈCES DU DOSSIER : CV OPTIMISÉ VS LETTRE DE MOTIVATION
+             ========================================================================= */}
+          <div className="flex border-b border-gray-200 overflow-x-auto gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveDossierTab('cv')}
+              className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeDossierTab === 'cv'
+                  ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-2xl'
+                  : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>1. CV Optimisé ATS (V{currentEvolutionVersion})</span>
+            </button>
 
-              {/* Actions de téléchargement & copie en 1 clic */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleCopy(cvText, 'cv')}
-                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  {copiedState === 'cv' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedState === 'cv' ? 'CV Copié !' : 'Copier le CV'}</span>
-                </button>
+            <button
+              type="button"
+              onClick={() => setActiveDossierTab('letter')}
+              className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeDossierTab === 'letter'
+                  ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-2xl'
+                  : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Mail className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>2. Lettre de Motivation Sur-Mesure</span>
+              {finalCoverLetter ? (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                  Prête ✨
+                </span>
+              ) : (
+                <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
+                  À rédiger
+                </span>
+              )}
+            </button>
+          </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDownload('doc', cvText, newCvTitle)}
-                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Télécharger en document Word .doc"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Word (.doc)</span>
-                </button>
+          {/* =========================================================================
+              PIÈCE 1 : CV OPTIMISÉ FINAL AVEC ACTIONS DIRECTES
+             ========================================================================= */}
+          {activeDossierTab === 'cv' && (
+            <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-xs space-y-4 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                <div>
+                  <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Texte Final du CV Optimisé</span>
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    Prêt à être envoyé, copié dans votre traitement de texte ou téléchargé.
+                  </p>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDownload('txt', cvText, newCvTitle)}
-                  className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Télécharger en format texte brut .txt"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Texte (.txt)</span>
-                </button>
-              </div>
-            </div>
+                {/* Actions de téléchargement & copie en 1 clic */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(cvText, 'cv')}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    {copiedState === 'cv' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedState === 'cv' ? 'CV Copié !' : 'Copier le CV'}</span>
+                  </button>
 
-            {/* Zone texte du CV final */}
-            <textarea
-              rows={14}
-              value={cvText}
-              onChange={(e) => setCvText(e.target.value)}
-              className="w-full p-4 bg-gray-50/50 border border-gray-300 rounded-2xl text-xs font-mono text-gray-900 leading-relaxed focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-            />
+                  <button
+                    type="button"
+                    onClick={() => handleDownload('doc', cvText, newCvTitle)}
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Télécharger en document Word .doc"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Word (.doc)</span>
+                  </button>
 
-            {/* Sauvegarde en BDD locale */}
-            <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <Database className="w-4 h-4 text-purple-700 shrink-0" />
-                <div className="min-w-0">
-                  <span className="font-bold text-purple-950 block">
-                    Sauvegarder ce CV optimisé dans votre Base Locale :
-                  </span>
-                  <input
-                    type="text"
-                    value={newCvTitle}
-                    onChange={(e) => setNewCvTitle(e.target.value)}
-                    className="mt-1 px-2.5 py-1 bg-white border border-purple-300 rounded-lg text-xs font-medium text-gray-800 w-full sm:w-72"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDownload('txt', cvText, newCvTitle)}
+                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Télécharger en format texte brut .txt"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Texte (.txt)</span>
+                  </button>
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={isSavingNewCv}
-                onClick={handleSaveFinalToDb}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{isSavingNewCv ? 'Sauvegarde...' : 'Enregistrer en BDD'}</span>
-              </button>
-            </div>
+              {/* Zone texte du CV final */}
+              <textarea
+                rows={14}
+                value={cvText}
+                onChange={(e) => setCvText(e.target.value)}
+                className="w-full p-4 bg-gray-50/50 border border-gray-300 rounded-2xl text-xs font-mono text-gray-900 leading-relaxed focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+              />
 
-            {saveSuccessMsg && (
-              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{saveSuccessMsg}</span>
+              {/* Sauvegarde en BDD locale & bascule vers Lettre */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Database className="w-4 h-4 text-purple-700 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-bold text-purple-950 block">
+                        Sauvegarder ce CV optimisé dans votre Base Locale :
+                      </span>
+                      <input
+                        type="text"
+                        value={newCvTitle}
+                        onChange={(e) => setNewCvTitle(e.target.value)}
+                        className="mt-1 px-2.5 py-1 bg-white border border-purple-300 rounded-lg text-xs font-medium text-gray-800 w-full sm:w-72"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isSavingNewCv}
+                    onClick={handleSaveFinalToDb}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingNewCv ? 'Sauvegarde...' : 'Enregistrer le CV en BDD'}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveDossierTab('letter')}
+                  className="px-4 py-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  <Mail className="w-4 h-4 text-rose-600" />
+                  <span>{finalCoverLetter ? 'Voir la Lettre Rédigée ➔' : 'Rédiger la Lettre Sur-Mesure ➔'}</span>
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* Action principale de finalisation : Suivre dans le Kanban */}
-          <div className="bg-linear-to-r from-blue-600 to-indigo-600 rounded-3xl p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
+              {saveSuccessMsg && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{saveSuccessMsg}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =========================================================================
+              PIÈCE 2 : LETTRE DE MOTIVATION SUR-MESURE
+             ========================================================================= */}
+          {activeDossierTab === 'letter' && (
+            <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-xs space-y-4 animate-fade-in">
+              {!finalCoverLetter ? (
+                <div className="p-6 bg-linear-to-br from-rose-50/80 via-purple-50/50 to-indigo-50/40 border border-rose-200/80 rounded-2xl space-y-4 text-center sm:text-left">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full border border-rose-200">
+                        Rédaction IA Ciblée
+                      </span>
+                      <h4 className="text-base sm:text-lg font-black text-gray-900 flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-rose-600" />
+                        <span>Rédiger votre Lettre de Motivation Sur-Mesure</span>
+                      </h4>
+                      <p className="text-xs text-gray-600 max-w-xl">
+                        L&apos;IA combine les mots-clés ATS de l&apos;annonce, vos réalisations clés et vos arguments pour générer une lettre percutante adaptée à{' '}
+                        <strong className="text-gray-900">{parsedAnalysis?.targetCompany || 'l\'entreprise cible'}</strong>{' '}
+                        pour le poste de{' '}
+                        <strong className="text-gray-900">{parsedAnalysis?.targetRole || 'Poste Cible'}</strong>.
+                      </p>
+                    </div>
+
+                    {/* Choix du ton */}
+                    <div className="flex flex-col items-center sm:items-end gap-1.5 shrink-0">
+                      <span className="text-[11px] font-bold text-gray-500">Ton de la lettre :</span>
+                      <div className="flex items-center gap-1.5">
+                        {(['professionnel', 'dynamique', 'concis'] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setCoverLetterTone(t)}
+                            className={`px-3 py-1 rounded-lg text-[11px] font-bold capitalize transition-all cursor-pointer ${
+                              coverLetterTone === t
+                                ? 'bg-rose-600 text-white shadow-2xs'
+                                : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-rose-200/60">
+                    <div className="text-xs text-gray-500 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>Génération instantanée en 1 clic — modifiable et prête à l&apos;envoi</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isGeneratingCoverLetter}
+                      onClick={handleGenerateFinalCoverLetter}
+                      className="px-6 py-3 bg-linear-to-r from-rose-600 to-purple-600 hover:from-rose-700 hover:to-purple-700 disabled:opacity-50 text-white rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer hover:scale-102"
+                    >
+                      {isGeneratingCoverLetter ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Rédaction personnalisée en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>✨ Générer ma Lettre de Motivation Sur-Mesure</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                    <div>
+                      <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-rose-600" />
+                        <span>Lettre de Motivation Sur-Mesure</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                          Prête ✨
+                        </span>
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {finalCoverLetter.split(/\s+/).filter(Boolean).length} mots • Personnalisée pour {parsedAnalysis?.targetCompany || 'l\'entreprise'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(finalCoverLetter, 'letter')}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        {copiedState === 'letter' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedState === 'letter' ? 'Copié !' : 'Copier la lettre'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDownload('doc', finalCoverLetter, `Lettre_Motivation_${(parsedAnalysis?.targetCompany || 'Candidature').replace(/\s+/g, '_')}`)}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Télécharger en Word (.doc)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Word (.doc)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isGeneratingCoverLetter}
+                        onClick={handleGenerateFinalCoverLetter}
+                        className="px-3 py-1.5 bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Régénérer une nouvelle version"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingCoverLetter ? 'animate-spin' : ''}`} />
+                        <span>Régénérer</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Zone de texte de la lettre */}
+                  <textarea
+                    rows={12}
+                    value={finalCoverLetter}
+                    onChange={(e) => setFinalCoverLetter(e.target.value)}
+                    className="w-full p-4 bg-gray-50/50 border border-gray-300 rounded-2xl text-xs font-sans text-gray-800 leading-relaxed focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+                  />
+
+                  {/* Sauvegarde en BDD locale de la lettre */}
+                  <div className="p-3.5 bg-rose-50/60 border border-rose-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Database className="w-4 h-4 text-rose-700 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-bold text-rose-950 block">
+                          Sauvegarder cette lettre dans votre Base Locale :
+                        </span>
+                        <input
+                          type="text"
+                          value={coverLetterTitle}
+                          onChange={(e) => setCoverLetterTitle(e.target.value)}
+                          className="mt-1 px-2.5 py-1 bg-white border border-rose-300 rounded-lg text-xs font-medium text-gray-800 w-full sm:w-72"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSavingLetter}
+                      onClick={handleSaveLetterToDb}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isSavingLetter ? 'Sauvegarde...' : 'Enregistrer la Lettre en BDD'}</span>
+                    </button>
+                  </div>
+
+                  {coverLetterNotice && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{coverLetterNotice}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =========================================================================
+              ACTION PRINCIPALE DE FINALISATION : SUIVRE LE DOSSIER COMPLET DANS LE KANBAN
+             ========================================================================= */}
+          <div className="bg-linear-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-3xl p-6 text-white shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-amber-300" />
-                <span className="font-black text-sm">
-                  Passez à l&apos;action : candidatez et organisez vos relances
+                <Briefcase className="w-5 h-5 text-amber-300" />
+                <span className="font-black text-base">
+                  Enregistrer et Suivre cette Candidature Complète
                 </span>
               </div>
-              <p className="text-xs text-blue-100">
-                Ajoutez cette opportunité optimisée à votre tableau Kanban pour piloter vos entretiens et réponses.
+              <p className="text-xs text-blue-100 max-w-xl">
+                Ajoute cette opportunité directement dans votre suivi Kanban avec votre{' '}
+                <strong className="text-white">CV optimisé V{currentEvolutionVersion}</strong>{' '}
+                et votre{' '}
+                <strong className="text-white">
+                  {finalCoverLetter ? 'lettre de motivation rattachée' : 'lettre de motivation (optionnelle)'}
+                </strong>
+                , pour piloter vos relances et entretiens !
               </p>
+              {finalCoverLetter ? (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 border border-emerald-400/40 rounded-lg text-xs text-emerald-200 font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Lettre de motivation prête et rattachée à la candidature</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/20 border border-amber-400/40 rounded-lg text-xs text-amber-200">
+                  <span>💡 Conseil : vous pouvez générer votre lettre ci-dessus en 1 clic pour l&apos;inclure au dossier !</span>
+                </div>
+              )}
             </div>
 
             <button
               type="button"
               onClick={() => {
-                onAddToTracker(`Score ATS optimisé : ${finalScore || 88}%`);
-                confetti({ particleCount: 50, spread: 70 });
+                onAddToTracker({
+                  customNotes: `Candidature optimisée V${currentEvolutionVersion} (Score ATS : ${finalScore || 88}%)`,
+                  company: parsedAnalysis?.targetCompany || undefined,
+                  role: parsedAnalysis?.targetRole || undefined,
+                  score: finalScore || 88,
+                  coverLetter: finalCoverLetter.trim() || undefined,
+                  coverLetterTitle: coverLetterTitle.trim() || (finalCoverLetter ? `Lettre - ${parsedAnalysis?.targetCompany || 'Candidature'}` : undefined),
+                });
+                confetti({ particleCount: 60, spread: 80 });
               }}
-              className="px-5 py-3 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+              className="px-6 py-3.5 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer hover:scale-105 active:scale-95 shrink-0"
             >
-              <span>💼 Ajouter à mon Suivi Kanban</span>
+              <span>💼 Ajouter le Dossier au Suivi Kanban</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

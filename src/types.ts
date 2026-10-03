@@ -21,6 +21,8 @@ export interface ApplicationItem {
   notes?: string;
   score?: number | null;
   analysisId?: string | null;
+  coverLetter?: string; // Contenu complet de la lettre de motivation rattachée
+  coverLetterTitle?: string; // Titre ou sujet de la lettre
   checklist: {
     cvSent: boolean;
     coverLetterSent: boolean;
@@ -129,6 +131,17 @@ export interface SavedSuggestion {
   createdAt: string;
 }
 
+export interface SavedCoverLetter {
+  id: string;
+  title: string;
+  company: string;
+  role: string;
+  content: string;
+  applicationId?: string; // ID de la candidature associée si liée
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UserSettings {
   customApiKey?: string;
   selectedModel: string;
@@ -146,6 +159,7 @@ export interface DatabaseSchema {
   applications: ApplicationItem[];
   analyses: AnalysisHistoryItem[];
   suggestions: SavedSuggestion[];
+  coverLetters?: SavedCoverLetter[]; // Lettres de motivation enregistrées
   settings: UserSettings;
 }
 
@@ -154,6 +168,7 @@ export interface DatabaseStats {
   applicationsCount: number;
   analysesCount: number;
   suggestionsCount: number;
+  coverLettersCount: number;
   dbSizeBytes: number;
   lastUpdated: string;
 }

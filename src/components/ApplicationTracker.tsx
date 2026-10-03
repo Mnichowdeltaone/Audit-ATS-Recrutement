@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useId } from 'react';
+import React, { useState, useMemo, useId, useEffect } from 'react';
 import {
   Briefcase,
   Building2,
@@ -24,6 +24,9 @@ import {
   ChevronRight,
   Eye,
   FileSpreadsheet,
+  FileText,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { ApplicationItem, ApplicationStatus, AnalysisHistoryItem } from '../types';
 import { localDbClient } from '../services/localDbClient';
@@ -124,9 +127,35 @@ export default function ApplicationTracker({
     portfolioSent: false,
     followUpDone: false,
   });
+  const [formCoverLetter, setFormCoverLetter] = useState('');
+  const [formCoverLetterTitle, setFormCoverLetterTitle] = useState('');
+  const [selectedAppForLetter, setSelectedAppForLetter] = useState<ApplicationItem | null>(null);
+  const [isLetterModalOpen, setIsLetterModalOpen] = useState(false);
+  const [letterModalCopied, setLetterModalCopied] = useState(false);
+  const [coverLetterCopied, setCoverLetterCopied] = useState(false);
 
   const companyInputId = useId();
   const roleInputId = useId();
+
+  // Écouteur global pour la réinitialisation de la BDD
+  useEffect(() => {
+    const handleReset = () => {
+      setSearchQuery('');
+      setStatusFilter('all');
+      setSelectedAppForLetter(null);
+      setIsLetterModalOpen(false);
+      setEditingApp(null);
+      setIsModalOpen(false);
+      setConfirmDeleteId(null);
+      setFormCompany('');
+      setFormRole('');
+      setFormNotes('');
+      setFormCoverLetter('');
+      setFormCoverLetterTitle('');
+    };
+    window.addEventListener('cv_move_database_reset', handleReset);
+    return () => window.removeEventListener('cv_move_database_reset', handleReset);
+  }, []);
 
   // Metrics
   const stats = useMemo(() => {
@@ -178,6 +207,8 @@ export default function ApplicationTracker({
     setFormNotes('');
     setFormScore('');
     setFormAnalysisId('');
+    setFormCoverLetter('');
+    setFormCoverLetterTitle('');
     setFormChecklist({ cvSent: false, coverLetterSent: false, portfolioSent: false, followUpDone: false });
     setIsModalOpen(true);
   };
@@ -197,7 +228,14 @@ export default function ApplicationTracker({
     setFormNotes(app.notes || '');
     setFormScore(app.score !== undefined && app.score !== null ? String(app.score) : '');
     setFormAnalysisId(app.analysisId || '');
-    setFormChecklist(app.checklist || { cvSent: false, coverLetterSent: false, portfolioSent: false, followUpDone: false });
+    setFormCoverLetter(app.coverLetter || '');
+    setFormCoverLetterTitle(app.coverLetterTitle || '');
+    setFormChecklist(app.checklist || {
+      cvSent: false,
+      coverLetterSent: !!app.coverLetter,
+      portfolioSent: false,
+      followUpDone: false,
+    });
     setIsModalOpen(true);
   };
 
@@ -206,6 +244,11 @@ export default function ApplicationTracker({
     if (!formCompany.trim() || !formRole.trim()) return;
 
     const parsedScore = formScore.trim() ? parseInt(formScore, 10) : null;
+    const finalCoverLetter = formCoverLetter.trim();
+    const finalChecklist = {
+      ...formChecklist,
+      coverLetterSent: finalCoverLetter ? true : formChecklist.coverLetterSent,
+    };
 
     if (editingApp) {
       // Update
@@ -224,7 +267,9 @@ export default function ApplicationTracker({
         notes: formNotes.trim(),
         score: isNaN(Number(parsedScore)) ? null : parsedScore,
         analysisId: formAnalysisId.trim() || null,
-        checklist: formChecklist,
+        coverLetter: finalCoverLetter || undefined,
+        coverLetterTitle: formCoverLetterTitle.trim() || (finalCoverLetter ? `Lettre - ${formCompany.trim()}` : undefined),
+        checklist: finalChecklist,
         updatedAt: new Date().toISOString(),
       };
       setApplications((prev) =>
@@ -232,13 +277,26 @@ export default function ApplicationTracker({
       );
       try {
         await localDbClient.saveApplication(updatedApp);
+        if (finalCoverLetter) {
+          await localDbClient.saveCoverLetter({
+            id: `letter-${editingApp.id}`,
+            title: updatedApp.coverLetterTitle || `Lettre - ${updatedApp.company}`,
+            company: updatedApp.company,
+            role: updatedApp.role,
+            content: finalCoverLetter,
+            applicationId: updatedApp.id,
+            createdAt: updatedApp.createdAt,
+            updatedAt: new Date().toISOString(),
+          });
+        }
       } catch (err) {
         console.error('Erreur mise à jour candidature :', err);
       }
     } else {
       // Create
+      const newAppId = 'app-' + Date.now();
       const newApp: ApplicationItem = {
-        id: 'app-' + Date.now(),
+        id: newAppId,
         company: formCompany.trim(),
         role: formRole.trim(),
         status: formStatus,
@@ -252,13 +310,27 @@ export default function ApplicationTracker({
         notes: formNotes.trim(),
         score: isNaN(Number(parsedScore)) ? null : parsedScore,
         analysisId: formAnalysisId.trim() || null,
-        checklist: formChecklist,
+        coverLetter: finalCoverLetter || undefined,
+        coverLetterTitle: formCoverLetterTitle.trim() || (finalCoverLetter ? `Lettre - ${formCompany.trim()}` : undefined),
+        checklist: finalChecklist,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       setApplications((prev) => [newApp, ...prev]);
       try {
         await localDbClient.saveApplication(newApp);
+        if (finalCoverLetter) {
+          await localDbClient.saveCoverLetter({
+            id: `letter-${newAppId}`,
+            title: newApp.coverLetterTitle || `Lettre - ${newApp.company}`,
+            company: newApp.company,
+            role: newApp.role,
+            content: finalCoverLetter,
+            applicationId: newApp.id,
+            createdAt: newApp.createdAt,
+            updatedAt: newApp.updatedAt,
+          });
+        }
       } catch (err) {
         console.error('Erreur création candidature :', err);
       }
@@ -722,6 +794,39 @@ export default function ApplicationTracker({
                             <p className="text-[11px] text-gray-600 line-clamp-2 bg-gray-50 p-1.5 rounded italic">
                               « {app.notes} »
                             </p>
+                          )}
+
+                          {/* Lettre de motivation rattachée */}
+                          {app.coverLetter ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAppForLetter(app);
+                                setIsLetterModalOpen(true);
+                              }}
+                              className="w-full flex items-center justify-between px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
+                              title="Lire ou copier la lettre de motivation"
+                            >
+                              <span className="flex items-center gap-1.5 truncate">
+                                <FileText className="w-3 h-3 text-purple-600 shrink-0" />
+                                <span className="truncate">Lettre ({app.coverLetter.split(/\s+/).filter(Boolean).length} mots)</span>
+                              </span>
+                              <span className="text-[9px] text-purple-600 font-semibold shrink-0">Voir ↗</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditModal(app);
+                              }}
+                              className="w-full flex items-center justify-center gap-1 py-1 border border-dashed border-gray-200 text-gray-400 hover:text-purple-600 hover:border-purple-200 rounded-lg text-[10px] transition-colors cursor-pointer"
+                              title="Rédiger ou coller une lettre de motivation pour cette candidature"
+                            >
+                              <Plus className="w-2.5 h-2.5" />
+                              <span>+ Ajouter lettre</span>
+                            </button>
                           )}
 
                           {/* Pied de carte avec actions */}
@@ -1239,6 +1344,61 @@ export default function ApplicationTracker({
                 </div>
               </div>
 
+              {/* Section Lettre de motivation rattachée */}
+              <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-purple-700" />
+                    <span>Lettre de motivation rattachée à cette candidature</span>
+                  </label>
+                  {formCoverLetter && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(formCoverLetter);
+                          setCoverLetterCopied(true);
+                          setTimeout(() => setCoverLetterCopied(false), 2000);
+                        }}
+                        className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        {coverLetterCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        <span>{coverLetterCopied ? 'Copiée !' : 'Copier'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const blob = new Blob([formCoverLetter], { type: 'application/msword;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `Lettre_Motivation_${(formCompany || 'Candidature').replace(/\s+/g, '_')}.doc`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="text-[11px] text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 cursor-pointer"
+                        title="Télécharger en Word (.doc)"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Word (.doc)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <textarea
+                  rows={5}
+                  value={formCoverLetter}
+                  onChange={(e) => {
+                    setFormCoverLetter(e.target.value);
+                    if (e.target.value.trim() && !formChecklist.coverLetterSent) {
+                      setFormChecklist((p) => ({ ...p, coverLetterSent: true }));
+                    }
+                  }}
+                  placeholder="Collez ou rédigez ici le contenu de la lettre de motivation transmise ou préparée pour cette offre..."
+                  className="w-full text-xs p-3 border border-purple-200 bg-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden font-sans leading-relaxed text-gray-800"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Notes & Pistes d&apos;entretien
@@ -1268,6 +1428,88 @@ export default function ApplicationTracker({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Consultation Rapide de Lettre de Motivation */}
+      {isLetterModalOpen && selectedAppForLetter && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl animate-fade-in border border-purple-200">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">
+                  {selectedAppForLetter.company}
+                </span>
+                <h3 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-600" />
+                  <span>Lettre de motivation — {selectedAppForLetter.role}</span>
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLetterModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-sm cursor-pointer p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto p-4 bg-gray-50/70 border border-gray-200 rounded-2xl text-xs font-sans text-gray-800 leading-relaxed whitespace-pre-line">
+              {selectedAppForLetter.coverLetter || 'Aucun texte de lettre disponible.'}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
+              <span className="text-xs text-gray-400">
+                {selectedAppForLetter.coverLetter ? `${selectedAppForLetter.coverLetter.split(/\s+/).filter(Boolean).length} mots` : '0 mot'}
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedAppForLetter.coverLetter) return;
+                    navigator.clipboard.writeText(selectedAppForLetter.coverLetter);
+                    setLetterModalCopied(true);
+                    setTimeout(() => setLetterModalCopied(false), 2000);
+                  }}
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  {letterModalCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{letterModalCopied ? 'Copié !' : 'Copier le texte'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedAppForLetter.coverLetter) return;
+                    const blob = new Blob([selectedAppForLetter.coverLetter], { type: 'application/msword;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Lettre_Motivation_${selectedAppForLetter.company.replace(/\s+/g, '_')}.doc`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Word (.doc)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLetterModalOpen(false);
+                    handleOpenEditModal(selectedAppForLetter);
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Modifier</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

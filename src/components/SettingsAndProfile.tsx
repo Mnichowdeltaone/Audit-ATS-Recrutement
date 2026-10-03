@@ -239,25 +239,66 @@ export default function SettingsAndProfile({
     }
   };
 
+  // Écouteur global pour la réinitialisation de la BDD
+  useEffect(() => {
+    const handleReset = () => {
+      const blankProfile: UserProfile = {
+        id: `profile-${Date.now()}`,
+        name: 'Profil Personnel',
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        location: '',
+        currentTitle: '',
+        bio: '',
+        linkedinUrl: '',
+        githubUrl: '',
+        portfolioUrl: '',
+        targetRoles: [],
+        skills: [],
+        updatedAt: new Date().toISOString(),
+        isDefault: true,
+      };
+      setProfile(blankProfile);
+      setProfiles([]);
+      setNewSkillInput('');
+      setNewRoleInput('');
+      setNotice(null);
+    };
+    window.addEventListener('cv_move_database_reset', handleReset);
+    return () => window.removeEventListener('cv_move_database_reset', handleReset);
+  }, []);
+
   // Supprimer un profil
   const handleDeleteProfile = async (idToDelete: string) => {
-    if (profiles.length <= 1) {
-      setNotice({ type: 'error', message: 'Vous devez conserver au moins un profil actif.' });
-      setTimeout(() => setNotice(null), 3000);
-      return;
-    }
-
     try {
       await localDbClient.deleteProfile(idToDelete);
       const updatedList = await localDbClient.getProfiles();
-      setProfiles(updatedList);
-      onProfilesUpdated?.(updatedList);
-      const newActive = updatedList.find((p) => p.isDefault) || updatedList[0];
-      if (newActive) {
-        setProfile(newActive);
-        onProfileUpdated?.(newActive);
-      }
-      setNotice({ type: 'success', message: 'Profil supprimé avec succès.' });
+      const cleanList = updatedList && updatedList.length > 0 ? updatedList : [];
+      setProfiles(cleanList);
+      onProfilesUpdated?.(cleanList);
+      const newActive = cleanList.find((p) => p.isDefault) || cleanList[0] || {
+        id: `profile-${Date.now()}`,
+        name: 'Nouveau Profil',
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        location: '',
+        currentTitle: '',
+        bio: '',
+        linkedinUrl: '',
+        githubUrl: '',
+        portfolioUrl: '',
+        targetRoles: [],
+        skills: [],
+        updatedAt: new Date().toISOString(),
+        isDefault: true,
+      };
+      setProfile(newActive);
+      onProfileUpdated?.(newActive);
+      setNotice({ type: 'success', message: '🗑️ Profil supprimé avec succès.' });
       setTimeout(() => setNotice(null), 3000);
     } catch {
       setNotice({ type: 'error', message: 'Erreur lors de la suppression du profil.' });

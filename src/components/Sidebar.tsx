@@ -155,7 +155,7 @@ export default function Sidebar({
           icon: Database,
           color: 'text-emerald-600',
           activeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-          badge: dbStats ? String(dbStats.cvsCount) : null,
+          badge: dbStats && dbStats.cvsCount > 0 ? String(dbStats.cvsCount) : null,
         },
       ],
     },

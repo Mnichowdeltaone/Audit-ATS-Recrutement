@@ -70,7 +70,14 @@ app.post('/api/test-key', async (req: Request, res: Response) => {
 // Run AI compatibility analysis using Google GenAI SDK
 app.post('/api/analyze', async (req: Request, res: Response) => {
   try {
-    const { cvText, jobText, apiKey: userApiKey, model: requestedModel } = req.body;
+    const {
+      cvText,
+      jobText,
+      apiKey: userApiKey,
+      model: requestedModel,
+      isReAnalysis,
+      previousScore,
+    } = req.body;
 
     if (!cvText || typeof cvText !== 'string' || !cvText.trim()) {
       res.status(400).json({ error: 'Le texte du CV est requis pour lancer l’analyse.' });
@@ -93,14 +100,24 @@ app.post('/api/analyze', async (req: Request, res: Response) => {
       return;
     }
 
-    const prompt = `Tu es un expert en recrutement et en systèmes de suivi des candidatures (ATS). Voici mon CV : ${cvText.trim()}. Et voici l'offre d'emploi que je vise : ${jobText.trim()}.
+    const reAnalysisContext = isReAnalysis
+      ? `\nCONTEXTE DE RÉ-ANALYSE : Il s'agit d'une NOUVELLE VERSION optimisée du CV modifiée spécifiquement pour cette offre (la version initiale avait un score de départ estimé à ${previousScore || 65}/100). Évalue objectivement la note d'analyse finale en tenant compte des améliorations apportées, des mots-clés ajoutés et de l'adéquation renforcée avec les exigences du poste.`
+      : '';
+
+    const prompt = `Tu es un expert en recrutement et en systèmes de suivi des candidatures (ATS). Voici le CV du candidat :
+${cvText.trim()}
+
+Et voici l'offre d'emploi visée :
+${jobText.trim()}
+${reAnalysisContext}
+
 Fais une analyse détaillée et renvoie la réponse au format Markdown structuré avec les éléments suivants :
-- Score de compatibilité : Une note sur 100 globale.
-- Points forts : 3 éléments de mon CV qui correspondent parfaitement à l'offre.
-- Points faibles / Manques : Ce qui me manque par rapport à l'offre.
-- Stratégie de CV : 2 conseils pratiques sur les mots-clés à ajouter ou modifier dans mon CV pour passer les filtres.
-- Lettre de motivation : Une ébauche de paragraphe d'accroche ultra-personnalisé.
-- Préparation entretien : 3 questions difficiles qu'un recruteur pourrait me poser en voyant mon profil pour ce poste, avec des pistes de réponse.`;
+- Score de compatibilité : Une note sur 100 globale (ex: **88 / 100** ou **92 / 100**).
+- Points forts : 3 éléments du CV qui correspondent parfaitement à l'offre.
+- Points faibles / Manques : Ce qui reste perfectible par rapport à l'offre.
+- Stratégie de CV : 2 conseils pratiques sur les mots-clés ou l'impact opérationnel.
+- Lettre de motivation : Une ébauche de paragraphe d'accroche ultra-personnalisé pour l'entreprise.
+- Préparation entretien : 3 questions qu'un recruteur pourrait poser, avec des pistes de réponse selon la méthode STAR.`;
 
     const ai = new GoogleGenAI({
       apiKey: keyToUse.trim(),
@@ -976,6 +993,34 @@ app.post('/api/db/suggestions', async (req: Request, res: Response) => {
 app.delete('/api/db/suggestions/:id', async (req: Request, res: Response) => {
   try {
     const deleted = await localDb.deleteSuggestion(req.params.id);
+    res.json({ success: deleted });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+// Lettres de motivation (Cover Letters)
+app.get('/api/db/cover-letters', async (_req: Request, res: Response) => {
+  try {
+    const letters = await localDb.getCoverLetters();
+    res.json(letters);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.post('/api/db/cover-letters', async (req: Request, res: Response) => {
+  try {
+    const saved = await localDb.saveCoverLetter(req.body);
+    res.json({ success: true, coverLetter: saved });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.delete('/api/db/cover-letters/:id', async (req: Request, res: Response) => {
+  try {
+    const deleted = await localDb.deleteCoverLetter(req.params.id);
     res.json({ success: deleted });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
