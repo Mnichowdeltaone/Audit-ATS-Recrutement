@@ -45,6 +45,13 @@ import { parseAnalysisResult, extractScore } from '../utils/analysisParser';
 import { detectCvChanges, buildEvolutionStep } from '../utils/cvEvolutionHelper';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from '../utils/sampleData';
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
+
+function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, init);
+}
+
 interface OptimizationFunnelProps {
   cvText: string;
   setCvText: (text: string) => void;
@@ -326,7 +333,7 @@ export default function OptimizationFunnel({
         keyArg = `${keyArg} ${customInstructions.trim()}`.trim();
       }
 
-      const res = await fetch('/api/assist-cv', {
+      const res = await apiFetch('/api/assist-cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

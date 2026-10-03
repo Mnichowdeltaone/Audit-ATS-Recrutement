@@ -1,9 +1,11 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import PdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?worker';
 import mammoth from 'mammoth';
 
-// Set up pdf.js worker using unpkg or cdnjs, or fallback
+// Bundle and instantiate the pdf.js worker locally. A worker URL can fall back to a
+// broken fake worker in the packaged Electron app.
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.10.38'}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
 }
 
 export interface ExtractedFileResult {
@@ -14,6 +16,17 @@ export interface ExtractedFileResult {
   pageCount?: number;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 /**
  * Extract plain text from PDF ArrayBuffer
  */
@@ -22,14 +35,27 @@ async function extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<{ text: str
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(arrayBuffer),
       useSystemFonts: true,
+      useWorkerFetch: false,
     });
-    const pdf = await loadingTask.promise;
+    const pdf = await withTimeout(
+      loadingTask.promise,
+      20000,
+      "L'extraction du PDF prend trop de temps. Le fichier est peut-être protégé, scanné ou incompatible."
+    );
     const pageCount = pdf.numPages;
     const textPieces: string[] = [];
 
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
+      const page = await withTimeout(
+        pdf.getPage(pageNum),
+        10000,
+        `La page ${pageNum} du PDF met trop de temps à se charger.`
+      );
+      const textContent = await withTimeout(
+        page.getTextContent(),
+        10000,
+        `La page ${pageNum} du PDF met trop de temps à extraire son texte.`
+      );
       const pageText = textContent.items
         .map((item) => ('str' in item ? item.str : ''))
         .join(' ');
