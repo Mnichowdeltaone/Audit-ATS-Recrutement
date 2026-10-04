@@ -56,11 +56,13 @@ import {
   Mail,
   Zap,
   Plus,
+  Edit3,
 } from 'lucide-react';
 import { marked } from 'marked';
 import confetti from 'canvas-confetti';
 import { parseCvFile, ExtractedFileResult } from './utils/fileExtractor';
 import { extractProfileFromCv } from './utils/profileExtractor';
+import { extractOfferMetadata } from './utils/offerMetadataExtractor';
 import ApplicationTracker from './components/ApplicationTracker';
 import CvAssistant from './components/CvAssistant';
 import DatabaseManager from './components/DatabaseManager';
@@ -723,6 +725,8 @@ export default function App() {
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [confirmDeleteHistoryId, setConfirmDeleteHistoryId] = useState<string | null>(null);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+  const [editingAnalysisId, setEditingAnalysisId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState<string>('');
   const [cvSaveSuccess, setCvSaveSuccess] = useState<string | null>(null);
   const [isCvOptimizationModalOpen, setIsCvOptimizationModalOpen] = useState(false);
 
@@ -992,6 +996,23 @@ export default function App() {
     }
   };
 
+  // Renommer une analyse (personnalisation utilisateur)
+  const handleRenameAnalysis = async (id: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    const trimmed = newTitle.trim();
+    setHistory((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, title: trimmed, customTitle: trimmed } : item
+      )
+    );
+    setEditingAnalysisId(null);
+    try {
+      await localDbClient.renameAnalysis(id, trimmed);
+    } catch (err) {
+      console.warn('Erreur renommage analyse locale :', err);
+    }
+  };
+
   // Vider tout l'historique
   const handleClearHistory = async () => {
     setHistory([]);
@@ -1171,8 +1192,8 @@ export default function App() {
       confetti({ particleCount: 90, spread: 65, origin: { y: 0.6 } });
 
       const score = extractScore(finalResult);
-      const firstLineJob = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 50);
-      const title = firstLineJob.length > 5 ? firstLineJob : "Analyse d'adéquation";
+      const offerMeta = extractOfferMetadata(jobText, jobUrl, finalResult);
+      const title = offerMeta.suggestedTitle;
 
       // Calcul des étapes d'évolution (V1 -> Traitement -> V2...)
       let newSteps: EvolutionStep[] = [];
@@ -1228,32 +1249,53 @@ export default function App() {
       setEvolutionSteps(newSteps);
       setCurrentEvolutionVersion(newVersion);
 
-      const newHistoryItem: AnalysisHistoryItem = {
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        title,
-        jobSnippet: jobText.trim().slice(0, 120),
-        cvSnippet: activeCvText.slice(0, 120),
-        cvText: activeCvText,
-        jobText: jobText.trim(),
-        analysisResult: finalResult,
-        score,
-        fileName: uploadedFileInfo?.fileName,
-        fileType: uploadedFileInfo?.fileType,
-        jobUrl: jobUrl.trim() || undefined,
-        currentVersion: newVersion,
-        evolutionSteps: newSteps,
-      };
+      if (isReAnalysisCall && selectedHistoryId && history.some((h) => h.id === selectedHistoryId)) {
+        const existing = history.find((h) => h.id === selectedHistoryId)!;
+        const updatedHistoryItem: AnalysisHistoryItem = {
+          ...existing,
+          timestamp: offerMeta.horodatage,
+          title: existing.customTitle || title,
+          company: existing.company || offerMeta.company || undefined,
+          cabinet: existing.cabinet || offerMeta.cabinet || undefined,
+          role: existing.role || offerMeta.role || undefined,
+          isHorodatedOnly: offerMeta.isHorodatedOnly,
+          cvSnippet: activeCvText.slice(0, 120),
+          cvText: activeCvText,
+          jobText: jobText.trim(),
+          analysisResult: finalResult,
+          score,
+          currentVersion: newVersion,
+          evolutionSteps: newSteps,
+        };
 
-      setHistory((prev) => [newHistoryItem, ...prev]);
-      setSelectedHistoryId(newHistoryItem.id);
-      localDbClient.saveAnalysis(newHistoryItem).catch((e) => console.warn('Erreur sauvegarde analyse BDD', e));
+        setHistory((prev) => prev.map((h) => (h.id === selectedHistoryId ? updatedHistoryItem : h)));
+        localDbClient.saveAnalysis(updatedHistoryItem).catch((e) => console.warn('Erreur sauvegarde analyse BDD', e));
+      } else {
+        const newHistoryItem: AnalysisHistoryItem = {
+          id: Date.now().toString(),
+          timestamp: offerMeta.horodatage,
+          title,
+          company: offerMeta.company || undefined,
+          cabinet: offerMeta.cabinet || undefined,
+          role: offerMeta.role || undefined,
+          isHorodatedOnly: offerMeta.isHorodatedOnly,
+          jobSnippet: jobText.trim().slice(0, 120),
+          cvSnippet: activeCvText.slice(0, 120),
+          cvText: activeCvText,
+          jobText: jobText.trim(),
+          analysisResult: finalResult,
+          score,
+          fileName: uploadedFileInfo?.fileName,
+          fileType: uploadedFileInfo?.fileType,
+          jobUrl: jobUrl.trim() || undefined,
+          currentVersion: newVersion,
+          evolutionSteps: newSteps,
+        };
+
+        setHistory((prev) => [newHistoryItem, ...prev]);
+        setSelectedHistoryId(newHistoryItem.id);
+        localDbClient.saveAnalysis(newHistoryItem).catch((e) => console.warn('Erreur sauvegarde analyse BDD', e));
+      }
       localDbClient.fetchStats().then((st) => setDbStats(st)).catch(() => {});
 
       return finalResult;
@@ -1312,25 +1354,9 @@ export default function App() {
     const baseScore = analysisResult ? extractScore(analysisResult) : null;
     const finalScore = opts.score !== undefined ? opts.score : baseScore;
     const firstLineJob = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 60);
-    const inferredRole = opts.role || (firstLineJob.length > 5 ? firstLineJob : 'Poste analysé');
-
-    let inferredCompany = opts.company || 'Entreprise';
-    if (!opts.company && jobUrl) {
-      try {
-        const host = new URL(jobUrl).hostname.replace(/^www\./, '').split('.')[0];
-        if (host && !['indeed', 'linkedin', 'hellowork', 'francetravail', 'apec'].includes(host.toLowerCase())) {
-          inferredCompany = host.charAt(0).toUpperCase() + host.slice(1);
-        }
-      } catch {
-        // ignore
-      }
-    }
-    if (!opts.company) {
-      const matchCompany = jobText.match(/(?:chez|entreprise|société|groupe)\s+([A-Z][a-zA-Z0-9éèàîôùç\s]{2,20})/i);
-      if (matchCompany && matchCompany[1]) {
-        inferredCompany = matchCompany[1].trim();
-      }
-    }
+    const offerMeta = extractOfferMetadata(jobText, jobUrl, analysisResult || undefined);
+    const inferredRole = opts.role || offerMeta.role || (firstLineJob.length > 5 ? firstLineJob : 'Poste analysé');
+    const inferredCompany = opts.company || offerMeta.company || offerMeta.cabinet || 'Entreprise';
 
     const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const newAppId = 'app-' + Date.now();
@@ -1385,6 +1411,10 @@ export default function App() {
     const q = historySearchQuery.toLowerCase();
     return (
       item.title.toLowerCase().includes(q) ||
+      (item.customTitle && item.customTitle.toLowerCase().includes(q)) ||
+      (item.company && item.company.toLowerCase().includes(q)) ||
+      (item.cabinet && item.cabinet.toLowerCase().includes(q)) ||
+      (item.role && item.role.toLowerCase().includes(q)) ||
       item.jobSnippet.toLowerCase().includes(q) ||
       item.cvSnippet.toLowerCase().includes(q) ||
       (item.fileName && item.fileName.toLowerCase().includes(q)) ||
@@ -1588,6 +1618,9 @@ export default function App() {
               onPopulateProfileFromCurrentCv={handlePopulateProfileFromCurrentCv}
               isExtractingProfile={isExtractingProfile}
               onResetAll={handleReset}
+              currentAnalysisId={selectedHistoryId}
+              currentAnalysisTitle={history.find((h) => h.id === selectedHistoryId)?.title}
+              onRenameAnalysis={handleRenameAnalysis}
             />
           )}
 
@@ -1662,6 +1695,7 @@ export default function App() {
             }}
             onDatabaseReset={handleDatabaseReset}
             onDatabaseUpdated={handleDatabaseUpdated}
+            onRenameAnalysis={handleRenameAnalysis}
           />
         )}
 
@@ -1767,12 +1801,92 @@ export default function App() {
                     key={item.id}
                     className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all flex flex-col justify-between bg-white relative group"
                   >
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-0.5">
-                          <h4 className="text-xs font-bold text-gray-900 line-clamp-2 leading-snug">
-                            {item.title}
-                          </h4>
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          {/* Badges émetteur / cabinet / statut horodaté */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {item.company && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 text-[10px] font-extrabold border border-blue-200">
+                                🏢 {item.company}
+                              </span>
+                            )}
+                            {item.cabinet && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 text-[10px] font-extrabold border border-purple-200">
+                                👔 {item.cabinet}
+                              </span>
+                            )}
+                            {item.isHorodatedOnly && !item.company && !item.cabinet && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-bold border border-amber-200"
+                                title="Société non identifiée dans l'offre - analyse horodatée"
+                              >
+                                🕒 Horodatée
+                              </span>
+                            )}
+                            <span className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-bold">
+                              V{item.currentVersion || (item.evolutionSteps?.length ?? 1)}
+                            </span>
+                          </div>
+
+                          {/* Titre avec mode édition inline */}
+                          {editingAnalysisId === item.id ? (
+                            <div className="flex items-center gap-1 mt-1">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingTitleValue}
+                                onChange={(e) => setEditingTitleValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleRenameAnalysis(item.id, editingTitleValue);
+                                  if (e.key === 'Escape') setEditingAnalysisId(null);
+                                }}
+                                placeholder="Nommer cette analyse..."
+                                className="w-full text-xs font-bold px-2 py-1 border-2 border-purple-500 rounded-lg focus:outline-none bg-purple-50/50"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRenameAnalysis(item.id, editingTitleValue)}
+                                className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold cursor-pointer shrink-0"
+                                title="Enregistrer le nom"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingAnalysisId(null)}
+                                className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer shrink-0"
+                                title="Annuler"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="group/title flex items-center gap-1.5">
+                              <h4
+                                onClick={() => {
+                                  setEditingAnalysisId(item.id);
+                                  setEditingTitleValue(item.title);
+                                }}
+                                className="text-xs font-bold text-gray-900 line-clamp-2 leading-snug cursor-pointer hover:text-purple-700 transition-colors"
+                                title="Cliquer pour renommer cette analyse"
+                              >
+                                {item.title}
+                              </h4>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingAnalysisId(item.id);
+                                  setEditingTitleValue(item.title);
+                                }}
+                                className="opacity-0 group-hover/title:opacity-100 text-gray-400 hover:text-purple-600 transition-opacity p-0.5 rounded cursor-pointer"
+                                title="Renommer cette analyse"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400">
                             <span className="flex items-center gap-1">
                               <Clock className="w-2.5 h-2.5" />
@@ -1838,6 +1952,18 @@ export default function App() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>Consulter</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingAnalysisId(item.id);
+                            setEditingTitleValue(item.title);
+                          }}
+                          className="text-xs font-bold text-gray-600 hover:text-purple-700 flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Renommer cette analyse"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Renommer</span>
                         </button>
                         <button
                           type="button"

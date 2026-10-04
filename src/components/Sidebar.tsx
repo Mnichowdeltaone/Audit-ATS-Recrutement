@@ -70,6 +70,8 @@ export default function Sidebar({
   applicationsCount,
   historyCount,
   dbStats,
+  history = [],
+  onLoadHistoryItem,
   isMobileOpen,
   setIsMobileOpen,
 }: SidebarProps) {
@@ -345,6 +347,73 @@ export default function Sidebar({
             </div>
           </div>
         ))}
+
+        {/* Widget Analyses Récentes Identifiables */}
+        {!isCollapsed && history && history.length > 0 && (
+          <div className="mx-2 mb-2 p-2.5 bg-gray-50/90 border border-gray-200/90 rounded-xl space-y-1.5 shadow-2xs">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                <History className="w-3 h-3 text-purple-600" />
+                Dernières Analyses
+              </span>
+              <button
+                type="button"
+                onClick={() => handleNavClick('history')}
+                className="text-[10px] text-purple-700 hover:underline font-bold cursor-pointer"
+              >
+                Tout voir ({history.length})
+              </button>
+            </div>
+            <div className="space-y-1 pt-0.5">
+              {history.slice(0, 3).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    onLoadHistoryItem?.(item);
+                    handleNavClick('app');
+                  }}
+                  className="w-full text-left p-1.5 rounded-lg hover:bg-white hover:shadow-2xs transition-all border border-transparent hover:border-gray-200 group flex items-center justify-between gap-1.5 cursor-pointer"
+                  title={`Charger : ${item.title}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      {item.company ? (
+                        <span className="text-[9px] font-extrabold text-blue-800 bg-blue-100/80 px-1 py-0.2 rounded truncate max-w-[85px]">
+                          🏢 {item.company}
+                        </span>
+                      ) : item.cabinet ? (
+                        <span className="text-[9px] font-extrabold text-purple-800 bg-purple-100/80 px-1 py-0.2 rounded truncate max-w-[85px]">
+                          👔 {item.cabinet}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1 py-0.2 rounded truncate">
+                          🕒 Horodatée
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-bold text-gray-800 truncate group-hover:text-purple-700 transition-colors mt-0.5">
+                      {item.title}
+                    </div>
+                  </div>
+                  {item.score !== null && (
+                    <span
+                      className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+                        item.score >= 80
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : item.score >= 60
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {item.score}%
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Widget Astuce Recruteur Express & Fun */}
         {!isCollapsed && (

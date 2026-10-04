@@ -43,6 +43,7 @@ interface DatabaseManagerProps {
   onNavigateToTab: (tab: 'app' | 'tracker' | 'cv-assistant' | 'history' | 'database') => void;
   onDatabaseReset?: () => void;
   onDatabaseUpdated?: () => void;
+  onRenameAnalysis?: (id: string, newTitle: string) => Promise<void> | void;
 }
 
 export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
@@ -51,12 +52,39 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   onNavigateToTab,
   onDatabaseReset,
   onDatabaseUpdated,
+  onRenameAnalysis,
 }) => {
   const [subTab, setSubTab] = useState<'profile' | 'cvs' | 'coverLetters' | 'applications' | 'analyses' | 'suggestions' | 'backup'>('profile');
   const [dbData, setDbData] = useState<DatabaseSchema | null>(null);
   const [stats, setStats] = useState<DatabaseStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Rename analysis state
+  const [editingAnalysisId, setEditingAnalysisId] = useState<string | null>(null);
+  const [editingAnalysisTitle, setEditingAnalysisTitle] = useState('');
+
+  const handleRenameAnalysis = async (id: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    const trimmed = newTitle.trim();
+    setDbData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        analyses: prev.analyses.map((a) =>
+          a.id === id ? { ...a, title: trimmed, customTitle: trimmed } : a
+        ),
+      };
+    });
+    setEditingAnalysisId(null);
+    try {
+      await localDbClient.renameAnalysis(id, trimmed);
+      onRenameAnalysis?.(id, trimmed);
+      onDatabaseUpdated?.();
+    } catch (err) {
+      console.warn('Erreur renommage analyse dans la BDD', err);
+    }
+  };
 
   // Profile form state
   const [profileForm, setProfileForm] = useState<UserProfile | null>(null);
@@ -1724,19 +1752,109 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {(dbData?.analyses || []).map((an) => (
-              <div key={an.id} className="p-4 rounded-xl border border-gray-200 bg-white hover:border-gray-300">
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <h4 className="font-bold text-xs text-gray-900 line-clamp-1">{an.title}</h4>
-                  {an.score !== null && an.score !== undefined && (
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      {an.score}%
+              <div key={an.id} className="p-4 rounded-xl border border-gray-200 bg-white hover:border-gray-300 flex flex-col justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                    {an.company && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 text-[10px] font-extrabold border border-blue-200">
+                        🏢 {an.company}
+                      </span>
+                    )}
+                    {an.cabinet && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 text-[10px] font-extrabold border border-purple-200">
+                        👔 {an.cabinet}
+                      </span>
+                    )}
+                    {an.isHorodatedOnly && !an.company && !an.cabinet && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-bold border border-amber-200">
+                        🕒 Horodatée
+                      </span>
+                    )}
+                    <span className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-bold">
+                      V{an.currentVersion || (an.evolutionSteps?.length ?? 1)}
                     </span>
-                  )}
+                  </div>
+
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    {editingAnalysisId === an.id ? (
+                      <div className="flex items-center gap-1 flex-1">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editingAnalysisTitle}
+                          onChange={(e) => setEditingAnalysisTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameAnalysis(an.id, editingAnalysisTitle);
+                            if (e.key === 'Escape') setEditingAnalysisId(null);
+                          }}
+                          placeholder="Nommer cette analyse..."
+                          className="w-full text-xs font-bold px-2 py-1 border-2 border-purple-500 rounded-lg focus:outline-none bg-purple-50/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRenameAnalysis(an.id, editingAnalysisTitle)}
+                          className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAnalysisId(null)}
+                          className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="group/title flex items-center gap-1.5 flex-1 min-w-0">
+                        <h4
+                          onClick={() => {
+                            setEditingAnalysisId(an.id);
+                            setEditingAnalysisTitle(an.title);
+                          }}
+                          className="font-bold text-xs text-gray-900 line-clamp-1 cursor-pointer hover:text-purple-700 transition-colors"
+                          title="Cliquer pour renommer cette analyse"
+                        >
+                          {an.title}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingAnalysisId(an.id);
+                            setEditingAnalysisTitle(an.title);
+                          }}
+                          className="opacity-0 group-hover/title:opacity-100 text-gray-400 hover:text-purple-600 transition-opacity p-0.5 rounded cursor-pointer"
+                          title="Renommer cette analyse"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    {an.score !== null && an.score !== undefined && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                        {an.score}%
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500 line-clamp-2 mb-3">{an.jobSnippet}</p>
                 </div>
-                <p className="text-[11px] text-gray-500 line-clamp-2 mb-3">{an.jobSnippet}</p>
+
                 <div className="flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100 pt-2">
                   <span>{an.timestamp}</span>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingAnalysisId(an.id);
+                        setEditingAnalysisTitle(an.title);
+                      }}
+                      className="text-gray-600 hover:text-purple-700 font-bold flex items-center gap-0.5 cursor-pointer text-[11px]"
+                      title="Renommer cette analyse"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Renommer</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {

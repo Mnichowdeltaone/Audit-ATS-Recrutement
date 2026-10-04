@@ -112,6 +112,9 @@ ${jobText.trim()}
 ${reAnalysisContext}
 
 Fais une analyse détaillée et renvoie la réponse au format Markdown structuré avec les éléments suivants :
+- Société / Entreprise : [Nom exact de l'entreprise émettrice identifiée dans l'offre, ou "Non mentionnée" si absente]
+- Cabinet de recrutement : [Nom du cabinet de recrutement ou chasseur de têtes identifié dans l'offre, ou "Aucun" si direct]
+- Intitulé du poste : [Intitulé exact du poste visé]
 - Score de compatibilité : Une note sur 100 globale (ex: **88 / 100** ou **92 / 100**).
 - Points forts : 3 éléments du CV qui correspondent parfaitement à l'offre.
 - Points faibles / Manques : Ce qui reste perfectible par rapport à l'offre.

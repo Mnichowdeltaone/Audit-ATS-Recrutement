@@ -126,17 +126,28 @@ export default function VisualAnalysisModal({
               <Trophy className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/15 px-2.5 py-0.5 rounded-full text-amber-300 border border-white/20">
                   Rapport Visuel & KPIs ATS
                 </span>
-                <span className="text-xs text-gray-400 hidden sm:inline">•</span>
-                <span className="text-xs text-gray-300 font-semibold truncate hidden sm:inline">
-                  {parsed.targetRole} {parsed.targetCompany ? `chez ${parsed.targetCompany}` : ''}
-                </span>
+                {parsed.company && (
+                  <span className="text-[10px] font-extrabold bg-blue-500/30 text-blue-200 border border-blue-400/40 px-2 py-0.5 rounded-full">
+                    🏢 {parsed.company}
+                  </span>
+                )}
+                {parsed.cabinet && (
+                  <span className="text-[10px] font-extrabold bg-purple-500/30 text-purple-200 border border-purple-400/40 px-2 py-0.5 rounded-full">
+                    👔 {parsed.cabinet}
+                  </span>
+                )}
+                {parsed.isHorodatedOnly && (
+                  <span className="text-[10px] font-medium bg-amber-500/20 text-amber-200 border border-amber-400/30 px-2 py-0.5 rounded-full">
+                    🕒 {parsed.horodatage}
+                  </span>
+                )}
               </div>
-              <h2 className="text-base sm:text-lg font-black text-white truncate leading-tight">
-                Tableau de Bord d&apos;Adéquation Candidat / Offre 📊
+              <h2 className="text-base sm:text-lg font-black text-white truncate leading-tight mt-0.5">
+                {parsed.suggestedTitle || `${parsed.targetRole} chez ${parsed.targetCompany}`}
               </h2>
             </div>
           </div>

@@ -58,6 +58,11 @@ export interface AnalysisHistoryItem {
   id: string;
   timestamp: string;
   title: string;
+  company?: string;
+  cabinet?: string;
+  role?: string;
+  isHorodatedOnly?: boolean;
+  customTitle?: string;
   jobSnippet: string;
   cvSnippet: string;
   cvText: string;

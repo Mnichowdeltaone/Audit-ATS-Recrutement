@@ -713,6 +713,21 @@ export const localDbClient = {
     return item;
   },
 
+  async renameAnalysis(id: string, newTitle: string): Promise<AnalysisHistoryItem | null> {
+    const current = this.getLocalAnalyses();
+    const item = current.find((a) => a.id === id);
+    if (!item) return null;
+
+    const updatedItem: AnalysisHistoryItem = {
+      ...item,
+      title: newTitle.trim(),
+      customTitle: newTitle.trim(),
+    };
+
+    await this.saveAnalysis(updatedItem);
+    return updatedItem;
+  },
+
   async deleteAnalysis(id: string): Promise<boolean> {
     const current = this.getLocalAnalyses();
     const updated = current.filter((a) => a.id !== id);

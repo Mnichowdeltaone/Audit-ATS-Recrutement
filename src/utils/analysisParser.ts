@@ -1,3 +1,5 @@
+import { extractOfferMetadata } from './offerMetadataExtractor';
+
 export interface ParsedStrength {
   title: string;
   description: string;
@@ -35,6 +37,11 @@ export interface ParsedAnalysis {
   scoreLabel: string;
   targetCompany: string;
   targetRole: string;
+  company: string | null;
+  cabinet: string | null;
+  isHorodatedOnly: boolean;
+  suggestedTitle: string;
+  horodatage: string;
   executiveSummary: string;
   strengths: ParsedStrength[];
   weaknesses: ParsedWeakness[];
@@ -56,20 +63,23 @@ export interface ParsedAnalysis {
   };
 }
 
+export function extractScore(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const scoreMatch = text.match(/(\d{1,3})\s*(?:\/|\s*sur\s*)\s*100/i);
+  if (scoreMatch && scoreMatch[1]) {
+    const parsed = parseInt(scoreMatch[1], 10);
+    return parsed >= 0 && parsed <= 100 ? parsed : null;
+  }
+  return null;
+}
+
 export function parseAnalysisResult(
   rawText: string,
   cvText: string = '',
   jobText: string = ''
 ): ParsedAnalysis {
   // 1. Extraire le score global
-  let globalScore = 80;
-  const scoreMatch = rawText.match(/(\d{1,3})\s*(?:\/|\s*sur\s*)\s*100/i);
-  if (scoreMatch && scoreMatch[1]) {
-    const parsed = parseInt(scoreMatch[1], 10);
-    if (parsed >= 0 && parsed <= 100) {
-      globalScore = parsed;
-    }
-  }
+  let globalScore = extractScore(rawText) ?? 80;
 
   // Label selon le score
   let scoreLabel = 'Excellente adéquation (Fortes chances de présélection ATS)';
@@ -81,20 +91,10 @@ export function parseAnalysisResult(
     scoreLabel = 'Bonne adéquation (Quelques ajustements recommandés)';
   }
 
-  // 2. Entreprise et rôle
-  let targetCompany = 'Entreprise';
-  const compMatch =
-    jobText.match(/(?:chez|entreprise|société|groupe)\s+([A-Z][a-zA-Z0-9éèàîôùç\s]{2,25})/i) ||
-    rawText.match(/(?:chez|pour le poste visé chez|avec)\s+([A-Z][a-zA-Z0-9éèàîôùç\s]{2,25})/i);
-  if (compMatch && compMatch[1]) {
-    targetCompany = compMatch[1].trim();
-  }
-
-  let targetRole = 'Poste Ciblé';
-  const roleMatch = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 50);
-  if (roleMatch && roleMatch.length > 5) {
-    targetRole = roleMatch;
-  }
+  // 2. Entreprise et rôle scrutés intelligemment
+  const offerMeta = extractOfferMetadata(jobText, '', rawText);
+  const targetCompany = offerMeta.company || offerMeta.cabinet || 'Entreprise';
+  const targetRole = offerMeta.role || 'Poste Ciblé';
 
   // 3. Découpage des sections du texte
   const sections: { [key: string]: string } = {};
@@ -385,6 +385,11 @@ export function parseAnalysisResult(
     scoreLabel,
     targetCompany,
     targetRole,
+    company: offerMeta.company,
+    cabinet: offerMeta.cabinet,
+    isHorodatedOnly: offerMeta.isHorodatedOnly,
+    suggestedTitle: offerMeta.suggestedTitle,
+    horodatage: offerMeta.horodatage,
     executiveSummary,
     strengths,
     weaknesses,
