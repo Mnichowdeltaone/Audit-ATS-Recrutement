@@ -16,11 +16,12 @@ import {
   Settings,
   X,
   BookOpen,
+  TrendingUp,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
 
 export interface NavItem {
-  id: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
+  id: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
@@ -35,8 +36,8 @@ export interface NavSection {
 }
 
 interface SidebarProps {
-  activeTab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
-  setActiveTab: (tab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => void;
+  activeTab: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
+  setActiveTab: (tab: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => void;
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
   userProfile: UserProfile | null;
@@ -92,7 +93,7 @@ export default function Sidebar({
   };
 
   // Navigation cliquable avec gestion du menu mobile
-  const handleNavClick = (tab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => {
+  const handleNavClick = (tab: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => {
     setActiveTab(tab);
     if (isMobileOpen) {
       setIsMobileOpen(false);
@@ -142,6 +143,15 @@ export default function Sidebar({
           color: 'text-blue-600',
           activeBg: 'bg-blue-50 text-blue-700 border-blue-200',
           badge: applicationsCount > 0 ? String(applicationsCount) : null,
+        },
+        {
+          id: 'reports' as const,
+          label: 'Analyses & Rapports',
+          icon: TrendingUp,
+          color: 'text-purple-600',
+          activeBg: 'bg-purple-50 text-purple-700 border-purple-200',
+          badge: 'KPIs',
+          badgeColor: 'bg-purple-100 text-purple-800',
         },
         {
           id: 'history' as const,

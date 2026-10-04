@@ -27,6 +27,7 @@ import {
   FileText,
   Copy,
   Check,
+  TrendingUp,
 } from 'lucide-react';
 import { ApplicationItem, ApplicationStatus, AnalysisHistoryItem } from '../types';
 import { localDbClient } from '../services/localDbClient';
@@ -37,6 +38,7 @@ interface ApplicationTrackerProps {
   analyses: AnalysisHistoryItem[];
   onOpenAnalysis?: (analysisId: string) => void;
   onNewAnalysisWithJob?: (jobText: string, jobUrl?: string) => void;
+  onNavigateToReports?: () => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -99,6 +101,7 @@ export default function ApplicationTracker({
   analyses,
   onOpenAnalysis,
   onNewAnalysisWithJob,
+  onNavigateToReports,
 }: ApplicationTrackerProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
@@ -515,6 +518,17 @@ export default function ApplicationTracker({
               <ListFilter className="w-4 h-4" />
               <span className="hidden sm:inline">Liste</span>
             </button>
+            {onNavigateToReports && (
+              <button
+                type="button"
+                onClick={onNavigateToReports}
+                className="p-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors text-purple-700 hover:bg-purple-100/70 bg-purple-50/50 border border-purple-200 cursor-pointer"
+                title="Consulter les graphiques, entonnoirs et rapports d'activité"
+              >
+                <TrendingUp className="w-4 h-4 text-purple-600" />
+                <span className="hidden sm:inline">Analyses & Rapports 📈</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1">

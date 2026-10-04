@@ -64,6 +64,7 @@ import { parseCvFile, ExtractedFileResult } from './utils/fileExtractor';
 import { extractProfileFromCv } from './utils/profileExtractor';
 import { extractOfferMetadata } from './utils/offerMetadataExtractor';
 import ApplicationTracker from './components/ApplicationTracker';
+import JobSearchAnalyticsReport from './components/JobSearchAnalyticsReport';
 import CvAssistant from './components/CvAssistant';
 import DatabaseManager from './components/DatabaseManager';
 import CvOptimizationModal from './components/CvOptimizationModal';
@@ -322,7 +323,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Navigation par onglets
-  const [activeTab, setActiveTab] = useState<'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings'>('app');
+  const [activeTab, setActiveTab] = useState<'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings'>('app');
 
   // Profil utilisateur et affichage (Multi-profils)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -1469,6 +1470,7 @@ export default function App() {
                   {activeTab === 'app' && '🎯 Analyseur d\'Adéquation CV & Offre'}
                   {activeTab === 'cv-assistant' && '✨ Générateur Assisté CV & Lettre'}
                   {activeTab === 'tracker' && '💼 Suivi des Candidatures'}
+                  {activeTab === 'reports' && '📈 Analyses & Rapports de Recherche d\'Emploi'}
                   {activeTab === 'history' && '🕒 Historique des Audits'}
                   {activeTab === 'database' && '🗄️ Base de Données Locale'}
                   {activeTab === 'guide' && '💡 Mode d\'Emploi Interactif & Astuces'}
@@ -1482,6 +1484,7 @@ export default function App() {
                 {activeTab === 'app' && 'Comparez votre CV à l\'offre, identifiez les écarts ATS et boostez vos chances d\'entretien'}
                 {activeTab === 'cv-assistant' && 'Rédigez un CV sur-mesure ou une lettre de motivation percutante avec l\'IA'}
                 {activeTab === 'tracker' && 'Gérez vos candidatures, relances et entretiens en mode Kanban interactif'}
+                {activeTab === 'reports' && 'Mesurez vos taux de conversion, l\'impact de vos scores ATS et générez vos justificatifs officiels d\'activité'}
                 {activeTab === 'history' && 'Retrouvez vos rapports d\'audit passés et comparez les scores d\'adéquation'}
                 {activeTab === 'database' && 'Gérez vos CVs enregistrés, suggestions IA et sauvegardes'}
                 {activeTab === 'guide' && 'Guide pas-à-pas, simulateur ATS interactif, quiz recruteur et checklist pour réussir vos candidatures'}
@@ -1645,6 +1648,33 @@ export default function App() {
               if (jobU) setJobUrl(jobU);
               setActiveTab('app');
             }}
+            onNavigateToReports={() => setActiveTab('reports')}
+          />
+        )}
+
+        {/* =========================================================================
+            ONGLET : ANALYSES & RAPPORTS DE PROGRESSION DES RECHERCHES D'EMPLOI
+           ========================================================================= */}
+        {activeTab === 'reports' && (
+          <JobSearchAnalyticsReport
+            applications={applications}
+            setApplications={setApplications}
+            analyses={history}
+            userProfile={userProfile}
+            onNavigateToTab={(tab) => {
+              setActiveTab(tab as any);
+            }}
+            onOpenAnalysis={(analysisId) => {
+              const item = history.find((h) => h.id === analysisId);
+              if (item) {
+                handleLoadHistoryItem(item);
+              } else {
+                setActiveTab('history');
+              }
+            }}
+            onRenameAnalysis={handleRenameAnalysis}
+            apiKey={apiKey}
+            hasServerKey={hasServerKey}
           />
         )}
 
