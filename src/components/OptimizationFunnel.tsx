@@ -452,7 +452,7 @@ export default function OptimizationFunnel({
     setIsGeneratingCoverLetter(true);
     setFunnelError(null);
     try {
-      const res = await fetch('/api/assist-cv', {
+      const res = await apiFetch('/api/assist-cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
