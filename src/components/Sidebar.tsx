@@ -19,6 +19,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
+import CvImprovementLogo from './CvImprovementLogo';
 
 export interface NavItem {
   id: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
@@ -206,20 +207,13 @@ export default function Sidebar({
       <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-2 shrink-0">
         <div
           onClick={() => handleNavClick('app')}
-          className="flex items-center gap-2.5 cursor-pointer group min-w-0"
+          className="flex items-center gap-2 cursor-pointer group min-w-0"
+          title="CV Improvement - Votre potentiel mérite un meilleur CV."
         >
-          <div className="w-8 h-8 rounded-lg bg-[#FF4B4B] flex items-center justify-center text-white font-bold text-base shadow-xs shrink-0 group-hover:scale-105 transition-transform">
-            📄
-          </div>
-          {!isCollapsed && (
-            <div className="min-w-0">
-              <h2 className="font-bold text-gray-900 text-sm leading-tight truncate">
-                CV Move Personnel
-              </h2>
-              <p className="text-[10px] text-gray-500 font-medium truncate">
-                Audit ATS & Recrutement
-              </p>
-            </div>
+          {!isCollapsed ? (
+            <CvImprovementLogo variant="full" size="sm" showTagline={true} />
+          ) : (
+            <CvImprovementLogo variant="icon" size="xs" />
           )}
         </div>
 
@@ -387,7 +381,7 @@ export default function Sidebar({
                   title={`Charger : ${item.title}`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       {item.company ? (
                         <span className="text-[9px] font-extrabold text-blue-800 bg-blue-100/80 px-1 py-0.2 rounded truncate max-w-[85px]">
                           🏢 {item.company}
@@ -399,6 +393,14 @@ export default function Sidebar({
                       ) : (
                         <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1 py-0.2 rounded truncate">
                           🕒 Horodatée
+                        </span>
+                      )}
+                      {(item.coverLetterTitle || item.coverLetterContent || item.coverLetterId) && (
+                        <span
+                          className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded"
+                          title={`Lettre rattachée : ${item.coverLetterTitle || 'Sur-mesure'}`}
+                        >
+                          ✉️ Lettre
                         </span>
                       )}
                     </div>

@@ -106,6 +106,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   const [letterFormRole, setLetterFormRole] = useState('');
   const [letterFormContent, setLetterFormContent] = useState('');
   const [letterFormAppId, setLetterFormAppId] = useState('');
+  const [letterFormAnalysisId, setLetterFormAnalysisId] = useState('');
   const [copiedLetterId, setCopiedLetterId] = useState<string | null>(null);
   const [confirmDeleteLetterId, setConfirmDeleteLetterId] = useState<string | null>(null);
 
@@ -312,6 +313,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
         role: letterFormRole.trim() || 'Poste Cible',
         content: letterFormContent.trim(),
         applicationId: letterFormAppId || undefined,
+        analysisId: letterFormAnalysisId || undefined,
         createdAt: editingLetter ? editingLetter.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -1283,25 +1285,65 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                   </div>
                 </div>
 
-                {dbData?.applications && dbData.applications.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-purple-50/40 border border-purple-200/60 rounded-xl text-xs">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Rattacher à une candidature existante du Kanban (optionnel)
+                    <label className="block text-xs font-bold text-purple-950 mb-1 flex items-center gap-1.5">
+                      <span>🎯 Rattacher à un Audit ATS (Analyse d&apos;offre)</span>
+                      <span className="text-[10px] text-gray-500 font-normal">(optionnel)</span>
+                    </label>
+                    <select
+                      value={letterFormAnalysisId}
+                      onChange={(e) => {
+                        const selId = e.target.value;
+                        setLetterFormAnalysisId(selId);
+                        if (selId && dbData?.analyses) {
+                          const matchedAn = dbData.analyses.find((a) => a.id === selId);
+                          if (matchedAn) {
+                            if (!letterFormCompany && matchedAn.company) {
+                              setLetterFormCompany(matchedAn.company);
+                            }
+                            if (!letterFormRole && matchedAn.role) {
+                              setLetterFormRole(matchedAn.role);
+                            }
+                          }
+                        }
+                      }}
+                      className="w-full text-xs px-3 py-2 border border-purple-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden font-medium text-gray-900"
+                    >
+                      <option value="">-- Aucun audit ATS rattaché pour le moment --</option>
+                      {dbData?.analyses?.map((an) => (
+                        <option key={an.id} value={an.id}>
+                          🎯 {an.company ? `${an.company} — ` : ''}{an.title || an.role || 'Audit sans titre'} ({an.score != null ? `${an.score}%` : 'Score N/A'})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-purple-900/70 mt-1">
+                      Permet d&apos;associer cette lettre directement au dossier d&apos;audit ouvert dans l&apos;Analyseur.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-blue-950 mb-1 flex items-center gap-1.5">
+                      <span>💼 Rattacher à une Candidature Kanban</span>
+                      <span className="text-[10px] text-gray-500 font-normal">(optionnel)</span>
                     </label>
                     <select
                       value={letterFormAppId}
                       onChange={(e) => setLetterFormAppId(e.target.value)}
-                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                      className="w-full text-xs px-3 py-2 border border-blue-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium text-gray-900"
                     >
-                      <option value="">-- Aucune candidature rattachée pour le moment --</option>
-                      {dbData.applications.map((app) => (
+                      <option value="">-- Aucune candidature Kanban rattachée --</option>
+                      {dbData?.applications?.map((app) => (
                         <option key={app.id} value={app.id}>
-                          {app.company} — {app.role} ({app.appliedDate || 'En cours'})
+                          💼 {app.company} — {app.role} ({app.appliedDate || 'En cours'})
                         </option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-blue-900/70 mt-1">
+                      Intègre automatiquement la lettre dans la fiche de suivi Kanban.
+                    </p>
                   </div>
-                )}
+                </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -1377,6 +1419,11 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                 const associatedApp = letter.applicationId
                   ? dbData.applications.find((a) => a.id === letter.applicationId)
                   : null;
+                const associatedAnalysis = letter.analysisId
+                  ? dbData.analyses?.find((a) => a.id === letter.analysisId)
+                  : (letter.company
+                      ? dbData?.analyses?.find((a) => a.company && a.company.toLowerCase().trim() === letter.company.toLowerCase().trim())
+                      : null);
                 const isCopied = copiedLetterId === letter.id;
 
                 return (
@@ -1399,21 +1446,36 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                           </span>
                         </div>
 
-                        {associatedApp ? (
-                          <button
-                            type="button"
-                            onClick={() => onNavigateToTab('tracker')}
-                            className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold flex items-center gap-1 hover:bg-blue-100 cursor-pointer shrink-0"
-                            title="Ouvrir dans le Kanban"
-                          >
-                            <Briefcase className="w-2.5 h-2.5" />
-                            <span>Liée Kanban</span>
-                          </button>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-medium shrink-0">
-                            Non liée
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                          {associatedAnalysis && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenAnalysis(associatedAnalysis.id)}
+                              className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-bold flex items-center gap-1 hover:bg-purple-100 cursor-pointer shadow-2xs"
+                              title={`Ouvrir dans l'analyseur l'audit ATS « ${associatedAnalysis.company || associatedAnalysis.title} »`}
+                            >
+                              <span>🎯 Audit : {associatedAnalysis.company || associatedAnalysis.title || 'Audit ATS'}</span>
+                            </button>
+                          )}
+
+                          {associatedApp && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToTab('tracker')}
+                              className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold flex items-center gap-1 hover:bg-blue-100 cursor-pointer shadow-2xs"
+                              title="Ouvrir dans le Kanban"
+                            >
+                              <Briefcase className="w-2.5 h-2.5" />
+                              <span>💼 Kanban</span>
+                            </button>
+                          )}
+
+                          {!associatedAnalysis && !associatedApp && (
+                            <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium">
+                              Non rattachée
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Aperçu du texte */}
@@ -1462,6 +1524,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                             setLetterFormRole(letter.role);
                             setLetterFormContent(letter.content);
                             setLetterFormAppId(letter.applicationId || '');
+                            setLetterFormAnalysisId(letter.analysisId || '');
                             setIsAddingLetter(true);
                           }}
                           className="p-1 rounded-md border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -1773,6 +1836,18 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                     <span className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-bold">
                       V{an.currentVersion || (an.evolutionSteps?.length ?? 1)}
                     </span>
+                    {an.coverLetterTitle || an.coverLetterContent || an.coverLetterId ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200"
+                        title={`Lettre de motivation rattachée : ${an.coverLetterTitle || 'Sur-mesure'}`}
+                      >
+                        ✉️ Lettre : {an.coverLetterTitle || 'Rattachée'}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gray-50 text-gray-500 text-[10px] border border-gray-200">
+                        ✉️ Sans lettre
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-start justify-between gap-2 mb-1.5">

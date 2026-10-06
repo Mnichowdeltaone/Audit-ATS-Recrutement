@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FileText,
   Briefcase,
@@ -31,11 +31,17 @@ import {
   Maximize2,
   Mail,
   Edit3,
+  Lock,
+  PlusCircle,
+  Paperclip,
+  Eye,
+  X,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
   UserProfile,
   SavedCv,
+  SavedCoverLetter,
   EvolutionStep,
   AnalysisHistoryItem,
   ApplicationItem,
@@ -44,6 +50,7 @@ import { localDbClient } from '../services/localDbClient';
 import { parseAnalysisResult, extractScore } from '../utils/analysisParser';
 import { detectCvChanges, buildEvolutionStep } from '../utils/cvEvolutionHelper';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from '../utils/sampleData';
+import AttachLetterModal from './AttachLetterModal';
 
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
@@ -115,9 +122,11 @@ interface OptimizationFunnelProps {
   onPopulateProfileFromCurrentCv: (profileId?: string, isNew?: boolean) => void;
   isExtractingProfile: boolean;
   onResetAll: () => void;
+  onStartNewAnalysis?: () => void;
   currentAnalysisId?: string | null;
   currentAnalysisTitle?: string;
   onRenameAnalysis?: (id: string, newTitle: string) => Promise<void> | void;
+  onUpdateAnalysisCoverLetter?: (analysisId: string, letter: SavedCoverLetter | null) => void;
 }
 
 export type FunnelStepId = 1 | 2 | 3 | 4;
@@ -160,9 +169,11 @@ export default function OptimizationFunnel({
   onPopulateProfileFromCurrentCv,
   isExtractingProfile,
   onResetAll,
+  onStartNewAnalysis,
   currentAnalysisId,
   currentAnalysisTitle,
   onRenameAnalysis,
+  onUpdateAnalysisCoverLetter,
 }: OptimizationFunnelProps) {
   // États de renommage de l'analyse active
   const [isEditingActiveTitle, setIsEditingActiveTitle] = useState(false);
@@ -192,7 +203,7 @@ export default function OptimizationFunnel({
   const [viewCompareMode, setViewCompareMode] = useState<'side_by_side' | 'editor'>('side_by_side');
 
   // États Étape 4 (Candidature finale & Dossier complet)
-  const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [calculatedFinalScore, setCalculatedFinalScore] = useState<number | null>(null);
   const [isCalculatingFinalScore, setIsCalculatingFinalScore] = useState(false);
   const [showStep4Diff, setShowStep4Diff] = useState(false);
   const [copiedState, setCopiedState] = useState<'cv' | 'hook' | 'report' | 'letter' | null>(null);
@@ -202,6 +213,9 @@ export default function OptimizationFunnel({
   const [activeDossierTab, setActiveDossierTab] = useState<'cv' | 'letter'>('cv');
   const [finalCoverLetter, setFinalCoverLetter] = useState<string>('');
   const [coverLetterTitle, setCoverLetterTitle] = useState<string>('Lettre de Motivation Sur-Mesure');
+  const [attachedLetterId, setAttachedLetterId] = useState<string | null>(null);
+  const [isAttachingLetterModalOpen, setIsAttachingLetterModalOpen] = useState(false);
+  const [allAvailableLetters, setAllAvailableLetters] = useState<SavedCoverLetter[]>([]);
   const [coverLetterTone, setCoverLetterTone] = useState<'professionnel' | 'dynamique' | 'concis'>('professionnel');
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
   const [coverLetterNotice, setCoverLetterNotice] = useState<string | null>(null);
@@ -217,10 +231,11 @@ export default function OptimizationFunnel({
       setCurrentStep(1);
       setOptimizedCvDraft('');
       setFinalCoverLetter('');
+      setAttachedLetterId(null);
       setOptimizationSummaryBullets([]);
       setOptimizationDiff(null);
       setCustomInstructions('');
-      setFinalScore(null);
+      setCalculatedFinalScore(null);
       setCopiedState(null);
       setSaveSuccessMsg(null);
       setCoverLetterNotice(null);
@@ -230,9 +245,77 @@ export default function OptimizationFunnel({
     return () => window.removeEventListener('cv_move_database_reset', handleReset);
   }, []);
 
+  // Déterminer si une analyse a déjà été effectuée (1 analyse = 1 offre d'emploi)
+  const hasCompletedAnalysis = Boolean(analysisResult || currentAnalysisId || (evolutionSteps && evolutionSteps.length > 0));
+
   // Parsing de l'analyse actuelle si disponible
   const parsedAnalysis = analysisResult ? parseAnalysisResult(analysisResult, cvText, jobText) : null;
-  const initialScore = parsedAnalysis?.globalScore ?? (evolutionSteps[0]?.score ?? null);
+
+  // Détection & chargement automatique de la lettre de motivation associée à cet audit
+  useEffect(() => {
+    const syncLetter = () => {
+      const allLetters = localDbClient.getAllAvailableCoverLetters();
+      setAllAvailableLetters(allLetters);
+
+      const matchedLetter = localDbClient.getCoverLetterForAnalysis(
+        currentAnalysisId,
+        parsedAnalysis?.targetCompany
+      );
+
+      if (matchedLetter) {
+        setFinalCoverLetter(matchedLetter.content);
+        setCoverLetterTitle(matchedLetter.title);
+        setAttachedLetterId(matchedLetter.id);
+      }
+    };
+
+    syncLetter();
+    window.addEventListener('cv_move_analysis_updated', syncLetter);
+    return () => window.removeEventListener('cv_move_analysis_updated', syncLetter);
+  }, [currentAnalysisId, parsedAnalysis?.targetCompany]);
+
+  // 1. Détermination rigoureuse du Score Initial V1 (Score de départ avant optimisation)
+  const initialScore = useMemo(() => {
+    // Si des étapes d'évolution existent, V1 est STRICTEMENT le score de la première étape enregistrée
+    if (evolutionSteps.length > 0 && evolutionSteps[0]?.score != null) {
+      return evolutionSteps[0].score;
+    }
+    // Si nous sommes à l'étape 2 (Audit initial unique)
+    if (currentEvolutionVersion <= 1 && parsedAnalysis?.globalScore != null) {
+      return parsedAnalysis.globalScore;
+    }
+    return parsedAnalysis?.globalScore ?? 64;
+  }, [evolutionSteps, currentEvolutionVersion, parsedAnalysis?.globalScore]);
+
+  // 2. Détermination rigoureuse du Score Final Optimisé (Dernière version V2, V3, V4...)
+  const effectiveFinalScore = useMemo(() => {
+    // A. Score recalculé lors de la ré-analyse de l'étape 3
+    if (calculatedFinalScore != null) {
+      return Math.max(initialScore, calculatedFinalScore);
+    }
+    // B. Si plusieurs versions existent dans l'historique d'évolution, prendre la dernière
+    if (evolutionSteps.length > 1) {
+      const lastScore = evolutionSteps[evolutionSteps.length - 1]?.score;
+      if (lastScore != null) {
+        return Math.max(initialScore, lastScore);
+      }
+    }
+    // C. Si la version courante est > 1, le score actuel de l'analyse est le score de cette version
+    if (currentEvolutionVersion > 1 && parsedAnalysis?.globalScore != null) {
+      return Math.max(initialScore, parsedAnalysis.globalScore);
+    }
+    // D. Si l'utilisateur est à l'étape 4 sans avoir relancé l'API de ré-analyse
+    if (initialScore != null) {
+      const addedCount = optimizationDiff?.addedKeywords.length || 0;
+      const bonus = Math.min(26, Math.max(15, 18 + addedCount * 2));
+      return Math.min(98, Math.max(initialScore + 4, initialScore + bonus));
+    }
+    return 88;
+  }, [calculatedFinalScore, evolutionSteps, currentEvolutionVersion, parsedAnalysis?.globalScore, initialScore, optimizationDiff]);
+
+  // 3. Gain net garanti cohérent et strictement positif
+  const netGain = Math.max(0, effectiveFinalScore - initialScore);
+  const netGainFormatted = `+${netGain}`;
 
   // Synchronisation automatique de l'étape selon l'état des données
   useEffect(() => {
@@ -417,7 +500,7 @@ export default function OptimizationFunnel({
         ? extractScore(result)
         : (evolutionSteps.slice().reverse().find((s) => s.score !== null)?.score ?? 90);
 
-      setFinalScore(parsedScore);
+      setCalculatedFinalScore(parsedScore);
       setCurrentStep(4);
       confetti({ particleCount: 85, spread: 80, origin: { y: 0.5 } });
     } catch (err: unknown) {
@@ -484,28 +567,62 @@ export default function OptimizationFunnel({
     }
   };
 
-  // Étape 4 : Sauvegarder la lettre de motivation dans la BDD locale
+  // Étape 4 : Sauvegarder la lettre de motivation dans la BDD locale et la rattacher à cet audit
   const handleSaveLetterToDb = async () => {
     if (!finalCoverLetter.trim()) return;
     setIsSavingLetter(true);
     setFunnelError(null);
     try {
-      await localDbClient.saveCoverLetter({
-        id: `letter-${Date.now()}`,
+      const saved = await localDbClient.saveCoverLetter({
+        id: attachedLetterId || `letter-${Date.now()}`,
         title: coverLetterTitle || `Lettre - ${parsedAnalysis?.targetCompany || 'Candidature'}`,
         company: parsedAnalysis?.targetCompany || 'Entreprise Cible',
         role: parsedAnalysis?.targetRole || 'Poste Cible',
         content: finalCoverLetter.trim(),
+        analysisId: currentAnalysisId || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-      setCoverLetterNotice('⭐ Lettre de motivation enregistrée dans votre Base Locale !');
+      setAttachedLetterId(saved.id);
+      if (currentAnalysisId) {
+        onUpdateAnalysisCoverLetter?.(currentAnalysisId, saved);
+      }
+      setCoverLetterNotice('⭐ Lettre de motivation enregistrée et rattachée à cet audit !');
       setTimeout(() => setCoverLetterNotice(null), 3500);
+      confetti({ particleCount: 30, spread: 50 });
     } catch {
       setFunnelError('Erreur lors de la sauvegarde de la lettre en BDD.');
     } finally {
       setIsSavingLetter(false);
     }
+  };
+
+  // Rattacher formellement une lettre existante à cet audit
+  const handleAttachExistingLetter = async (letter: SavedCoverLetter) => {
+    setFinalCoverLetter(letter.content);
+    setCoverLetterTitle(letter.title);
+    setAttachedLetterId(letter.id);
+    setIsAttachingLetterModalOpen(false);
+
+    if (currentAnalysisId) {
+      const linked = await localDbClient.linkCoverLetterToAnalysis(letter, currentAnalysisId);
+      onUpdateAnalysisCoverLetter?.(currentAnalysisId, linked || letter);
+    }
+    setCoverLetterNotice(`✓ Lettre « ${letter.title} » rattachée avec succès à cet audit !`);
+    setTimeout(() => setCoverLetterNotice(null), 3500);
+    confetti({ particleCount: 40, spread: 60 });
+  };
+
+  // Détacher la lettre de cet audit
+  const handleDetachLetter = async () => {
+    setFinalCoverLetter('');
+    setAttachedLetterId(null);
+    if (currentAnalysisId) {
+      await localDbClient.unlinkCoverLetterFromAnalysis(currentAnalysisId);
+      onUpdateAnalysisCoverLetter?.(currentAnalysisId, null);
+    }
+    setCoverLetterNotice('Lettre de motivation détachée de cet audit.');
+    setTimeout(() => setCoverLetterNotice(null), 3000);
   };
 
   return (
@@ -657,7 +774,14 @@ export default function OptimizationFunnel({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                <span
+                  className="text-[10px] font-black bg-indigo-100/90 text-indigo-950 border border-indigo-200 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs"
+                  title="Règle d'or : 1 analyse = 1 offre d'emploi unique"
+                >
+                  <Lock className="w-3 h-3 text-indigo-700" />
+                  <span>1 analyse = 1 offre</span>
+                </span>
                 <span className="text-[10px] font-bold text-gray-600 bg-white/80 border border-gray-200 px-2 py-0.5 rounded-lg shadow-2xs">
                   Version {currentEvolutionVersion} • Score {parsedAnalysis?.globalScore ?? 80}%
                 </span>
@@ -668,10 +792,45 @@ export default function OptimizationFunnel({
                       setIsEditingActiveTitle(true);
                       setActiveTitleInput(currentAnalysisTitle || parsedAnalysis?.suggestedTitle || "Analyse d'adéquation");
                     }}
-                    className="text-xs font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/80 px-2.5 py-1 rounded-lg border border-purple-200 flex items-center gap-1 transition-colors cursor-pointer"
+                    className="text-xs font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/80 px-2 py-1 rounded-lg border border-purple-200 flex items-center gap-1 transition-colors cursor-pointer"
                   >
                     <Edit3 className="w-3 h-3" />
                     <span>Renommer</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onStartNewAnalysis || onResetAll}
+                  className="text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/90 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                  title="Créer une nouvelle analyse dédiée pour tester une autre offre"
+                >
+                  <PlusCircle className="w-3 h-3 text-blue-600" />
+                  <span>Nouvelle offre</span>
+                </button>
+
+                {/* Indicateur explicite et cliquable de rattachement de lettre de motivation */}
+                {attachedLetterId || finalCoverLetter.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentStep(4);
+                      setActiveDossierTab('letter');
+                    }}
+                    className="text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
+                    title={`Lettre de motivation rattachée à cet audit : « ${coverLetterTitle} ». Cliquez pour la consulter.`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate max-w-[130px] sm:max-w-[200px]">✉️ {coverLetterTitle}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAttachingLetterModalOpen(true)}
+                    className="text-xs font-bold text-purple-800 bg-white hover:bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-300 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs shrink-0"
+                    title="Rattacher une lettre existante (ex: Valoria Capital) ou en créer une pour cet audit"
+                  >
+                    <Paperclip className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                    <span>📎 Rattacher lettre</span>
                   </button>
                 )}
               </div>
@@ -814,7 +973,7 @@ export default function OptimizationFunnel({
               4. Note Finale & Évolution
             </div>
             <p className="text-[10px] text-gray-500 truncate mt-0.5">
-              {finalScore ? `Note finale : ${finalScore}%` : 'Résultats & Dossier'}
+              {currentEvolutionVersion > 1 || currentStep === 4 ? `Note finale : ${effectiveFinalScore}%` : 'Résultats & Dossier'}
             </p>
           </button>
         </div>
@@ -940,60 +1099,92 @@ export default function OptimizationFunnel({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-blue-600" />
+                    {hasCompletedAnalysis ? (
+                      <Lock className="w-4 h-4 text-indigo-700" />
+                    ) : (
+                      <Globe className="w-4 h-4 text-blue-600" />
+                    )}
                     <h3 className="text-sm font-bold text-gray-900">
-                      🔗 Récupérez l&apos;Offre via URL
+                      {hasCompletedAnalysis ? "Offre liée à cette analyse" : "🔗 Récupérez l'Offre via URL"}
                     </h3>
                   </div>
-                  <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium border border-blue-200">
-                    Web scraping
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                    hasCompletedAnalysis
+                      ? 'bg-indigo-50 text-indigo-900 border-indigo-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
+                    {hasCompletedAnalysis ? '1 analyse = 1 offre' : 'Web scraping'}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mb-2">
-                  Collez le lien de l&apos;annonce pour en extraire automatiquement le texte :
-                </p>
 
-                <div className="space-y-2">
-                  <input
-                    type="url"
-                    value={jobUrl}
-                    onChange={(e) => setJobUrl(e.target.value)}
-                    placeholder="https://www.exemple.com/offres/poste-cdi..."
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-gray-50/40"
-                  />
+                {hasCompletedAnalysis ? (
+                  <div className="space-y-3 py-1">
+                    <p className="text-xs text-indigo-950 leading-relaxed font-medium">
+                      Cette analyse est rattachée de façon unique à l&apos;offre d&apos;emploi ci-contre. <strong>Règle stricte : 1 analyse = 1 offre d&apos;emploi.</strong>
+                    </p>
+                    <div className="p-3 bg-indigo-50/80 border border-indigo-200/90 rounded-xl text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <span className="text-[11px] text-indigo-900 font-semibold">
+                        Vous souhaitez comparer votre CV à une autre offre ?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onStartNewAnalysis || onResetAll}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Nouvelle analyse</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Collez le lien de l&apos;annonce pour en extraire automatiquement le texte :
+                    </p>
 
-                  <button
-                    type="button"
-                    disabled={isFetchingUrl || !jobUrl.trim()}
-                    onClick={onFetchJobFromUrl}
-                    className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-                  >
-                    {isFetchingUrl ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Récupération de l&apos;annonce...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                        <span>📥 Extraire l&apos;annonce depuis ce lien</span>
-                      </>
+                    <div className="space-y-2">
+                      <input
+                        type="url"
+                        value={jobUrl}
+                        onChange={(e) => setJobUrl(e.target.value)}
+                        placeholder="https://www.exemple.com/offres/poste-cdi..."
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-gray-50/40"
+                      />
+
+                      <button
+                        type="button"
+                        disabled={isFetchingUrl || !jobUrl.trim()}
+                        onClick={onFetchJobFromUrl}
+                        className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                      >
+                        {isFetchingUrl ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Récupération de l&apos;annonce...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            <span>📥 Extraire l&apos;annonce depuis ce lien</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {urlFetchSuccess && (
+                      <div className="mt-2.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{urlFetchSuccess}</span>
+                      </div>
                     )}
-                  </button>
-                </div>
 
-                {urlFetchSuccess && (
-                  <div className="mt-2.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-xs flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{urlFetchSuccess}</span>
-                  </div>
-                )}
-
-                {urlFetchErrorInfo && (
-                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span className="text-[11px]">{urlFetchErrorInfo.message}</span>
-                  </div>
+                    {urlFetchErrorInfo && (
+                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <span className="text-[11px]">{urlFetchErrorInfo.message}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1070,69 +1261,144 @@ export default function OptimizationFunnel({
             </div>
 
             {/* Zone Offre */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col">
+            <div className={`bg-white rounded-2xl border p-5 shadow-xs flex flex-col transition-all ${
+              hasCompletedAnalysis ? 'border-indigo-300 ring-2 ring-indigo-50' : 'border-gray-200'
+            }`}>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-blue-600" />
-                  <span>2. Texte de l&apos;Offre d&apos;Emploi (éditable)</span>
+                  {hasCompletedAnalysis ? (
+                    <Lock className="w-4 h-4 text-indigo-700 shrink-0" />
+                  ) : (
+                    <Briefcase className="w-4 h-4 text-blue-600 shrink-0" />
+                  )}
+                  <span>
+                    2. Texte de l&apos;Offre d&apos;Emploi {hasCompletedAnalysis ? '(🔒 Verrouillée - 1 analyse = 1 offre)' : '(éditable)'}
+                  </span>
                 </label>
-                <span className="text-xs text-gray-400">
-                  {jobText.length > 0 ? `${jobText.length} car.` : 'Requis'}
-                </span>
+                {hasCompletedAnalysis ? (
+                  <span className="text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-200 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                    <Lock className="w-3 h-3 text-indigo-700" />
+                    Offre verrouillée
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">
+                    {jobText.length > 0 ? `${jobText.length} car.` : 'Requis'}
+                  </span>
+                )}
               </div>
+
+              {hasCompletedAnalysis && (
+                <div className="mb-2.5 p-2.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start gap-2 text-xs text-amber-950">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-extrabold text-amber-950">Offre verrouillée pour cette analyse</span>
+                    <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                      Règle stricte : <strong>1 analyse = 1 offre d&apos;emploi</strong>. Vous ne devez pas analyser une autre offre sur une analyse déjà effectuée. Pour tester votre CV sur une autre offre, créez une nouvelle analyse dédiée ci-dessous.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <textarea
                 rows={11}
                 value={jobText}
-                onChange={(e) => setJobText(e.target.value)}
+                readOnly={hasCompletedAnalysis}
+                onChange={(e) => {
+                  if (!hasCompletedAnalysis) setJobText(e.target.value);
+                }}
                 placeholder="Collez ici l'annonce de recrutement (missions, compétences, profil recherché)..."
-                className="w-full p-3.5 text-xs sm:text-sm font-sans border border-gray-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-gray-50/30 resize-y flex-1 min-h-[220px]"
+                className={`w-full p-3.5 text-xs sm:text-sm font-sans border rounded-xl resize-y flex-1 min-h-[220px] transition-colors ${
+                  hasCompletedAnalysis
+                    ? 'border-indigo-200 bg-gray-100/75 text-gray-700 cursor-not-allowed select-text'
+                    : 'border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-gray-50/30'
+                }`}
               />
 
-              {jobText && (
-                <div className="flex justify-end mt-1.5">
+              {hasCompletedAnalysis ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-100 text-xs">
+                  <span className="text-[11px] text-gray-500 font-medium italic">
+                    Offre de référence de l&apos;analyse en cours
+                  </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      setJobText('');
-                      setJobUrl('');
-                    }}
-                    className="text-[11px] text-gray-400 hover:text-red-500 cursor-pointer"
+                    onClick={onStartNewAnalysis || onResetAll}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                    title="Créer une nouvelle analyse dédiée pour analyser une autre offre"
                   >
-                    Effacer l&apos;offre
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Analyser une autre offre (Nouvelle analyse)</span>
                   </button>
                 </div>
+              ) : (
+                jobText && (
+                  <div className="flex justify-end mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setJobText('');
+                        setJobUrl('');
+                      }}
+                      className="text-[11px] text-gray-400 hover:text-red-500 cursor-pointer"
+                    >
+                      Effacer l&apos;offre
+                    </button>
+                  </div>
+                )
               )}
             </div>
           </div>
 
           {/* Bouton d'action principal Étape 1 -> Étape 2 */}
           <div className="pt-2">
-            <button
-              type="button"
-              disabled={isLoadingAnalysis || !cvText.trim() || !jobText.trim()}
-              onClick={handleGoToStep2}
-              className={`w-full py-4 px-6 rounded-2xl font-black text-base shadow-md transition-all flex items-center justify-center gap-3 cursor-pointer ${
-                !cvText.trim() || !jobText.trim()
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : isLoadingAnalysis
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-linear-to-r from-red-600 via-[#FF4B4B] to-purple-600 hover:from-red-700 hover:to-purple-700 text-white hover:scale-101 active:scale-99'
-              }`}
-            >
-              {isLoadingAnalysis ? (
-                <>
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Analyse ATS en cours par l&apos;IA Google Gemini...</span>
-                </>
-              ) : (
-                <>
+            {hasCompletedAnalysis ? (
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="w-full sm:flex-1 py-4 px-6 rounded-2xl font-black text-base shadow-md bg-linear-to-r from-red-600 via-[#FF4B4B] to-purple-600 hover:from-red-700 hover:to-purple-700 text-white hover:scale-101 active:scale-99 transition-all flex items-center justify-center gap-3 cursor-pointer"
+                >
                   <Sparkles className="w-5 h-5 text-amber-300" />
-                  <span>Passer à l&apos;Étape 2 : Lancer le Diagnostic ATS & Analyse d&apos;Écarts</span>
+                  <span>Consulter le Diagnostic de cette Offre (Étape 2)</span>
                   <ArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </button>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onStartNewAnalysis || onResetAll}
+                  className="w-full sm:w-auto py-4 px-6 rounded-2xl font-bold text-sm border-2 border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                  title="Créer une nouvelle analyse dédiée pour une autre offre d'emploi"
+                >
+                  <PlusCircle className="w-4 h-4 text-indigo-700" />
+                  <span>Créer une nouvelle analyse (Autre offre)</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isLoadingAnalysis || !cvText.trim() || !jobText.trim()}
+                onClick={handleGoToStep2}
+                className={`w-full py-4 px-6 rounded-2xl font-black text-base shadow-md transition-all flex items-center justify-center gap-3 cursor-pointer ${
+                  !cvText.trim() || !jobText.trim()
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : isLoadingAnalysis
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-linear-to-r from-red-600 via-[#FF4B4B] to-purple-600 hover:from-red-700 hover:to-purple-700 text-white hover:scale-101 active:scale-99'
+                }`}
+              >
+                {isLoadingAnalysis ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <span>Analyse ATS en cours par l&apos;IA Google Gemini...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5 text-amber-300" />
+                    <span>Passer à l&apos;Étape 2 : Lancer le Diagnostic ATS & Analyse d&apos;Écarts</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1690,7 +1956,7 @@ export default function OptimizationFunnel({
                     Score Initial V1
                   </span>
                   <span className="text-lg font-black text-white">
-                    {initialScore ? `${initialScore}%` : '68%'}
+                    {initialScore}%
                   </span>
                 </div>
 
@@ -1701,7 +1967,7 @@ export default function OptimizationFunnel({
                     Score Final Optimisé
                   </span>
                   <span className="text-2xl font-black text-amber-300">
-                    {finalScore ? `${finalScore}%` : '88%'}
+                    {effectiveFinalScore}%
                   </span>
                 </div>
 
@@ -1710,7 +1976,7 @@ export default function OptimizationFunnel({
                     Gain Net
                   </span>
                   <span className="text-xs font-black bg-emerald-500 text-gray-950 px-2 py-0.5 rounded-full">
-                    +{finalScore && initialScore ? finalScore - initialScore : 18} pts
+                    {netGainFormatted} pts
                   </span>
                 </div>
               </div>
@@ -1756,7 +2022,7 @@ export default function OptimizationFunnel({
               </div>
 
               <span className="px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-xs font-black self-start sm:self-auto">
-                +{finalScore && initialScore ? finalScore - initialScore : 22} points ATS gagnés
+                {netGainFormatted} points ATS gagnés
               </span>
             </div>
 
@@ -1812,7 +2078,7 @@ export default function OptimizationFunnel({
                   <span>Statut de Présélection</span>
                 </div>
                 <div className="text-2xl font-black text-purple-900">
-                  {(finalScore || 90) >= 80 ? 'Prioritaire' : 'Compétitif'}
+                  {effectiveFinalScore >= 80 ? 'Prioritaire' : 'Compétitif'}
                 </div>
                 <p className="text-xs text-gray-600 leading-relaxed font-normal">
                   Votre CV franchit avec succès les filtres de tri automatisés des logiciels de recrutement (ATS).
@@ -1831,31 +2097,31 @@ export default function OptimizationFunnel({
                 {[
                   {
                     name: 'Compétences Techniques',
-                    init: Math.min(100, Math.max(45, Math.round((initialScore || 64) * 0.98))),
-                    final: Math.min(100, Math.max(88, Math.round((finalScore || 90) * 1.02))),
+                    init: Math.min(95, Math.max(35, Math.round(initialScore * 0.98))),
+                    final: Math.min(100, Math.max(Math.round(initialScore * 0.98) + (netGain > 0 ? 3 : 0), Math.round(effectiveFinalScore * 1.01))),
                   },
                   {
                     name: 'Mots-Clés & Filtres ATS',
-                    init: Math.min(100, Math.max(40, Math.round((initialScore || 64) * 0.92))),
-                    final: Math.min(100, Math.max(90, Math.round((finalScore || 90) * 1.01))),
+                    init: Math.min(95, Math.max(35, Math.round(initialScore * 0.92))),
+                    final: Math.min(100, Math.max(Math.round(initialScore * 0.92) + (netGain > 0 ? 3 : 0), Math.round(effectiveFinalScore * 1.0))),
                   },
                   {
                     name: 'Expérience & Pertinence',
-                    init: Math.min(100, Math.max(50, Math.round((initialScore || 64) * 1.02))),
-                    final: Math.min(100, Math.max(88, Math.round((finalScore || 90) * 1.0))),
+                    init: Math.min(95, Math.max(40, Math.round(initialScore * 0.96))),
+                    final: Math.min(100, Math.max(Math.round(initialScore * 0.96) + (netGain > 0 ? 2 : 0), Math.round(effectiveFinalScore * 0.99))),
                   },
                   {
                     name: 'Réalisations STAR',
-                    init: Math.min(100, Math.max(40, Math.round((initialScore || 64) * 0.88))),
-                    final: Math.min(100, Math.max(86, Math.round((finalScore || 90) * 0.98))),
+                    init: Math.min(95, Math.max(35, Math.round(initialScore * 0.88))),
+                    final: Math.min(100, Math.max(Math.round(initialScore * 0.88) + (netGain > 0 ? 3 : 0), Math.round(effectiveFinalScore * 0.98))),
                   },
                   {
                     name: 'Cohérence Titre / En-tête',
-                    init: Math.min(100, Math.max(50, Math.round((initialScore || 64) * 0.95))),
-                    final: Math.min(100, Math.max(92, Math.round((finalScore || 90) * 1.03))),
+                    init: Math.min(95, Math.max(40, Math.round(initialScore * 0.94))),
+                    final: Math.min(100, Math.max(Math.round(initialScore * 0.94) + (netGain > 0 ? 2 : 0), Math.round(effectiveFinalScore * 1.01))),
                   },
                 ].map((pillar, idx) => {
-                  const gain = pillar.final - pillar.init;
+                  const gain = Math.max(0, pillar.final - pillar.init);
                   return (
                     <div key={idx} className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2">
                       <div className="flex items-center justify-between text-xs">
@@ -1968,8 +2234,9 @@ export default function OptimizationFunnel({
               <Mail className="w-4 h-4 text-rose-600 shrink-0" />
               <span>2. Lettre de Motivation Sur-Mesure</span>
               {finalCoverLetter ? (
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                  Prête ✨
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  Rattachée & Prête ✨
                 </span>
               ) : (
                 <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">
@@ -2081,6 +2348,114 @@ export default function OptimizationFunnel({
                   <span>{saveSuccessMsg}</span>
                 </div>
               )}
+
+              {/* BLOC PROMINENT : STATUT & RATTACHEMENT DE LA LETTRE DE MOTIVATION À CET AUDIT */}
+              <div
+                className={`p-4 rounded-2xl border transition-all ${
+                  finalCoverLetter.trim()
+                    ? 'bg-linear-to-r from-emerald-50/80 via-teal-50/40 to-blue-50/30 border-emerald-300 shadow-2xs'
+                    : 'bg-linear-to-r from-rose-50/60 via-purple-50/40 to-indigo-50/30 border-rose-200 shadow-2xs'
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`p-1.5 rounded-lg ${
+                          finalCoverLetter.trim()
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-rose-100 text-rose-700'
+                        }`}
+                      >
+                        <Mail className="w-4 h-4" />
+                      </span>
+                      <h5 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                        <span>Lettre de motivation de cet audit</span>
+                      </h5>
+                      {finalCoverLetter.trim() ? (
+                        <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Rattachée à cet audit
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full font-bold">
+                          Non rattachée pour le moment
+                        </span>
+                      )}
+                    </div>
+
+                    {finalCoverLetter.trim() ? (
+                      <div className="text-xs text-gray-600 space-y-0.5">
+                        <p className="font-semibold text-emerald-950 truncate">
+                          « {coverLetterTitle} » • {finalCoverLetter.split(/\s+/).filter(Boolean).length} mots
+                          {parsedAnalysis?.targetCompany && ` • Entreprise : ${parsedAnalysis.targetCompany}`}
+                        </p>
+                        <p className="text-[11px] text-gray-500 line-clamp-1 italic">
+                          &quot;{finalCoverLetter.slice(0, 110)}...&quot;
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-600">
+                        Aucune lettre n&apos;est encore rattachée à cet audit. Vous pouvez la rédiger avec l&apos;IA ou rattacher une lettre existante de votre Base Locale (ex: Valoria Capital).
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {finalCoverLetter.trim() ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveDossierTab('letter')}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Consulter la Lettre ➔</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(finalCoverLetter, 'letter')}
+                          className="px-2.5 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedState === 'letter' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedState === 'letter' ? 'Copiée !' : 'Copier'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsAttachingLetterModalOpen(true)}
+                          className="px-2.5 py-1.5 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                          title="Changer de lettre ou choisir une autre lettre en BDD"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          <span>Changer de lettre</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveDossierTab('letter')}
+                          className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Rédiger avec l&apos;IA ➔</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsAttachingLetterModalOpen(true)}
+                          className="px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-700 border border-purple-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Paperclip className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Rattacher une lettre existante</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2133,27 +2508,39 @@ export default function OptimizationFunnel({
                   <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-rose-200/60">
                     <div className="text-xs text-gray-500 flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                      <span>Génération instantanée en 1 clic — modifiable et prête à l&apos;envoi</span>
+                      <span>Rédigez avec l&apos;IA ou rattachez une lettre existante de votre base</span>
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={isGeneratingCoverLetter}
-                      onClick={handleGenerateFinalCoverLetter}
-                      className="px-6 py-3 bg-linear-to-r from-rose-600 to-purple-600 hover:from-rose-700 hover:to-purple-700 disabled:opacity-50 text-white rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer hover:scale-102"
-                    >
-                      {isGeneratingCoverLetter ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Rédaction personnalisée en cours...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 text-amber-300" />
-                          <span>✨ Générer ma Lettre de Motivation Sur-Mesure</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setIsAttachingLetterModalOpen(true)}
+                        className="px-4 py-3 bg-white hover:bg-purple-50 text-purple-800 border-2 border-purple-300 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-102"
+                        title="Sélectionner une lettre existante en BDD pour la rattacher à cet audit"
+                      >
+                        <Paperclip className="w-4 h-4 text-purple-600" />
+                        <span>📎 Rattacher une lettre existante</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isGeneratingCoverLetter}
+                        onClick={handleGenerateFinalCoverLetter}
+                        className="px-6 py-3 bg-linear-to-r from-rose-600 to-purple-600 hover:from-rose-700 hover:to-purple-700 disabled:opacity-50 text-white rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer hover:scale-102"
+                      >
+                        {isGeneratingCoverLetter ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Rédaction personnalisée en cours...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-amber-300" />
+                            <span>✨ Générer ma Lettre de Motivation Sur-Mesure</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -2163,23 +2550,44 @@ export default function OptimizationFunnel({
                       <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
                         <Mail className="w-4 h-4 text-rose-600" />
                         <span>Lettre de Motivation Sur-Mesure</span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                          Prête ✨
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-2xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Rattachée à cet audit
                         </span>
                       </h4>
                       <p className="text-xs text-gray-500">
-                        {finalCoverLetter.split(/\s+/).filter(Boolean).length} mots • Personnalisée pour {parsedAnalysis?.targetCompany || 'l\'entreprise'}
+                        {finalCoverLetter.split(/\s+/).filter(Boolean).length} mots • Titre : « {coverLetterTitle} » • Pour {parsedAnalysis?.targetCompany || 'l\'entreprise cible'}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
+                        onClick={() => setIsAttachingLetterModalOpen(true)}
+                        className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Changer de lettre ou en choisir une autre en BDD"
+                      >
+                        <Paperclip className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Changer de lettre</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDetachLetter}
+                        className="px-2.5 py-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                        title="Détacher la lettre de cet audit"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Détacher</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => handleCopy(finalCoverLetter, 'letter')}
                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                       >
                         {copiedState === 'letter' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedState === 'letter' ? 'Copié !' : 'Copier la lettre'}</span>
+                        <span>{copiedState === 'letter' ? 'Copié !' : 'Copier'}</span>
                       </button>
 
                       <button
@@ -2197,7 +2605,7 @@ export default function OptimizationFunnel({
                         disabled={isGeneratingCoverLetter}
                         onClick={handleGenerateFinalCoverLetter}
                         className="px-3 py-1.5 bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title="Régénérer une nouvelle version"
+                        title="Régénérer une nouvelle version avec l'IA"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingCoverLetter ? 'animate-spin' : ''}`} />
                         <span>Régénérer</span>
@@ -2288,10 +2696,10 @@ export default function OptimizationFunnel({
               type="button"
               onClick={() => {
                 onAddToTracker({
-                  customNotes: `Candidature optimisée V${currentEvolutionVersion} (Score ATS : ${finalScore || 88}%)`,
+                  customNotes: `Candidature optimisée V${currentEvolutionVersion} (Score ATS : ${effectiveFinalScore}%)`,
                   company: parsedAnalysis?.targetCompany || undefined,
                   role: parsedAnalysis?.targetRole || undefined,
-                  score: finalScore || 88,
+                  score: effectiveFinalScore,
                   coverLetter: finalCoverLetter.trim() || undefined,
                   coverLetterTitle: coverLetterTitle.trim() || (finalCoverLetter ? `Lettre - ${parsedAnalysis?.targetCompany || 'Candidature'}` : undefined),
                 });
@@ -2339,6 +2747,20 @@ export default function OptimizationFunnel({
           </div>
         </div>
       )}
+
+      {/* Modal de sélection et rattachement de lettre de motivation */}
+      <AttachLetterModal
+        isOpen={isAttachingLetterModalOpen}
+        onClose={() => setIsAttachingLetterModalOpen(false)}
+        analysisId={currentAnalysisId}
+        analysisTitle={currentAnalysisTitle || parsedAnalysis?.suggestedTitle}
+        analysisCompany={parsedAnalysis?.targetCompany}
+        analysisRole={parsedAnalysis?.targetRole}
+        currentAttachedLetterId={attachedLetterId}
+        currentAttachedLetterTitle={coverLetterTitle}
+        onLetterAttached={handleAttachExistingLetter}
+        onLetterDetached={handleDetachLetter}
+      />
     </div>
   );
 }

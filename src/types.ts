@@ -75,6 +75,9 @@ export interface AnalysisHistoryItem {
   sessionId?: string; // ID unique du fil d'évolution CV <-> Offre
   currentVersion?: number; // Version active (1, 2, 3...)
   evolutionSteps?: EvolutionStep[]; // Liste de toutes les étapes de traitement
+  coverLetterId?: string; // ID de la lettre de motivation rattachée
+  coverLetterTitle?: string; // Titre de la lettre de motivation
+  coverLetterContent?: string; // Contenu de la lettre de motivation
 }
 
 export interface ExtractedFileResult {
@@ -142,7 +145,8 @@ export interface SavedCoverLetter {
   company: string;
   role: string;
   content: string;
-  applicationId?: string; // ID de la candidature associée si liée
+  applicationId?: string; // ID de la candidature Kanban associée si liée
+  analysisId?: string; // ID de l'audit / analyse ATS associée si liée
   createdAt: string;
   updatedAt: string;
 }

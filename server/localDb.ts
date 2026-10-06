@@ -520,6 +520,16 @@ export async function saveCoverLetter(letter: SavedCoverLetter): Promise<SavedCo
     }
   }
 
+  // Si liée à un audit (analyse ATS), mettre également à jour l'audit
+  if (letterToSave.analysisId && db.analyses) {
+    const analysisIndex = db.analyses.findIndex((an) => an.id === letterToSave.analysisId);
+    if (analysisIndex >= 0) {
+      db.analyses[analysisIndex].coverLetterId = letterToSave.id;
+      db.analyses[analysisIndex].coverLetterTitle = letterToSave.title;
+      db.analyses[analysisIndex].coverLetterContent = letterToSave.content;
+    }
+  }
+
   await saveDatabase(db);
   return letterToSave;
 }

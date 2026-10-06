@@ -13,12 +13,6 @@ import type {
 const IDB_NAME = 'cv_move_personnel_local_db';
 const IDB_VERSION = 1;
 const IDB_STORE = 'app_state';
-const API_BASE_URL =
-  typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
-
-function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${API_BASE_URL}${path}`, init);
-}
 
 // Helper pour ouvrir IndexedDB côté navigateur
 function openIndexedDb(): Promise<IDBDatabase> {
@@ -122,10 +116,6 @@ function filterOutDemoCv(cv: SavedCv): boolean {
 function filterOutDemoApp(app: ApplicationItem): boolean {
   if (!app || !app.id) return false;
   if (app.id.startsWith('app-sample-') || app.id === 'app-1' || app.id === 'app-2' || app.id === 'app-3') {
-    return false;
-  }
-  const company = (app.company || '').toLowerCase();
-  if (company.includes('technova') || company.includes('retailgroup') || company.includes('finmetrics') || company.includes('valoria capital')) {
     return false;
   }
   return true;
@@ -268,7 +258,7 @@ export const localDbClient = {
     }
 
     try {
-      const res = await apiFetch('/api/db/profile');
+      const res = await fetch('/api/db/profile');
       if (res.ok) {
         const serverProfile = (await res.json()) as UserProfile;
         if (serverProfile && (serverProfile.firstName || serverProfile.lastName) && serverProfile.firstName !== 'Alex') {
@@ -288,7 +278,7 @@ export const localDbClient = {
     const localList = this.getLocalProfiles();
 
     try {
-      const res = await apiFetch('/api/db/profiles');
+      const res = await fetch('/api/db/profiles');
       if (res.ok) {
         const serverProfiles = (await res.json()) as UserProfile[];
         const cleanServer = serverProfiles.filter((p) => !(p.firstName === 'Alex' && p.lastName === 'Martin'));
@@ -300,7 +290,7 @@ export const localDbClient = {
         for (const p of localList) {
           if (!map.has(p.id)) {
             map.set(p.id, p);
-            apiFetch('/api/db/profiles', {
+            fetch('/api/db/profiles', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(p),
@@ -334,21 +324,38 @@ export const localDbClient = {
   },
 
   async saveProfile(profile: Partial<UserProfile>): Promise<UserProfile> {
-    const current = this.getLocalProfile() || ({ id: `profile-${Date.now()}` } as UserProfile);
+    const allProfiles = this.getLocalProfiles();
+    const existing = profile.id ? allProfiles.find((p) => p.id === profile.id) : null;
+
+    const base: UserProfile = existing || {
+      id: profile.id || `profile-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: profile.name || profile.currentTitle || 'Nouveau Profil',
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      location: '',
+      currentTitle: '',
+      bio: '',
+      linkedinUrl: '',
+      githubUrl: '',
+      portfolioUrl: '',
+      targetRoles: [],
+      skills: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDefault: false,
+    };
+
     const updated: UserProfile = {
-      ...current,
+      ...base,
       ...profile,
-      id: profile.id || current.id || `profile-${Date.now()}`,
-      name: profile.name || profile.currentTitle || `${profile.firstName || current.firstName || ''} ${profile.lastName || current.lastName || ''}`.trim() || 'Mon Profil',
+      id: profile.id || base.id || `profile-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: profile.name || base.name || profile.currentTitle || 'Mon Profil',
       updatedAt: new Date().toISOString(),
     };
 
-    // 1. Sauvegarde locale synchrone immédiate (profil actif)
-    setStorage('cv_move_user_profile', updated);
-    await setIdbCache('user_profile', updated);
-
-    // 2. Mise à jour de la liste multi-profils
-    const allProfiles = this.getLocalProfiles();
+    // Mise à jour de la liste multi-profils
     const existingIdx = allProfiles.findIndex((p) => p.id === updated.id);
 
     let updatedList: UserProfile[];
@@ -358,19 +365,28 @@ export const localDbClient = {
       updatedList = [updated, ...allProfiles];
     }
 
-    if (updated.isDefault) {
+    if (updated.isDefault || updatedList.length === 1) {
+      updated.isDefault = true;
       updatedList = updatedList.map((p) => ({
         ...p,
         isDefault: p.id === updated.id,
       }));
     }
 
+    // 1. Sauvegarde locale synchrone immédiate (profil actif si par défaut ou s'il correspond au profil actif actuel)
+    const currentActive = this.getLocalProfile();
+    if (updated.isDefault || !currentActive || currentActive.id === updated.id) {
+      setStorage('cv_move_user_profile', updated);
+      await setIdbCache('user_profile', updated);
+    }
+
+    // 2. Mise à jour de la liste
     setStorage('cv_move_user_profiles', updatedList);
     await setIdbCache('user_profiles', updatedList);
 
     // 3. Synchronisation serveur
     try {
-      await apiFetch('/api/db/profiles', {
+      await fetch('/api/db/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -399,7 +415,7 @@ export const localDbClient = {
       await setIdbCache('user_profiles', updatedList);
 
       try {
-        await apiFetch(`/api/db/profiles/${id}/set-default`, { method: 'POST' });
+        await fetch(`/api/db/profiles/${id}/set-default`, { method: 'POST' });
       } catch (err) {
         console.warn('Erreur setDefaultProfile serveur :', err);
       }
@@ -409,6 +425,14 @@ export const localDbClient = {
   },
 
   async deleteProfile(id: string): Promise<boolean> {
+    // 1. Suppression serveur en premier pour éviter que getProfiles() ne le ressuscite
+    try {
+      await fetch(`/api/db/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Erreur deleteProfile serveur :', err);
+    }
+
+    // 2. Filtrage local
     const allProfiles = this.getLocalProfiles();
     const filtered = allProfiles.filter((p) => p.id !== id);
 
@@ -416,10 +440,18 @@ export const localDbClient = {
     if (filtered.length > 0) {
       newDefault = filtered.find((p) => p.isDefault) || filtered[0];
       newDefault = { ...newDefault, isDefault: true };
+      const finalizedList = filtered.map((p) => ({
+        ...p,
+        isDefault: p.id === newDefault.id,
+      }));
+      setStorage('cv_move_user_profile', newDefault);
+      setStorage('cv_move_user_profiles', finalizedList);
+      await setIdbCache('user_profile', newDefault);
+      await setIdbCache('user_profiles', finalizedList);
     } else {
       newDefault = {
-        id: `profile-${Date.now()}`,
-        name: 'Nouveau Profil',
+        id: `profile-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: 'Profil Personnel',
         firstName: '',
         lastName: '',
         email: '',
@@ -432,21 +464,14 @@ export const localDbClient = {
         portfolioUrl: '',
         targetRoles: [],
         skills: [],
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         isDefault: true,
       };
-      filtered.push(newDefault);
-    }
-
-    setStorage('cv_move_user_profile', newDefault);
-    setStorage('cv_move_user_profiles', filtered);
-    await setIdbCache('user_profile', newDefault);
-    await setIdbCache('user_profiles', filtered);
-
-    try {
-      await apiFetch(`/api/db/profiles/${id}`, { method: 'DELETE' });
-    } catch (err) {
-      console.warn('Erreur deleteProfile serveur :', err);
+      setStorage('cv_move_user_profile', newDefault);
+      setStorage('cv_move_user_profiles', [newDefault]);
+      await setIdbCache('user_profile', newDefault);
+      await setIdbCache('user_profiles', [newDefault]);
     }
 
     return true;
@@ -464,7 +489,7 @@ export const localDbClient = {
     const localCvs = this.getLocalCvs();
 
     try {
-      const res = await apiFetch('/api/db/cvs');
+      const res = await fetch('/api/db/cvs');
       if (res.ok) {
         const serverCvs = (await res.json()) as SavedCv[];
         const cleanServer = serverCvs.filter(filterOutDemoCv);
@@ -476,7 +501,7 @@ export const localDbClient = {
         for (const cv of localCvs) {
           if (!map.has(cv.id)) {
             map.set(cv.id, cv);
-            apiFetch('/api/db/cvs', {
+            fetch('/api/db/cvs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(cv),
@@ -510,7 +535,7 @@ export const localDbClient = {
     await setIdbCache('saved_cvs', updated);
 
     try {
-      await apiFetch('/api/db/cvs', {
+      await fetch('/api/db/cvs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cv),
@@ -531,7 +556,7 @@ export const localDbClient = {
     await setIdbCache('saved_cvs', updated);
 
     try {
-      await apiFetch(`/api/db/cvs/${id}`, { method: 'DELETE' });
+      await fetch(`/api/db/cvs/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteCv serveur :', err);
     }
@@ -552,7 +577,7 @@ export const localDbClient = {
     await setIdbCache('saved_cvs', updated);
 
     try {
-      await apiFetch(`/api/db/cvs/${id}/set-default`, { method: 'POST' });
+      await fetch(`/api/db/cvs/${id}/set-default`, { method: 'POST' });
     } catch (err) {
       console.warn('Erreur setDefaultCv serveur :', err);
     }
@@ -572,7 +597,7 @@ export const localDbClient = {
     const localApps = this.getLocalApplications();
 
     try {
-      const res = await apiFetch('/api/db/applications');
+      const res = await fetch('/api/db/applications');
       if (res.ok) {
         const serverApps = (await res.json()) as ApplicationItem[];
         const cleanServer = serverApps.filter(filterOutDemoApp);
@@ -586,7 +611,7 @@ export const localDbClient = {
           if (!map.has(app.id)) {
             map.set(app.id, app);
             // Sauvegarder sur le serveur les candidatures locales manquantes
-            apiFetch('/api/db/applications', {
+            fetch('/api/db/applications', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(app),
@@ -623,7 +648,7 @@ export const localDbClient = {
     await setIdbCache('applications', updated);
 
     try {
-      await apiFetch('/api/db/applications', {
+      await fetch('/api/db/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(app),
@@ -644,7 +669,7 @@ export const localDbClient = {
     await setIdbCache('applications', updated);
 
     try {
-      await apiFetch(`/api/db/applications/${id}`, { method: 'DELETE' });
+      await fetch(`/api/db/applications/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteApplication serveur :', err);
     }
@@ -664,7 +689,7 @@ export const localDbClient = {
     const local = this.getLocalAnalyses();
 
     try {
-      const res = await apiFetch('/api/db/analyses');
+      const res = await fetch('/api/db/analyses');
       if (res.ok) {
         const serverList = (await res.json()) as AnalysisHistoryItem[];
         const cleanServer = serverList.filter(filterOutDemoAnalysis);
@@ -676,7 +701,7 @@ export const localDbClient = {
         for (const item of local) {
           if (!map.has(item.id)) {
             map.set(item.id, item);
-            apiFetch('/api/db/analyses', {
+            fetch('/api/db/analyses', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(item),
@@ -707,7 +732,7 @@ export const localDbClient = {
     localStorage.setItem('cv_move_history_initialized', 'true');
 
     try {
-      await apiFetch('/api/db/analyses', {
+      await fetch('/api/db/analyses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item),
@@ -742,7 +767,7 @@ export const localDbClient = {
     localStorage.setItem('cv_move_history_initialized', 'true');
 
     try {
-      await apiFetch(`/api/db/analyses/${id}`, { method: 'DELETE' });
+      await fetch(`/api/db/analyses/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur deleteAnalysis serveur :', err);
     }
@@ -755,7 +780,7 @@ export const localDbClient = {
     localStorage.setItem('cv_move_history_initialized', 'true');
 
     try {
-      await apiFetch('/api/db/analyses', { method: 'DELETE' });
+      await fetch('/api/db/analyses', { method: 'DELETE' });
     } catch (err) {
       console.warn('Erreur clearAnalyses serveur :', err);
     }
@@ -769,7 +794,7 @@ export const localDbClient = {
   async getSuggestions(): Promise<SavedSuggestion[]> {
     const local = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
     try {
-      const res = await apiFetch('/api/db/suggestions');
+      const res = await fetch('/api/db/suggestions');
       if (res.ok) {
         const serverList = (await res.json()) as SavedSuggestion[];
         if (serverList.length > 0 && local.length === 0) {
@@ -791,7 +816,7 @@ export const localDbClient = {
     setStorage('cv_move_suggestions', updated);
 
     try {
-      await apiFetch('/api/db/suggestions', {
+      await fetch('/api/db/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sugg),
@@ -809,7 +834,7 @@ export const localDbClient = {
     setStorage('cv_move_suggestions', updated);
 
     try {
-      await apiFetch(`/api/db/suggestions/${id}`, { method: 'DELETE' });
+      await fetch(`/api/db/suggestions/${id}`, { method: 'DELETE' });
     } catch {
       // Ignorer
     }
@@ -862,6 +887,61 @@ export const localDbClient = {
     setStorage('cv_move_cover_letters', updated);
     await setIdbCache('cover_letters', updated);
 
+    // Si rattachée à un audit, synchroniser l'analyse correspondante
+    if (letter.analysisId) {
+      const analyses = this.getLocalAnalyses();
+      let targetAnalysis: AnalysisHistoryItem | null = null;
+      const updatedAnalyses = analyses.map((a) => {
+        if (a.id === letter.analysisId) {
+          const synced: AnalysisHistoryItem = {
+            ...a,
+            coverLetterId: letter.id,
+            coverLetterTitle: letter.title,
+            coverLetterContent: letter.content,
+          };
+          targetAnalysis = synced;
+          return synced;
+        }
+        return a;
+      });
+      setStorage('cv_move_history', updatedAnalyses);
+      await setIdbCache('analyses', updatedAnalyses);
+
+      if (targetAnalysis) {
+        fetch('/api/db/analyses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(targetAnalysis),
+        }).catch((e) => console.warn('Erreur synchro analyse serveur :', e));
+      }
+
+      try {
+        window.dispatchEvent(
+          new CustomEvent('cv_move_analysis_updated', {
+            detail: { analysisId: letter.analysisId, letter },
+          })
+        );
+      } catch {}
+    }
+
+    // Si rattachée à une candidature, synchroniser la candidature Kanban correspondante
+    if (letter.applicationId) {
+      const apps = this.getLocalApplications();
+      const updatedApps = apps.map((app) => {
+        if (app.id === letter.applicationId) {
+          return {
+            ...app,
+            coverLetter: letter.content,
+            coverLetterTitle: letter.title,
+            checklist: { ...app.checklist, coverLetterSent: true },
+          };
+        }
+        return app;
+      });
+      setStorage('cv_move_applications', updatedApps);
+      await setIdbCache('applications', updatedApps);
+    }
+
     try {
       await fetch('/api/db/cover-letters', {
         method: 'POST',
@@ -875,11 +955,241 @@ export const localDbClient = {
     return letter;
   },
 
+  // Trouver la lettre rattachée à un audit (par son ID d'audit ou par correspondance d'entreprise)
+  getCoverLetterForAnalysis(analysisId?: string | null, companyName?: string | null): SavedCoverLetter | null {
+    // 1. Recherche directe dans l'analyse elle-même si elle stocke déjà la lettre
+    if (analysisId) {
+      const analyses = this.getLocalAnalyses();
+      const matchedAnalysis = analyses.find((a) => a.id === analysisId);
+      if (matchedAnalysis && matchedAnalysis.coverLetterContent) {
+        return {
+          id: matchedAnalysis.coverLetterId || `letter-${matchedAnalysis.id}`,
+          title: matchedAnalysis.coverLetterTitle || `Lettre - ${matchedAnalysis.company || matchedAnalysis.title}`,
+          company: matchedAnalysis.company || companyName || 'Entreprise Cible',
+          role: matchedAnalysis.role || 'Poste Cible',
+          content: matchedAnalysis.coverLetterContent,
+          analysisId: matchedAnalysis.id,
+          createdAt: matchedAnalysis.timestamp,
+          updatedAt: matchedAnalysis.timestamp,
+        };
+      }
+    }
+
+    const list = this.getLocalCoverLetters();
+
+    // 2. Recherche par ID direct de l'audit dans les lettres
+    if (analysisId && list && list.length > 0) {
+      const directMatch = list.find((l) => l.analysisId === analysisId);
+      if (directMatch) return directMatch;
+    }
+
+    // 3. Recherche par correspondance d'entreprise / intitulé si pas de lien direct explicite
+    if (companyName && companyName.trim() && list && list.length > 0) {
+      const normalizedTarget = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normalizedTarget.length > 2) {
+        const companyMatch = list.find((l) => {
+          const lCompany = (l.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const lTitle = (l.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return (
+            (lCompany.length > 2 && (lCompany.includes(normalizedTarget) || normalizedTarget.includes(lCompany))) ||
+            (lTitle.length > 2 && lTitle.includes(normalizedTarget))
+          );
+        });
+        if (companyMatch) return companyMatch;
+      }
+    }
+
+    // 4. Recherche dans les candidatures Kanban si une lettre existe pour cette entreprise
+    if (companyName && companyName.trim()) {
+      const apps = this.getLocalApplications();
+      const normalizedTarget = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchedApp = apps.find((app) => {
+        if (!app.coverLetter || !app.coverLetter.trim()) return false;
+        const appCompany = (app.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return appCompany.length > 2 && (appCompany.includes(normalizedTarget) || normalizedTarget.includes(appCompany));
+      });
+      if (matchedApp && matchedApp.coverLetter) {
+        return {
+          id: `letter-app-${matchedApp.id}`,
+          title: matchedApp.coverLetterTitle || `Lettre - ${matchedApp.company}`,
+          company: matchedApp.company,
+          role: matchedApp.role,
+          content: matchedApp.coverLetter,
+          applicationId: matchedApp.id,
+          analysisId: analysisId || undefined,
+          createdAt: matchedApp.appliedDate || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    return null;
+  },
+
+  // Récupérer l'ensemble exhaustif des lettres disponibles (BDD locale + Candidatures Kanban + Analyses + Modèles)
+  getAllAvailableCoverLetters(): SavedCoverLetter[] {
+    const list = this.getLocalCoverLetters();
+    const map = new Map<string, SavedCoverLetter>();
+
+    // 1. Lettres de la table coverLetters
+    for (const l of list) {
+      if (l.content && l.content.trim()) {
+        map.set(l.id, l);
+      }
+    }
+
+    // 2. Lettres associées aux candidatures Kanban
+    const apps = this.getLocalApplications();
+    for (const app of apps) {
+      if (app.coverLetter && app.coverLetter.trim()) {
+        const id = `letter-app-${app.id}`;
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            title: app.coverLetterTitle || `Lettre - ${app.company} (${app.role})`,
+            company: app.company,
+            role: app.role,
+            content: app.coverLetter.trim(),
+            applicationId: app.id,
+            createdAt: app.appliedDate || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    // 3. Lettres associées aux analyses passées
+    const analyses = this.getLocalAnalyses();
+    for (const an of analyses) {
+      if (an.coverLetterContent && an.coverLetterContent.trim()) {
+        const id = an.coverLetterId || `letter-an-${an.id}`;
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            title: an.coverLetterTitle || `Lettre - ${an.company || an.title}`,
+            company: an.company || 'Entreprise Cible',
+            role: an.role || 'Poste Cible',
+            content: an.coverLetterContent.trim(),
+            analysisId: an.id,
+            createdAt: an.timestamp || new Date().toISOString(),
+            updatedAt: an.timestamp || new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    // 4. Modèle dédié pour Valoria Capital (si aucune lettre n'existe pour Valoria)
+    const hasValoria = Array.from(map.values()).some(
+      (l) => l.company && l.company.toLowerCase().includes('valoria')
+    );
+    if (!hasValoria) {
+      const valoriaTemplate: SavedCoverLetter = {
+        id: 'letter-template-valoria',
+        title: 'Lettre de Motivation - Valoria Capital (Responsable Financier / Trésorier)',
+        company: 'Valoria Capital',
+        role: 'Responsable Financier / Trésorier Opérationnel',
+        content: `Madame, Monsieur,\n\nC’est avec un vif intérêt que je vous adresse ma candidature pour le poste de Responsable Financier / Trésorier au sein de Valoria Capital.\n\nFort de plus de 14 années d'expérience en gestion de trésorerie opérationnelle, cash pooling et déploiement de solutions TMS (Agicap, Pennylane), j'ai développé une expertise solide pour structurer les prévisions de cash, fiabiliser les arrêtés périodiques et sécuriser l'ensemble des flux bancaires (EBICS, SEPA).\n\nRejoindre Valoria Capital représente pour moi l'opportunité de mettre mon sens de l'analyse, ma rigueur technique et ma posture « business partner » au service de votre croissance et de vos participations.\n\nJe reste à votre entière disposition pour échanger lors d'un entretien.\n\nJe vous prie d'agréer, Madame, Monsieur, l'expression de mes salutations distinguées.`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      map.set(valoriaTemplate.id, valoriaTemplate);
+    }
+
+    return Array.from(map.values());
+  },
+
+  // Rattacher formellement une lettre existante à un audit
+  async linkCoverLetterToAnalysis(
+    letterOrId: string | SavedCoverLetter,
+    analysisId: string
+  ): Promise<SavedCoverLetter | null> {
+    let letterToLink: SavedCoverLetter | null = null;
+
+    if (typeof letterOrId === 'string') {
+      const allLetters = this.getAllAvailableCoverLetters();
+      letterToLink = allLetters.find((l) => l.id === letterOrId) || null;
+      if (!letterToLink) return null;
+    } else {
+      letterToLink = letterOrId;
+    }
+
+    const updatedLetter: SavedCoverLetter = {
+      ...letterToLink,
+      id: letterToLink.id.startsWith('letter-template-') ? `letter-${Date.now()}` : letterToLink.id,
+      analysisId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return await this.saveCoverLetter(updatedLetter);
+  },
+
+  // Détacher une lettre d'un audit
+  async unlinkCoverLetterFromAnalysis(analysisId: string): Promise<boolean> {
+    // 1. Mettre à jour l'analyse
+    const analyses = this.getLocalAnalyses();
+    let updatedAnalysis: AnalysisHistoryItem | null = null;
+    const cleanAnalyses = analyses.map((a) => {
+      if (a.id === analysisId) {
+        const cleaned: AnalysisHistoryItem = {
+          ...a,
+          coverLetterId: undefined,
+          coverLetterTitle: undefined,
+          coverLetterContent: undefined,
+        };
+        updatedAnalysis = cleaned;
+        return cleaned;
+      }
+      return a;
+    });
+
+    setStorage('cv_move_history', cleanAnalyses);
+    await setIdbCache('analyses', cleanAnalyses);
+
+    if (updatedAnalysis) {
+      fetch('/api/db/analyses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedAnalysis),
+      }).catch((e) => console.warn('Erreur unlink analyse serveur :', e));
+    }
+
+    // 2. Mettre à jour la lettre de motivation correspondante si présente
+    const letters = this.getLocalCoverLetters();
+    const updatedLetters = letters.map((l) => {
+      if (l.analysisId === analysisId) {
+        return {
+          ...l,
+          analysisId: undefined,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return l;
+    });
+    setStorage('cv_move_cover_letters', updatedLetters);
+    await setIdbCache('cover_letters', updatedLetters);
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent('cv_move_analysis_updated', {
+          detail: { analysisId, letter: null },
+        })
+      );
+    } catch {}
+
+    return true;
+  },
+
   async deleteCoverLetter(id: string): Promise<boolean> {
     const current = this.getLocalCoverLetters();
+    const target = current.find((l) => l.id === id);
     const updated = current.filter((l) => l.id !== id);
     setStorage('cv_move_cover_letters', updated);
     await setIdbCache('cover_letters', updated);
+
+    // Si cette lettre était rattachée à un audit, nettoyer l'analyse
+    if (target && target.analysisId) {
+      await this.unlinkCoverLetterFromAnalysis(target.analysisId);
+    }
 
     try {
       await fetch(`/api/db/cover-letters/${id}`, { method: 'DELETE' });
@@ -898,7 +1208,7 @@ export const localDbClient = {
     if (local) return local;
 
     try {
-      const res = await apiFetch('/api/db/settings');
+      const res = await fetch('/api/db/settings');
       if (res.ok) {
         const s = (await res.json()) as UserSettings;
         setStorage('cv_move_user_settings', s);
@@ -921,7 +1231,7 @@ export const localDbClient = {
     setStorage('cv_move_user_settings', updated);
 
     try {
-      await apiFetch('/api/db/settings', {
+      await fetch('/api/db/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -942,7 +1252,7 @@ export const localDbClient = {
     if (data.suggestions) setStorage('cv_move_suggestions', data.suggestions);
     if (data.coverLetters) setStorage('cv_move_cover_letters', data.coverLetters);
 
-    const res = await apiFetch('/api/db/import', {
+    const res = await fetch('/api/db/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -989,7 +1299,7 @@ export const localDbClient = {
     setStorage('cv_move_user_profile', null);
 
     // 4. Appel serveur pour réinitialiser la BDD persistée
-    const res = await apiFetch('/api/db/reset', { method: 'POST' });
+    const res = await fetch('/api/db/reset', { method: 'POST' });
     if (!res.ok) {
       throw new Error('Échec de la réinitialisation');
     }

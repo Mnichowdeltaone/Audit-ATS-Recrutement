@@ -1,4 +1,4 @@
-// Code source Python Streamlit autonome et dépendances pour CV Move Personnel
+// Code source Python Streamlit autonome et dépendances pour CV Improvement
 
 export const PYTHON_APP_CODE = `import io
 import re
@@ -29,7 +29,7 @@ except ImportError:
 # Configuration de la page Streamlit
 # ==============================================================================
 st.set_page_config(
-    page_title="CV Move Personnel",
+    page_title="CV Improvement",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -169,7 +169,7 @@ with st.sidebar:
 # ==============================================================================
 # Zone Principale
 # ==============================================================================
-st.title("📄 CV Move Personnel - Analyseur ATS & Offre")
+st.title("📄 CV Improvement - Analyseur ATS & Offre")
 col_cv_in, col_job_in = st.columns(2)
 
 with col_cv_in:

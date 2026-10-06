@@ -117,23 +117,39 @@ app.post('/api/analyze', async (req: Request, res: Response) => {
       ? `\nCONTEXTE DE RÉ-ANALYSE : Il s'agit d'une NOUVELLE VERSION optimisée du CV modifiée spécifiquement pour cette offre (la version initiale avait un score de départ estimé à ${previousScore || 65}/100). Évalue objectivement la note d'analyse finale en tenant compte des améliorations apportées, des mots-clés ajoutés et de l'adéquation renforcée avec les exigences du poste.`
       : '';
 
-    const prompt = `Tu es un expert en recrutement et en systèmes de suivi des candidatures (ATS). Voici le CV du candidat :
+    const prompt = `Tu es un auditeur expert en recrutement et en algorithmes ATS (Applicant Tracking Systems). Analyse avec rigueur, lucidité et une totale impartialité l'adéquation entre le CV et l'offre d'emploi ci-dessous.
+
+Voici le CV du candidat :
 ${cvText.trim()}
 
 Et voici l'offre d'emploi visée :
 ${jobText.trim()}
 ${reAnalysisContext}
 
-Fais une analyse détaillée et renvoie la réponse au format Markdown structuré avec les éléments suivants :
+Consignes strictes pour le calcul de la note ATS :
+- Évalue l'adéquation réelle selon les 4 piliers d'un ATS :
+  1. Mots-clés techniques, outils & compétences requises (40%)
+  2. Expérience professionnelle et niveau de séniorité requis (25%)
+  3. Formation, diplômes et certifications exigés (15%)
+  4. Compétences transversales et pertinence sectorielle (20%)
+- BARÈME OBJECTIF (sans complaisance ni surévaluation artificielle) :
+  * Moins de 35 / 100 : Profil hors-sujet ou métier totalement différent.
+  * 35 à 54 / 100 : Adéquation faible à partielle (de nombreuses compétences indispensables manquent).
+  * 55 à 69 / 100 : Adéquation modérée (le profil a les bases mais de sérieux écarts subsistent).
+  * 70 à 82 / 100 : Bonne adéquation (la majorité des critères obligatoires sont respectés).
+  * 83 à 95 / 100 : Excellente adéquation (correspondance très poussée sur les compétences et l'expérience).
+  * > 95 / 100 : Réservé aux cas exceptionnels de parfaite adéquation intégrale.
+
+Renvoie ton analyse au format Markdown structuré avec les rubriques suivantes :
 - Société / Entreprise : [Nom exact de l'entreprise émettrice identifiée dans l'offre, ou "Non mentionnée" si absente]
 - Cabinet de recrutement : [Nom du cabinet de recrutement ou chasseur de têtes identifié dans l'offre, ou "Aucun" si direct]
 - Intitulé du poste : [Intitulé exact du poste visé]
-- Score de compatibilité : Une note sur 100 globale (ex: **88 / 100** ou **92 / 100**).
-- Points forts : 3 éléments du CV qui correspondent parfaitement à l'offre.
-- Points faibles / Manques : Ce qui reste perfectible par rapport à l'offre.
-- Stratégie de CV : 2 conseils pratiques sur les mots-clés ou l'impact opérationnel.
-- Lettre de motivation : Une ébauche de paragraphe d'accroche ultra-personnalisé pour l'entreprise.
-- Préparation entretien : 3 questions qu'un recruteur pourrait poser, avec des pistes de réponse selon la méthode STAR.`;
+- Score de compatibilité : **[Note objective]/100** (avec une brève appréciation entre parenthèses)
+- Points forts : 3 éléments tangibles du CV qui correspondent précisément aux exigences de l'offre.
+- Points faibles / Manques : Ce qui manque réellement dans le CV par rapport aux exigences explicites de l'offre.
+- Stratégie de CV : 2 recommandations concrètes et immédiatement applicables (mots-clés ATS à intégrer, valorisation des réalisations).
+- Lettre de motivation : Une ébauche de paragraphe d'accroche percutant et personnalisé pour cette entreprise.
+- Préparation entretien : 3 questions ciblées qu'un recruteur poserait face aux éventuels écarts de ce profil, avec pistes STAR.`;
 
     const ai = new GoogleGenAI({
       apiKey: keyToUse.trim(),

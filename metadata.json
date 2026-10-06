@@ -1,6 +1,6 @@
 {
-  "name": "CV Move Personnel",
-  "description": "Analyseur intelligent d'adéquation entre CV et offre d'emploi avec Streamlit et l'API Google Gemini.",
+  "name": "CV Improvement",
+  "description": "CV Improvement : Votre potentiel mérite un meilleur CV. Analyseur intelligent d'adéquation CV & Offre d'emploi avec scoring ATS et optimisation personnalisée.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

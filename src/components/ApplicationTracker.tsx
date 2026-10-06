@@ -28,6 +28,10 @@ import {
   Copy,
   Check,
   TrendingUp,
+  Lock,
+  Unlock,
+  GripVertical,
+  MoveRight,
 } from 'lucide-react';
 import { ApplicationItem, ApplicationStatus, AnalysisHistoryItem } from '../types';
 import { localDbClient } from '../services/localDbClient';
@@ -109,6 +113,76 @@ export default function ApplicationTracker({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<ApplicationItem | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // États pour le déplacement à la souris et le verrouillage du Kanban
+  const [isDragLocked, setIsDragLocked] = useState<boolean>(() => {
+    return localStorage.getItem('cv_tracker_kanban_locked') === 'true';
+  });
+  const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<ApplicationStatus | null>(null);
+  const [moveToast, setMoveToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [kanbanLayout, setKanbanLayout] = useState<'spacious' | 'grid'>('spacious');
+
+  const toggleNoteExpanded = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleDragLock = () => {
+    setIsDragLocked((prev) => {
+      const next = !prev;
+      localStorage.setItem('cv_tracker_kanban_locked', String(next));
+      setMoveToast({
+        message: next
+          ? '🔒 Déplacement des cartes verrouillé. Vos cartes sont fixées et protégées.'
+          : '🔓 Déplacement activé ! Vous pouvez maintenant glisser-déposer les cartes avec la souris.',
+        type: next ? 'info' : 'success',
+      });
+      setTimeout(() => setMoveToast(null), 3500);
+      return next;
+    });
+  };
+
+  const handleDropOnColumn = async (appId: string, targetStatus: ApplicationStatus) => {
+    if (isDragLocked) return;
+    const target = applications.find((a) => a.id === appId);
+    if (!target) return;
+    if (target.status === targetStatus) return;
+
+    const sourceStatusLabel = STATUS_CONFIG[target.status]?.label || target.status;
+    const destStatusLabel = STATUS_CONFIG[targetStatus]?.label || targetStatus;
+
+    const updatedApp: ApplicationItem = {
+      ...target,
+      status: targetStatus,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setApplications((prev) => prev.map((a) => (a.id === appId ? updatedApp : a)));
+
+    try {
+      await localDbClient.saveApplication(updatedApp);
+      setMoveToast({
+        message: `✅ « ${target.role} » chez ${target.company} déplacé de "${sourceStatusLabel}" vers "${destStatusLabel}" !`,
+        type: 'success',
+      });
+      setTimeout(() => setMoveToast(null), 3500);
+    } catch (err) {
+      console.error('Erreur sauvegarde déplacement :', err);
+      setApplications((prev) => prev.map((a) => (a.id === appId ? target : a)));
+      setMoveToast({
+        message: '❌ Échec de la mise à jour en base locale.',
+        type: 'info',
+      });
+      setTimeout(() => setMoveToast(null), 3500);
+    }
+  };
 
   // Form State
   const [formCompany, setFormCompany] = useState('');
@@ -680,261 +754,473 @@ export default function ApplicationTracker({
         </div>
       </div>
 
-      {/* VUE KANBAN */}
+      {/* VUE KANBAN REFORMATÉE */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start">
-          {(
-            [
-              'to_apply',
-              'applied',
-              'waiting',
-              'interview',
-              'offer',
-              'rejected',
-            ] as ApplicationStatus[]
-          ).map((statusKey) => {
-            const config = STATUS_CONFIG[statusKey];
-            const columnApps = filteredApps.filter((a) => a.status === statusKey);
-
-            return (
-              <div
-                key={statusKey}
-                className="bg-gray-50/70 border border-gray-200 rounded-2xl p-3 flex flex-col gap-3 min-h-[420px]"
+        <div className="space-y-3.5">
+          {/* Barre d'outils dédiée au Kanban : Verrouillage du déplacement & Largeur des colonnes */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200 shadow-2xs">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Bouton pour verrouiller / déverrouiller le déplacement des cartes à la souris */}
+              <button
+                type="button"
+                onClick={toggleDragLock}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer border shadow-2xs ${
+                  isDragLocked
+                    ? 'bg-amber-50 text-amber-950 border-amber-300 hover:bg-amber-100 ring-2 ring-amber-200/70'
+                    : 'bg-emerald-50 text-emerald-950 border-emerald-300 hover:bg-emerald-100 ring-2 ring-emerald-200/70'
+                }`}
+                title={
+                  isDragLocked
+                    ? 'Déplacement verrouillé : cliquez pour déverrouiller et déplacer les cartes avec la souris'
+                    : 'Déplacement actif : cliquez pour verrouiller et protéger le tableau contre tout glissement accidentel'
+                }
               >
-                {/* En-tête de la colonne */}
-                <div className="flex items-center justify-between px-1 pb-1 border-b border-gray-200/80">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{config.icon}</span>
-                    <span className="text-xs font-bold text-gray-800">
-                      {config.label}
-                    </span>
-                  </div>
-                  <span
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${config.bg} ${config.text} ${config.border}`}
+                {isDragLocked ? (
+                  <>
+                    <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>🔒 Déplacement verrouillé (Cartes fixes)</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span>🔓 Déplacement actif (Glisser-déposer souris)</span>
+                  </>
+                )}
+              </button>
+
+              <span className="text-[11px] text-gray-500 hidden md:inline">
+                {isDragLocked
+                  ? 'Vos cartes sont protégées contre tout déplacement involontaire.'
+                  : 'Saisissez une carte avec la souris et relâchez-la dans la colonne cible.'}
+              </span>
+            </div>
+
+            {/* Sélecteur de mise en page des colonnes */}
+            <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setKanbanLayout('spacious')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  kanbanLayout === 'spacious'
+                    ? 'bg-white text-gray-900 shadow-2xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="Colonnes spacieuses (310px) : toutes les informations, notes et lettres sont 100% lisibles sans coupure"
+              >
+                Colonnes larges (Lisibilité max)
+              </button>
+              <button
+                type="button"
+                onClick={() => setKanbanLayout('grid')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  kanbanLayout === 'grid'
+                    ? 'bg-white text-gray-900 shadow-2xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="Grille compacte (Colonnes ajustées)"
+              >
+                Grille ajustée
+              </button>
+            </div>
+          </div>
+
+          {/* Toast de confirmation de déplacement */}
+          {moveToast && (
+            <div
+              className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between shadow-xs animate-fade-in ${
+                moveToast.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                  : 'bg-amber-50 border-amber-300 text-amber-950'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{moveToast.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoveToast(null)}
+                className="text-gray-500 hover:text-gray-900 font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Conteneur des colonnes Kanban */}
+          <div
+            className={`w-full ${
+              kanbanLayout === 'spacious'
+                ? 'overflow-x-auto pb-4 pt-1 -mx-2 px-2 scrollbar-thin'
+                : ''
+            }`}
+          >
+            <div
+              className={
+                kanbanLayout === 'spacious'
+                  ? 'flex gap-4 items-start min-w-[1440px] w-full'
+                  : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start'
+              }
+            >
+              {(
+                [
+                  'to_apply',
+                  'applied',
+                  'waiting',
+                  'interview',
+                  'offer',
+                  'rejected',
+                ] as ApplicationStatus[]
+              ).map((statusKey) => {
+                const config = STATUS_CONFIG[statusKey];
+                const columnApps = filteredApps.filter((a) => a.status === statusKey);
+                const isCurrentDragTarget = dragOverColumn === statusKey && !isDragLocked;
+
+                return (
+                  <div
+                    key={statusKey}
+                    onDragOver={(e) => {
+                      if (!isDragLocked) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverColumn !== statusKey) {
+                          setDragOverColumn(statusKey);
+                        }
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                      if (dragOverColumn === statusKey) {
+                        setDragOverColumn(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (isDragLocked) return;
+                      const appId = e.dataTransfer.getData('text/plain') || draggedAppId;
+                      if (appId) {
+                        handleDropOnColumn(appId, statusKey);
+                      }
+                      setDraggedAppId(null);
+                      setDragOverColumn(null);
+                    }}
+                    className={`border rounded-2xl p-3.5 flex flex-col gap-3 min-h-[460px] transition-all ${
+                      kanbanLayout === 'spacious' ? 'flex-1 min-w-[290px] sm:min-w-[310px] max-w-[350px]' : ''
+                    } ${
+                      isCurrentDragTarget
+                        ? 'border-blue-500 bg-blue-50/80 ring-4 ring-blue-200/80 shadow-md'
+                        : 'bg-gray-50/80 border-gray-200/90 shadow-2xs'
+                    }`}
                   >
-                    {columnApps.length}
-                  </span>
-                </div>
-
-                {/* Liste des cartes dans la colonne */}
-                <div className="space-y-3 flex-1 overflow-y-auto">
-                  {columnApps.length === 0 ? (
-                    <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
-                      <p className="text-[11px] text-gray-400">Aucun dossier</p>
+                    {/* En-tête de la colonne */}
+                    <div className="flex items-center justify-between px-1 pb-2 border-b border-gray-200">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-base shrink-0">{config.icon}</span>
+                        <span className="text-xs font-extrabold text-gray-900 truncate">
+                          {config.label}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs font-black px-2.5 py-0.5 rounded-full border shadow-2xs ${config.bg} ${config.text} ${config.border}`}
+                      >
+                        {columnApps.length}
+                      </span>
                     </div>
-                  ) : (
-                    columnApps.map((app) => {
-                      const isFollowUpDue =
-                        app.followUpDate &&
-                        app.followUpDate <= new Date().toISOString().split('T')[0] &&
-                        ['applied', 'waiting'].includes(app.status);
 
-                      return (
-                        <div
-                          key={app.id}
-                          className="bg-white rounded-xl border border-gray-200 p-3.5 shadow-2xs hover:shadow-sm transition-all space-y-2.5 group relative"
-                        >
-                          {/* En-tête de la carte */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 truncate">
-                                <Building2 className="w-3 h-3 text-gray-400" />
-                                {app.company}
-                              </span>
-                              <h4 className="text-xs font-bold text-gray-900 leading-snug line-clamp-2 mt-0.5">
-                                {app.role}
-                              </h4>
-                            </div>
+                    {/* Indicateur de dépôt lors du glisser-déposer */}
+                    {isCurrentDragTarget && (
+                      <div className="p-2 bg-blue-100 text-blue-900 border border-blue-300 rounded-xl text-xs font-bold text-center animate-pulse">
+                        📥 Relâcher pour déposer dans « {config.label} »
+                      </div>
+                    )}
 
-                            {app.score !== null && app.score !== undefined && (
-                              <div
-                                title={`Score de compatibilité ATS : ${app.score}%`}
-                                className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 ${
-                                  app.score >= 75
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : app.score >= 50
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-rose-100 text-rose-800'
-                                }`}
-                              >
-                                {app.score}%
-                              </div>
-                            )}
-                          </div>
+                    {/* Liste des cartes dans la colonne */}
+                    <div className="space-y-3 flex-1 overflow-y-auto">
+                      {columnApps.length === 0 ? (
+                        <div className={`py-12 text-center border-2 border-dashed rounded-xl transition-colors ${
+                          isCurrentDragTarget ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200'
+                        }`}>
+                          <p className="text-xs text-gray-400 font-medium">
+                            {isCurrentDragTarget ? 'Déposer la carte ici' : 'Aucun dossier'}
+                          </p>
+                        </div>
+                      ) : (
+                        columnApps.map((app) => {
+                          const isFollowUpDue =
+                            app.followUpDate &&
+                            app.followUpDate <= new Date().toISOString().split('T')[0] &&
+                            ['applied', 'waiting'].includes(app.status);
+                          const isNoteExpanded = expandedNotes.has(app.id);
+                          const isBeingDragged = draggedAppId === app.id;
 
-                          {/* Détails Contrat & Lieu */}
-                          <div className="flex items-center gap-2 text-[10px] text-gray-500 flex-wrap">
-                            {app.contractType && (
-                              <span className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
-                                {app.contractType}
-                              </span>
-                            )}
-                            {app.location && (
-                              <span className="flex items-center gap-0.5 truncate max-w-[130px]">
-                                <MapPin className="w-2.5 h-2.5 text-gray-400" />
-                                {app.location}
-                              </span>
-                            )}
-                            {app.salary && (
-                              <span className="text-emerald-700 font-medium">
-                                {app.salary}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Date de relance avec alerte */}
-                          {app.followUpDate && (
+                          return (
                             <div
-                              className={`flex items-center justify-between text-[10px] px-2 py-1 rounded-md ${
-                                isFollowUpDue
-                                  ? 'bg-amber-100 text-amber-900 font-bold border border-amber-300'
-                                  : 'bg-gray-50 text-gray-600'
-                              }`}
-                            >
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                Relance : {app.followUpDate}
-                              </span>
-                              {isFollowUpDue && (
-                                <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.2 rounded font-black">
-                                  DUE
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Note rapide */}
-                          {app.notes && (
-                            <p className="text-[11px] text-gray-600 line-clamp-2 bg-gray-50 p-1.5 rounded italic">
-                              « {app.notes} »
-                            </p>
-                          )}
-
-                          {/* Lettre de motivation rattachée */}
-                          {app.coverLetter ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedAppForLetter(app);
-                                setIsLetterModalOpen(true);
+                              key={app.id}
+                              draggable={!isDragLocked}
+                              onDragStart={(e) => {
+                                if (isDragLocked) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                e.dataTransfer.setData('text/plain', app.id);
+                                e.dataTransfer.effectAllowed = 'move';
+                                setDraggedAppId(app.id);
                               }}
-                              className="w-full flex items-center justify-between px-2 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
-                              title="Lire ou copier la lettre de motivation"
-                            >
-                              <span className="flex items-center gap-1.5 truncate">
-                                <FileText className="w-3 h-3 text-purple-600 shrink-0" />
-                                <span className="truncate">Lettre ({app.coverLetter.split(/\s+/).filter(Boolean).length} mots)</span>
-                              </span>
-                              <span className="text-[9px] text-purple-600 font-semibold shrink-0">Voir ↗</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenEditModal(app);
+                              onDragEnd={() => {
+                                setDraggedAppId(null);
+                                setDragOverColumn(null);
                               }}
-                              className="w-full flex items-center justify-center gap-1 py-1 border border-dashed border-gray-200 text-gray-400 hover:text-purple-600 hover:border-purple-200 rounded-lg text-[10px] transition-colors cursor-pointer"
-                              title="Rédiger ou coller une lettre de motivation pour cette candidature"
+                              className={`bg-white rounded-xl border p-4 shadow-2xs hover:shadow-md transition-all space-y-3 relative group ${
+                                isBeingDragged
+                                  ? 'opacity-40 scale-95 border-blue-400 ring-2 ring-blue-300 shadow-lg'
+                                  : 'border-gray-200 hover:border-blue-200'
+                              } ${!isDragLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
                             >
-                              <Plus className="w-2.5 h-2.5" />
-                              <span>+ Ajouter lettre</span>
-                            </button>
-                          )}
+                              {/* En-tête de la carte */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    {!isDragLocked ? (
+                                      <span
+                                        className="text-gray-400 hover:text-blue-600 cursor-grab p-0.5"
+                                        title="Glisser-déposer cette carte avec la souris"
+                                      >
+                                        <GripVertical className="w-3.5 h-3.5" />
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="text-amber-600/80 p-0.5"
+                                        title="Déplacement verrouillé (cliquez sur le bouton en haut pour déverrouiller)"
+                                      >
+                                        <Lock className="w-3 h-3" />
+                                      </span>
+                                    )}
+                                    <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1 truncate">
+                                      <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                      <span className="truncate">{app.company}</span>
+                                    </span>
+                                  </div>
 
-                          {/* Pied de carte avec actions */}
-                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
-                            <div className="flex items-center gap-1">
-                              {app.jobUrl && (
-                                <a
-                                  href={app.jobUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
-                                  title="Ouvrir le lien de l'offre"
+                                  <h4 className="text-sm font-extrabold text-gray-900 leading-snug mt-1 break-words">
+                                    {app.role}
+                                  </h4>
+                                </div>
+
+                                {app.score !== null && app.score !== undefined && (
+                                  <div
+                                    title={`Score de compatibilité ATS : ${app.score}%`}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 shadow-2xs ${
+                                      app.score >= 75
+                                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                                        : app.score >= 50
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                        : 'bg-rose-100 text-rose-900 border border-rose-200'
+                                    }`}
+                                  >
+                                    {app.score}% ATS
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Détails Contrat & Lieu & Salaire */}
+                              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 flex-wrap">
+                                {app.contractType && (
+                                  <span className="bg-gray-100 text-gray-800 font-bold px-2 py-0.5 rounded-md border border-gray-200">
+                                    {app.contractType}
+                                  </span>
+                                )}
+                                {app.location && (
+                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-200 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
+                                    <span>{app.location}</span>
+                                  </span>
+                                )}
+                                {app.salary && (
+                                  <span className="bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-md border border-emerald-200">
+                                    💰 {app.salary}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Date de relance avec alerte */}
+                              {app.followUpDate && (
+                                <div
+                                  className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border ${
+                                    isFollowUpDue
+                                      ? 'bg-amber-50 text-amber-950 font-bold border-amber-300 ring-1 ring-amber-200'
+                                      : 'bg-gray-50 text-gray-700 border-gray-200'
+                                  }`}
                                 >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
+                                  <span className="flex items-center gap-1.5">
+                                    <Clock className={`w-3.5 h-3.5 ${isFollowUpDue ? 'text-amber-700' : 'text-gray-500'}`} />
+                                    <span>Relance : <strong>{app.followUpDate}</strong></span>
+                                  </span>
+                                  {isFollowUpDue && (
+                                    <span className="bg-amber-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">
+                                      À FAIRE !
+                                    </span>
+                                  )}
+                                </div>
                               )}
-                              {app.analysisId && onOpenAnalysis && (
+
+                              {/* Note rapide sans coupure tronquée */}
+                              {app.notes && (
+                                <div className="bg-amber-50/60 border border-amber-200/90 rounded-lg p-2.5 text-xs text-gray-800">
+                                  <div className="flex items-start justify-between gap-1">
+                                    <p className={`text-xs text-gray-800 italic leading-relaxed ${
+                                      isNoteExpanded ? 'whitespace-pre-wrap' : 'line-clamp-3'
+                                    }`}>
+                                      « {app.notes} »
+                                    </p>
+                                  </div>
+                                  {app.notes.length > 80 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => toggleNoteExpanded(app.id, e)}
+                                      className="text-[10px] text-blue-700 hover:text-blue-900 font-bold mt-1.5 underline cursor-pointer"
+                                    >
+                                      {isNoteExpanded ? '▲ Réduire la note' : '▼ Lire toute la note'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Lettre de motivation rattachée sans coupure */}
+                              {app.coverLetter ? (
                                 <button
                                   type="button"
-                                  onClick={() => onOpenAnalysis(app.analysisId!)}
-                                  className="p-1 text-purple-600 hover:text-purple-800 rounded transition-colors"
-                                  title="Consulter l'analyse ATS liée"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAppForLetter(app);
+                                    setIsLetterModalOpen(true);
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                                  title="Consulter et copier la lettre de motivation"
                                 >
-                                  <Eye className="w-3.5 h-3.5" />
+                                  <span className="flex items-center gap-2 min-w-0">
+                                    <FileText className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                                    <span className="truncate">
+                                      Lettre de motivation ({app.coverLetter.split(/\s+/).filter(Boolean).length} mots)
+                                    </span>
+                                  </span>
+                                  <span className="text-[11px] text-purple-700 font-extrabold bg-purple-200/80 px-2 py-0.5 rounded shrink-0 ml-1">
+                                    Consulter ↗
+                                  </span>
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditModal(app)}
-                                className="p-1 text-gray-400 hover:text-gray-700 rounded transition-colors"
-                                title="Modifier cette candidature"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              {confirmDeleteId === app.id ? (
-                                <div
-                                  className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded shadow-xs"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <span className="text-[10px] text-rose-700 font-bold">Supprimer ?</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => executeDeleteApplication(app.id, e)}
-                                    className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold cursor-pointer"
-                                  >
-                                    Oui
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setConfirmDeleteId(null);
-                                    }}
-                                    className="px-1.5 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-[10px] font-bold cursor-pointer"
-                                  >
-                                    Non
-                                  </button>
-                                </div>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setConfirmDeleteId(app.id);
+                                    handleOpenEditModal(app);
                                   }}
-                                  className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
-                                  title="Supprimer cette candidature"
+                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-dashed border-gray-300 text-gray-500 hover:text-purple-700 hover:border-purple-300 hover:bg-purple-50/40 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                                  title="Ajouter une lettre de motivation"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Plus className="w-3 h-3" />
+                                  <span>+ Ajouter une lettre de motivation</span>
                                 </button>
                               )}
-                            </div>
 
-                            {/* Bouton rapide pour avancer d'étape */}
-                            {config.next && (
-                              <button
-                                type="button"
-                                onClick={() => handleQuickStatusChange(app.id, config.next!)}
-                                className="flex items-center gap-0.5 text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors"
-                                title={`Passer au statut : ${STATUS_CONFIG[config.next].label}`}
+                              {/* Pied de carte avec actions */}
+                              <div
+                                className="pt-2.5 border-t border-gray-100 flex items-center justify-between gap-1 text-xs"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <span>{STATUS_CONFIG[config.next].label}</span>
-                                <ChevronRight className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                                <div className="flex items-center gap-1">
+                                  {app.jobUrl && (
+                                    <a
+                                      href={app.jobUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 text-gray-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                      title="Ouvrir l'offre d'emploi"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  )}
+                                  {app.analysisId && onOpenAnalysis && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenAnalysis(app.analysisId!)}
+                                      className="p-1.5 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded-md transition-colors cursor-pointer"
+                                      title="Consulter l'analyse ATS liée"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditModal(app)}
+                                    className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
+                                    title="Modifier cette candidature"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  {confirmDeleteId === app.id ? (
+                                    <div
+                                      className="flex items-center gap-1 bg-rose-50 border border-rose-300 px-1.5 py-0.5 rounded shadow-xs"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <span className="text-[10px] text-rose-700 font-bold">Supprimer ?</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => executeDeleteApplication(app.id, e)}
+                                        className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                                      >
+                                        Oui
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setConfirmDeleteId(null);
+                                        }}
+                                        className="px-1.5 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-[10px] font-bold cursor-pointer"
+                                      >
+                                        Non
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setConfirmDeleteId(app.id);
+                                      }}
+                                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                                      title="Supprimer cette candidature"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Sélecteur de statut rapide ou bouton d'avancement */}
+                                <div className="flex items-center gap-1">
+                                  {config.next && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickStatusChange(app.id, config.next!)}
+                                      className="flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                                      title={`Avancer directement vers : ${STATUS_CONFIG[config.next].label}`}
+                                    >
+                                      <span>{STATUS_CONFIG[config.next].label}</span>
+                                      <ChevronRight className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 

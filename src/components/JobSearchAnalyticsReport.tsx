@@ -1373,6 +1373,14 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
                         {audit.jobSnippet || audit.jobText?.slice(0, 100) || 'Détails de l’offre analysée'}
                       </p>
 
+                      {/* Statut explicite de la lettre de motivation */}
+                      {audit.coverLetterTitle || audit.coverLetterContent || audit.coverLetterId ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>✉️ Lettre rattachée : « {audit.coverLetterTitle || 'Lettre sur-mesure'} »</span>
+                        </div>
+                      ) : null}
+
                       {/* Évolution des scores si multi-versions */}
                       {hasMultipleVersions && pointsGain !== null && (
                         <div className="inline-flex items-center gap-2 text-xs bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-xl">

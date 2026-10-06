@@ -65,9 +65,16 @@ export interface ParsedAnalysis {
 
 export function extractScore(text: string | null | undefined): number | null {
   if (!text) return null;
+  // Format 1 : XX / 100 ou XX/100 ou XX sur 100
   const scoreMatch = text.match(/(\d{1,3})\s*(?:\/|\s*sur\s*)\s*100/i);
   if (scoreMatch && scoreMatch[1]) {
     const parsed = parseInt(scoreMatch[1], 10);
+    return parsed >= 0 && parsed <= 100 ? parsed : null;
+  }
+  // Format 2 : score de XX % ou **XX%**
+  const pctMatch = text.match(/(?:score|note|compatibilité|adéquation)[^0-9\n]{0,25}(\d{1,3})\s*%/i);
+  if (pctMatch && pctMatch[1]) {
+    const parsed = parseInt(pctMatch[1], 10);
     return parsed >= 0 && parsed <= 100 ? parsed : null;
   }
   return null;
@@ -78,8 +85,22 @@ export function parseAnalysisResult(
   cvText: string = '',
   jobText: string = ''
 ): ParsedAnalysis {
-  // 1. Extraire le score global
-  let globalScore = extractScore(rawText) ?? 80;
+  // 1. Extraire le score global réaliste
+  let extracted = extractScore(rawText);
+  let globalScore: number;
+  if (extracted !== null) {
+    globalScore = extracted;
+  } else {
+    // Calcul heuristique objectif si aucun score explicite trouvé
+    const cvWords = new Set((cvText || '').toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) || []);
+    const jobWords = new Set((jobText || '').toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) || []);
+    let matchCount = 0;
+    jobWords.forEach((w) => {
+      if (cvWords.has(w)) matchCount++;
+    });
+    const ratio = jobWords.size > 0 ? (matchCount / jobWords.size) : 0.5;
+    globalScore = Math.max(30, Math.min(88, Math.round(ratio * 100)));
+  }
 
   // Label selon le score
   let scoreLabel = 'Excellente adéquation (Fortes chances de présélection ATS)';

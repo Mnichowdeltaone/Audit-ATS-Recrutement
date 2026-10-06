@@ -57,6 +57,7 @@ import {
   Zap,
   Plus,
   Edit3,
+  Paperclip,
 } from 'lucide-react';
 import { marked } from 'marked';
 import confetti from 'canvas-confetti';
@@ -74,6 +75,8 @@ import InteractiveGuide from './components/InteractiveGuide';
 import InteractiveTourModal from './components/InteractiveTourModal';
 import VisualAnalysisModal from './components/VisualAnalysisModal';
 import OptimizationFunnel from './components/OptimizationFunnel';
+import AttachLetterModal from './components/AttachLetterModal';
+import CvImprovementLogo from './components/CvImprovementLogo';
 import { parseAnalysisResult } from './utils/analysisParser';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from './utils/sampleData';
 import { localDbClient } from './services/localDbClient';
@@ -117,7 +120,7 @@ except ImportError:
 # Configuration de la page Streamlit
 # ==============================================================================
 st.set_page_config(
-    page_title="CV Move Personnel",
+    page_title="CV Improvement",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -238,7 +241,7 @@ with st.sidebar:
 # ==============================================================================
 # Zone Principale
 # ==============================================================================
-st.title("📄 CV Move Personnel")
+st.title("📄 CV Improvement")
 col_cv_in, col_job_in = st.columns(2)
 
 with col_cv_in:
@@ -738,6 +741,47 @@ export default function App() {
   const [cvSaveSuccess, setCvSaveSuccess] = useState<string | null>(null);
   const [isCvOptimizationModalOpen, setIsCvOptimizationModalOpen] = useState(false);
 
+  // Modals pour la gestion et lecture des lettres de motivation rattachées aux audits
+  const [isAttachLetterModalOpen, setIsAttachLetterModalOpen] = useState(false);
+  const [attachingAnalysis, setAttachingAnalysis] = useState<AnalysisHistoryItem | null>(null);
+  const [previewLetter, setPreviewLetter] = useState<{ title: string; company: string; content: string } | null>(null);
+  const [previewLetterCopied, setPreviewLetterCopied] = useState(false);
+
+  // Synchronisation temps réel lors du rattachement/détachement d'une lettre à un audit
+  useEffect(() => {
+    const onAnalysisUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ analysisId: string; letter: any }>;
+      const { analysisId, letter } = customEvent.detail || {};
+      if (analysisId) {
+        setHistory((prev) =>
+          prev.map((item) => {
+            if (item.id === analysisId) {
+              return {
+                ...item,
+                coverLetterId: letter?.id,
+                coverLetterTitle: letter?.title,
+                coverLetterContent: letter?.content,
+              };
+            }
+            return item;
+          })
+        );
+      }
+    };
+    window.addEventListener('cv_move_analysis_updated', onAnalysisUpdated);
+    return () => window.removeEventListener('cv_move_analysis_updated', onAnalysisUpdated);
+  }, []);
+
+  const handleOpenAttachLetterModal = (item: AnalysisHistoryItem) => {
+    setAttachingAnalysis(item);
+    setIsAttachLetterModalOpen(true);
+  };
+
+  const handleOpenLetterPreview = (letter: { title: string; company: string; content: string }) => {
+    setPreviewLetter(letter);
+    setPreviewLetterCopied(false);
+  };
+
   // Sauvegarder l'historique dans le localStorage
   useEffect(() => {
     try {
@@ -955,6 +999,25 @@ export default function App() {
     setCurrentEvolutionVersion(1);
   };
 
+  // Démarrer une nouvelle analyse pour une autre offre (1 analyse = 1 offre d'emploi)
+  const handleStartNewAnalysis = (keepCv: boolean = true) => {
+    setJobText('');
+    setJobUrl('');
+    setAnalysisResult(null);
+    setSelectedHistoryId(null);
+    setEvolutionSteps([]);
+    setCurrentEvolutionVersion(1);
+    setErrorMessage(null);
+    setUrlFetchErrorInfo(null);
+    setUrlFetchSuccess(null);
+    if (!keepCv) {
+      setCvText('');
+      setUploadedFileInfo(null);
+    }
+    setActiveTab('app');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Charger un élément d'historique dans l'éditeur
   const handleLoadHistoryItem = (item: AnalysisHistoryItem) => {
     setCvText(item.cvText);
@@ -1079,17 +1142,45 @@ export default function App() {
       if (useDemoFallback) {
         await new Promise((resolve) => setTimeout(resolve, 1400));
         
-        if (isReAnalysisCall) {
-          // Score dynamique pour la ré-analyse
-          const initScore = evolutionSteps[0]?.score || 64;
-          const diffCheck = detectCvChanges(evolutionSteps[0]?.cvText || '', activeCvText);
-          const pointsGain = Math.min(28, Math.max(18, 20 + diffCheck.addedKeywords.length * 2));
-          const calculatedScore = Math.min(95, Math.max(88, initScore + pointsGain));
+        // Calcul d'un score réaliste et objectif basé sur l'alignement réel CV / Offre
+        const stopWords = new Set([
+          'les', 'des', 'une', 'pour', 'dans', 'avec', 'vous', 'nous', 'votre', 'notre',
+          'plus', 'tout', 'faire', 'sont', 'cette', 'avoir', 'être', 'leur', 'leurs', 'par',
+          'sur', 'dans', 'aux', 'qui', 'que', 'quoi', 'dont', 'ces', 'cet', 'très', 'aussi',
+          'bien', 'comme', 'mais', 'donc', 'ainsi', 'chez', 'postuler', 'poste', 'emploi'
+        ]);
+        const cvTokens = new Set((activeCvText || '').toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) || []);
+        const jobRawTokens = (jobText || '').toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) || [];
+        const jobSignificantTokens = Array.from(new Set(jobRawTokens)).filter(
+          (t) => !stopWords.has(t) && t.length >= 3
+        );
+        const matchedSignificant = jobSignificantTokens.filter((t) => cvTokens.has(t));
+        const matchRatio = jobSignificantTokens.length > 0
+          ? matchedSignificant.length / jobSignificantTokens.length
+          : 0.35;
 
-          const firstLine = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 45) || 'Poste Cible';
+        // Note de base calculée de façon rigoureuse :
+        // matchRatio faible (<0.15) => 25-38/100 (inadéquat)
+        // matchRatio moyen (0.35) => 55-62/100 (partiel)
+        // matchRatio bon (0.60) => 72-78/100 (solide)
+        // matchRatio excellent (>0.80) => 84-91/100 (très aligné)
+        let baseCalculatedScore = Math.round(22 + matchRatio * 72);
+        baseCalculatedScore = Math.max(20, Math.min(92, baseCalculatedScore));
+
+        const firstLine = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 45) || 'Poste Cible';
+
+        if (isReAnalysisCall) {
+          // Score dynamique pour la ré-analyse basé sur les ajouts réels
+          const initScore = evolutionSteps[0]?.score ?? baseCalculatedScore;
+          const diffCheck = detectCvChanges(evolutionSteps[0]?.cvText || '', activeCvText);
+          const pointsGain = Math.min(
+            22,
+            Math.max(6, diffCheck.addedKeywords.length * 3 + Math.min(8, diffCheck.linesAddedCount * 2))
+          );
+          const calculatedScore = Math.min(95, Math.max(initScore + 4, initScore + pointsGain));
 
           finalResult = `### Score de compatibilité
-**${calculatedScore} / 100** (Excellente adéquation - Version optimisée V${(currentEvolutionVersion || 1) + 1})
+**${calculatedScore} / 100** (Adéquation renforcée - Version optimisée V${(currentEvolutionVersion || 1) + 1})
 
 ---
 
@@ -1125,34 +1216,47 @@ export default function App() {
 3. **Question :** *"Qu'est-ce qui vous motive le plus dans notre offre d'emploi ?"*  
    *Piste de réponse :* Valorisez votre compréhension des enjeux stratégiques et opérationnels du rôle.`;
         } else {
-          // Audit initial (Score de départ réaliste avec marge d'optimisation)
+          // Audit initial (Score réaliste selon l'adéquation effective)
+          let appreciation = 'Adéquation modérée - Optimisation ciblée recommandée';
+          if (baseCalculatedScore < 40) {
+            appreciation = 'Adéquation insuffisante - Écarts majeurs avec les exigences du poste';
+          } else if (baseCalculatedScore < 60) {
+            appreciation = 'Adéquation partielle - Plusieurs compétences et mots-clés essentiels font défaut';
+          } else if (baseCalculatedScore < 75) {
+            appreciation = 'Adéquation modérée - Bonnes bases mais perfectionnement requis';
+          } else if (baseCalculatedScore < 85) {
+            appreciation = 'Bonne adéquation - Profil pertinent pour la présélection ATS';
+          } else {
+            appreciation = 'Excellente adéquation - Forte conformité avec le profil recherché';
+          }
+
           finalResult = `### Score de compatibilité
-**64 / 100** (Adéquation modérée - Optimisation ciblée recommandée)
+**${baseCalculatedScore} / 100** (${appreciation})
 
 ---
 
 ### Points forts
-1. **Base de compétences solide** : Le parcours présente les fondamentaux requis pour le poste ciblé.
-2. **Expérience métier pertinente** : Les fonctions occupées s'inscrivent dans la trajectoire recherchée par l'entreprise.
-3. **Polyvalence professionnelle** : Profil adaptable avec des bases techniques exploitables.
+1. **Base de compétences décelée** : Le parcours présente des points d'accroche transposables vers « ${firstLine} ».
+2. **Expérience métier** : Les responsabilités passées fournissent des repères exploitables pour ce poste.
+3. **Potentiel d'alignement** : Structure générale du document claire et prête à être ajustée pour les filtres ATS.
 
 ---
 
 ### Points faibles / Manques
-1. **Mots-clés et compétences spécifiques absents** : Plusieurs outils, logiciels et termes techniques essentiels de l'annonce ne figurent pas explicitement dans votre CV.
-2. **Réalisations peu quantifiées** : Les descriptions de postes manquent de métriques d'impact chiffrées (pourcentages de gain, volumes gérés, livrables concrets).
-3. **Alignement du titre de CV** : L'en-tête ne reprend pas exactement l'intitulé du poste recherché par l'ATS.
+1. **Mots-clés techniques et outils manquants** : Plusieurs exigences explicites de l'offre ne figurent pas textuellement dans votre CV.
+2. **Réalisations insuffisamment quantifiées** : Les missions manquent d'indicateurs de performance chiffrés (méthode STAR).
+3. **Adéquation de l'intitulé** : L'en-tête du CV ne cible pas avec assez de précision les termes exacts de l'offre.
 
 ---
 
 ### Stratégie de CV
-1. **Harmonisation lexicale ATS** : Intégrez les mots-clés exacts de l'offre dans votre section compétences et au sein des puces d'expériences.
-2. **Adopter la méthode STAR** : Reformulez au moins 3 réalisations clés en précisant la situation, vos actions et les résultats obtenus.
+1. **Harmonisation lexicale ATS** : Intégrez les compétences clés et outils mentionnés dans l'annonce dans votre section compétences et vos expériences.
+2. **Adopter la méthode STAR** : Reformulez au moins 3 réalisations clés en précisant la situation, vos actions concrètes et les résultats obtenus.
 
 ---
 
 ### Lettre de motivation
-> "Passionné par les défis de votre secteur et fort de plusieurs années d'expérience, je souhaite mettre mon expertise au service de vos objectifs de développement."
+> "Passionné par les défis de votre secteur et fort de mon parcours, je souhaite mettre mon expertise et ma motivation au service de vos objectifs de développement."
 
 ---
 
@@ -1460,7 +1564,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Barre d'En-tête Supérieure */}
         <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs sticky top-0 z-20">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
             {/* Bouton Hamburger Mobile pour le Menu Latéral */}
             <button
               type="button"
@@ -1470,6 +1574,20 @@ export default function App() {
             >
               <Layers className="w-5 h-5 text-[#FF4B4B]" />
             </button>
+
+            {/* Logo CV Improvement officiel en tête */}
+            <div
+              onClick={() => setActiveTab('app')}
+              className="flex items-center shrink-0 pr-1.5 sm:pr-3 sm:border-r sm:border-gray-200 cursor-pointer"
+              title="CV Improvement - Accueil"
+            >
+              <div className="hidden sm:block">
+                <CvImprovementLogo variant="full" size="xs" showTagline={false} />
+              </div>
+              <div className="sm:hidden">
+                <CvImprovementLogo variant="symbol" size="xs" />
+              </div>
+            </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -1628,9 +1746,24 @@ export default function App() {
               onPopulateProfileFromCurrentCv={handlePopulateProfileFromCurrentCv}
               isExtractingProfile={isExtractingProfile}
               onResetAll={handleReset}
+              onStartNewAnalysis={() => handleStartNewAnalysis(true)}
               currentAnalysisId={selectedHistoryId}
               currentAnalysisTitle={history.find((h) => h.id === selectedHistoryId)?.title}
               onRenameAnalysis={handleRenameAnalysis}
+              onUpdateAnalysisCoverLetter={(analysisId, letter) => {
+                setHistory((prev) =>
+                  prev.map((h) =>
+                    h.id === analysisId
+                      ? {
+                          ...h,
+                          coverLetterId: letter?.id,
+                          coverLetterTitle: letter?.title,
+                          coverLetterContent: letter?.content,
+                        }
+                      : h
+                  )
+                );
+              }}
             />
           )}
 
@@ -1978,6 +2111,75 @@ export default function App() {
                           </div>
                         )}
                       </div>
+
+                      {/* Statut explicite de la lettre de motivation */}
+                      {item.coverLetterTitle || item.coverLetterContent || item.coverLetterId ? (
+                        <div className="p-2.5 bg-emerald-50/90 border border-emerald-200/90 rounded-xl text-xs flex items-center justify-between gap-2 shadow-2xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                            <Mail className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-[10px] uppercase font-black text-emerald-800 tracking-wider block">
+                                Lettre de motivation rattachée
+                              </span>
+                              <span className="font-bold text-emerald-950 truncate block text-xs">
+                                « {item.coverLetterTitle || 'Lettre sur-mesure'} »
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenLetterPreview({
+                                  title: item.coverLetterTitle || `Lettre - ${item.company || item.title}`,
+                                  company: item.company || 'Entreprise Cible',
+                                  content: item.coverLetterContent || '',
+                                });
+                              }}
+                              className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                              title="Consulter le texte de la lettre"
+                            >
+                              <Eye className="w-3 h-3 text-emerald-700" />
+                              <span>Lire</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenAttachLetterModal(item);
+                              }}
+                              className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              title="Changer ou détacher la lettre"
+                            >
+                              <Paperclip className="w-3 h-3 text-emerald-700" />
+                              <span>Gérer</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-xs flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-gray-500 text-[11px]">
+                            <Mail className="w-3 h-3 text-gray-400 shrink-0" />
+                            <span>Aucune lettre rattachée à cet audit</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAttachLetterModal(item);
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                            title="Rattacher une lettre existante (ex: Valoria Capital) ou en coller une"
+                          >
+                            <Paperclip className="w-3 h-3 text-purple-600" />
+                            <span>Rattacher une lettre</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-100 flex-wrap gap-2">
@@ -2183,6 +2385,130 @@ export default function App() {
           onTriggerReAnalysis={() => handleRunAnalysis(!apiKey && !hasServerKey)}
           onRestoreCv={handleRestoreCvFromStep}
         />
+      )}
+
+      {/* Modal de rattachement de lettre pour l'historique d'audit */}
+      {isAttachLetterModalOpen && attachingAnalysis && (
+        <AttachLetterModal
+          isOpen={isAttachLetterModalOpen}
+          onClose={() => {
+            setIsAttachLetterModalOpen(false);
+            setAttachingAnalysis(null);
+          }}
+          analysisId={attachingAnalysis.id}
+          analysisTitle={attachingAnalysis.title}
+          analysisCompany={attachingAnalysis.company}
+          analysisRole={attachingAnalysis.role}
+          currentAttachedLetterId={attachingAnalysis.coverLetterId}
+          currentAttachedLetterTitle={attachingAnalysis.coverLetterTitle}
+          onLetterAttached={(letter) => {
+            setHistory((prev) =>
+              prev.map((item) =>
+                item.id === attachingAnalysis.id
+                  ? {
+                      ...item,
+                      coverLetterId: letter.id,
+                      coverLetterTitle: letter.title,
+                      coverLetterContent: letter.content,
+                    }
+                  : item
+              )
+            );
+          }}
+          onLetterDetached={() => {
+            setHistory((prev) =>
+              prev.map((item) =>
+                item.id === attachingAnalysis.id
+                  ? {
+                      ...item,
+                      coverLetterId: undefined,
+                      coverLetterTitle: undefined,
+                      coverLetterContent: undefined,
+                    }
+                  : item
+              )
+            );
+          }}
+        />
+      )}
+
+      {/* Modal de lecture / prévisualisation de lettre de motivation */}
+      {previewLetter && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[85vh]">
+            <div className="p-5 bg-linear-to-r from-emerald-700 via-teal-700 to-indigo-700 text-white flex items-start justify-between gap-3 shrink-0">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 text-white px-2.5 py-0.5 rounded-full border border-white/30 inline-flex items-center gap-1">
+                  <Mail className="w-3 h-3" />
+                  Lettre de motivation rattachée à cet audit
+                </span>
+                <h3 className="text-base sm:text-lg font-black mt-1">
+                  {previewLetter.title}
+                </h3>
+                <p className="text-xs text-emerald-100">
+                  {previewLetter.company && `Entreprise : ${previewLetter.company} • `}
+                  {previewLetter.content.split(/\s+/).filter(Boolean).length} mots
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewLetter(null)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/25 text-white transition-colors cursor-pointer shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1 bg-gray-50/50">
+              <div className="p-4 bg-white border border-gray-200 rounded-2xl text-xs sm:text-sm text-gray-800 leading-relaxed font-sans whitespace-pre-wrap shadow-2xs">
+                {previewLetter.content}
+              </div>
+            </div>
+
+            <div className="p-4 bg-white border-t border-gray-200 flex items-center justify-between gap-2 flex-wrap shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(previewLetter.content);
+                    setPreviewLetterCopied(true);
+                    setTimeout(() => setPreviewLetterCopied(false), 2000);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  {previewLetterCopied ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{previewLetterCopied ? 'Copiée !' : 'Copier le texte'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([previewLetter.content], { type: 'application/msword;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${previewLetter.title.replace(/\s+/g, '_')}.doc`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Télécharger (.doc)</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewLetter(null)}
+                className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
