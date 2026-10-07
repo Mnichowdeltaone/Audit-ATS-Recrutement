@@ -9,6 +9,7 @@ import type {
   UserSettings,
   DatabaseStats,
 } from '../types';
+import { extractCompanyDossier } from '../utils/companyDossierExtractor';
 
 const IDB_NAME = 'cv_move_personnel_local_db';
 const IDB_VERSION = 1;
@@ -682,7 +683,18 @@ export const localDbClient = {
   // ==========================================
   getLocalAnalyses(): AnalysisHistoryItem[] {
     const raw = getStorage<AnalysisHistoryItem[]>('cv_move_history', []);
-    return raw.filter(filterOutDemoAnalysis);
+    const clean = raw.filter(filterOutDemoAnalysis);
+    return clean.map((item) => {
+      if (!item.companyDossier && (item.analysisResult || item.jobText)) {
+        item.companyDossier = extractCompanyDossier(
+          item.analysisResult,
+          item.jobText,
+          item.company || item.cabinet,
+          item.role
+        );
+      }
+      return item;
+    });
   },
 
   async getAnalyses(): Promise<AnalysisHistoryItem[]> {

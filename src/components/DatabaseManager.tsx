@@ -23,6 +23,8 @@ import {
   CheckCircle2,
   Mail,
   Copy,
+  Building2,
+  Paperclip,
 } from 'lucide-react';
 import { parseCvFile } from '../utils/fileExtractor';
 import type {
@@ -36,6 +38,9 @@ import type {
   DatabaseStats,
 } from '../types';
 import { localDbClient } from '../services/localDbClient';
+import CompanyDossierModal from './CompanyDossierModal';
+import AttachLetterModal from './AttachLetterModal';
+import { extractCompanyDossier } from '../utils/companyDossierExtractor';
 
 interface DatabaseManagerProps {
   onLoadCvToAnalyzer: (cvText: string, cvTitle: string) => void;
@@ -63,6 +68,8 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
   // Rename analysis state
   const [editingAnalysisId, setEditingAnalysisId] = useState<string | null>(null);
   const [editingAnalysisTitle, setEditingAnalysisTitle] = useState('');
+  const [selectedDossierAnalysis, setSelectedDossierAnalysis] = useState<AnalysisHistoryItem | null>(null);
+  const [selectedAttachLetterAnalysis, setSelectedAttachLetterAnalysis] = useState<AnalysisHistoryItem | null>(null);
 
   const handleRenameAnalysis = async (id: string, newTitle: string) => {
     if (!newTitle.trim()) return;
@@ -1912,7 +1919,44 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-gray-500 line-clamp-2 mb-3">{an.jobSnippet}</p>
+                  <p className="text-[11px] text-gray-500 line-clamp-2 mb-2">{an.jobSnippet}</p>
+
+                  {/* Statut Lettre & Fiche Entreprise */}
+                  <div className="flex items-center gap-2 flex-wrap mb-3">
+                    {an.coverLetterTitle || an.coverLetterContent || an.coverLetterId ? (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] text-emerald-800 font-bold">
+                        <span>✉️ Lettre : « {an.coverLetterTitle || 'Lettre sur-mesure'} »</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAttachLetterAnalysis(an)}
+                          className="ml-1 underline text-emerald-700 hover:text-emerald-900 cursor-pointer font-semibold"
+                          title="Gérer ou modifier la lettre rattachée"
+                        >
+                          Gérer
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAttachLetterAnalysis(an)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
+                        title="Rattacher une lettre de motivation à cet audit"
+                      >
+                        <Paperclip className="w-3 h-3 text-purple-600" />
+                        <span>📎 Rattacher une lettre</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDossierAnalysis(an)}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
+                      title="Consulter la fiche technique et financière de l'entreprise recruteuse pour préparer l'entretien"
+                    >
+                      <Building2 className="w-3 h-3 text-blue-600" />
+                      <span>🏛️ Fiche Entreprise</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100 pt-2">
@@ -2069,6 +2113,75 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal de consultation de la Fiche Technique & Financière */}
+      <CompanyDossierModal
+        isOpen={Boolean(selectedDossierAnalysis)}
+        onClose={() => setSelectedDossierAnalysis(null)}
+        dossier={
+          selectedDossierAnalysis?.companyDossier ||
+          (selectedDossierAnalysis
+            ? extractCompanyDossier(
+                selectedDossierAnalysis.analysisResult,
+                selectedDossierAnalysis.jobText,
+                selectedDossierAnalysis.company || selectedDossierAnalysis.cabinet,
+                selectedDossierAnalysis.role
+              )
+            : null)
+        }
+        roleTitle={selectedDossierAnalysis?.role}
+        analysisTitle={selectedDossierAnalysis?.title}
+      />
+
+      {/* Modal de rattachement de lettre de motivation */}
+      {selectedAttachLetterAnalysis && (
+        <AttachLetterModal
+          isOpen={Boolean(selectedAttachLetterAnalysis)}
+          onClose={() => setSelectedAttachLetterAnalysis(null)}
+          analysisId={selectedAttachLetterAnalysis.id}
+          analysisTitle={selectedAttachLetterAnalysis.title}
+          analysisCompany={selectedAttachLetterAnalysis.company}
+          analysisRole={selectedAttachLetterAnalysis.role}
+          currentAttachedLetterId={selectedAttachLetterAnalysis.coverLetterId}
+          currentAttachedLetterTitle={selectedAttachLetterAnalysis.coverLetterTitle}
+          onLetterAttached={(letter) => {
+            const updated = {
+              ...selectedAttachLetterAnalysis,
+              coverLetterId: letter.id,
+              coverLetterTitle: letter.title,
+              coverLetterContent: letter.content,
+            };
+            localDbClient.saveAnalysis(updated).catch(() => {});
+            setDbData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                analyses: prev.analyses.map((a) => (a.id === updated.id ? updated : a)),
+              };
+            });
+            onDatabaseUpdated?.();
+            setSelectedAttachLetterAnalysis(null);
+          }}
+          onLetterDetached={() => {
+            const updated = {
+              ...selectedAttachLetterAnalysis,
+              coverLetterId: undefined,
+              coverLetterTitle: undefined,
+              coverLetterContent: undefined,
+            };
+            localDbClient.saveAnalysis(updated).catch(() => {});
+            setDbData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                analyses: prev.analyses.map((a) => (a.id === updated.id ? updated : a)),
+              };
+            });
+            onDatabaseUpdated?.();
+            setSelectedAttachLetterAnalysis(null);
+          }}
+        />
       )}
     </div>
   );

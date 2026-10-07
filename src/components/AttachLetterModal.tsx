@@ -59,6 +59,16 @@ export default function AttachLetterModal({
   );
   const [newContent, setNewContent] = useState('');
 
+  const handlePrefillTemplate = (companyTarget?: string) => {
+    const cName = companyTarget || newCompany || analysisCompany || 'Valoria Capital';
+    const rTitle = newRole || analysisRole || 'Responsable Administratif et Financier';
+    setNewCompany(cName);
+    setNewRole(rTitle);
+    setNewTitle(`Lettre de Motivation - ${cName} (${rTitle})`);
+    setNewContent(`Madame, Monsieur,\n\nC'est avec un vif intérêt que je vous soumets ma candidature pour le poste de ${rTitle} au sein de ${cName}.\n\nFort d'une solide expérience en gestion financière, pilotage de trésorerie et supervision des clôtures comptables, j'ai développé une expertise reconnue dans la fiabilisation des reporting et l'optimisation du Besoin en Fonds de Roulement (BFR). Au cours de mes précédentes missions, j'ai notamment assuré la mise en place de prévisions de trésorerie glissantes (13 semaines), le déploiement d'outils progiciels de gestion et l'animation des relations avec les banques et les Commissaires aux Comptes.\n\nRejoindre ${cName} représente pour moi l'opportunité d'apporter ma rigueur méthodologique et ma posture de véritable Business Partner pour accompagner la croissance de vos activités et sécuriser vos opérations financières.\n\nJe serais ravi d'échanger de vive voix lors d'un entretien pour vous exposer plus en détail la pertinence de mon profil pour ce poste.\n\nJe vous prie d'agréer, Madame, Monsieur, l'expression de mes salutations distinguées.`);
+    setActiveTab('new');
+  };
+
   // Recharger la liste exhaustive des lettres disponibles à l'ouverture
   useEffect(() => {
     if (isOpen) {
@@ -292,11 +302,37 @@ export default function AttachLetterModal({
 
               {/* Raccourci de test / suggestion pour Valoria si mentionné */}
               {analysisCompany && analysisCompany.toLowerCase().includes('valoria') && (
-                <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
+                <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-2xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Audit ciblé pour <strong>Valoria Capital</strong> : vous pouvez rattacher une lettre en un clic ci-dessous.</span>
+                    <span>Audit ciblé pour <strong>Valoria Capital</strong> : aucune lettre n&apos;est encore liée.</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handlePrefillTemplate('Valoria Capital')}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                    <span>Générer lettre pour Valoria Capital ➔</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Raccourci universel si aucune lettre ne correspond */}
+              {filteredLetters.length === 0 && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl text-xs text-purple-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span>Besoin d&apos;une lettre pour <strong>{analysisCompany || 'cet audit'}</strong> ?</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handlePrefillTemplate(analysisCompany)}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Créer un modèle adapté en 1 clic ➔</span>
+                  </button>
                 </div>
               )}
 
@@ -472,9 +508,20 @@ export default function AttachLetterModal({
                   <label className="block text-xs font-bold text-gray-700">
                     Contenu complet de la lettre de motivation *
                   </label>
-                  <span className="text-[11px] text-gray-400">
-                    {newContent.split(/\s+/).filter(Boolean).length} mots
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePrefillTemplate()}
+                      className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-0.5 rounded-lg border border-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Insérer un modèle complet adapté à ce poste et cette entreprise"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Pré-remplir un modèle sur-mesure</span>
+                    </button>
+                    <span className="text-[11px] text-gray-400">
+                      {newContent.split(/\s+/).filter(Boolean).length} mots
+                    </span>
+                  </div>
                 </div>
                 <textarea
                   rows={8}

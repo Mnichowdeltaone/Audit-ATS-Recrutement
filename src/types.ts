@@ -78,6 +78,34 @@ export interface AnalysisHistoryItem {
   coverLetterId?: string; // ID de la lettre de motivation rattachée
   coverLetterTitle?: string; // Titre de la lettre de motivation
   coverLetterContent?: string; // Contenu de la lettre de motivation
+  companyDossier?: CompanyFinancialTechnicalDossier; // Fiche technique et financière de l'entreprise recruteuse
+}
+
+export interface CompanyFinancialTechnicalDossier {
+  companyName: string;
+  sector?: string;
+  businessModel?: string; // B2B, B2C, SaaS, Retail, Industrie, etc.
+  estimatedSize?: string; // PME, ETI, Grand Groupe, 50-250 salariés...
+  location?: string; // Siège / Implantation
+  ownershipStructure?: string; // Familial, Fonds LBO/PE, VC, Cotée, etc.
+  financialProfile: {
+    estimatedRevenue?: string; // Ordre de grandeur CA ou croissance
+    growthStage?: string; // Forte croissance, Maturité, Restructuration...
+    profitabilityModel?: string; // Marge, EBITDA, BFR, optimisation trésorerie
+    keyFinancialChallenges: string[]; // Enjeux financiers identifiés (cash pooling, prévisions 13 semaines, clôtures, CAC)
+  };
+  technicalProfile: {
+    toolsAndStack: string[]; // ERP, TMS, logiciels (Pennylane, Agicap, SAP, Excel avancé...)
+    methodology?: string; // Normes françaises, IFRS, clôtures rapides J+5...
+    reportingLine?: string; // Reporte au DAF, DG, Fondateurs
+    keyOperationalProjects: string[]; // Migration ERP/TMS, internalisation, audit
+  };
+  interviewStrategy: {
+    pitchRecommendation: string; // Pitch d'accroche personnalisé pour l'entretien
+    highImpactQuestions: { question: string; objective: string }[]; // 3 à 5 questions pointues à poser au recruteur
+    strategicAdvice: string[]; // Conseils pour franchir les étapes du process
+  };
+  rawBriefText?: string; // Texte complet en Markdown
 }
 
 export interface ExtractedFileResult {

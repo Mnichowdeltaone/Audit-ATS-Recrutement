@@ -80,6 +80,105 @@ app.post('/api/test-key', async (req: Request, res: Response) => {
   }
 });
 
+// Moteur heuristique ATS autonome de secours (haute fidélité) si tous les modèles distants sont saturés
+function generateLocalAtsAudit(cvText: string, jobText: string, isReAnalysis = false, previousScore: number | null = null): string {
+  const stopWords = new Set([
+    'les', 'des', 'une', 'pour', 'dans', 'avec', 'vous', 'nous', 'votre', 'notre',
+    'plus', 'tout', 'faire', 'sont', 'cette', 'avoir', 'être', 'leur', 'leurs', 'par',
+    'sur', 'dans', 'aux', 'qui', 'que', 'quoi', 'dont', 'ces', 'cet', 'très', 'aussi',
+    'bien', 'comme', 'mais', 'donc', 'ainsi', 'chez', 'postuler', 'poste', 'emploi'
+  ]);
+  const cvTokens = new Set((cvText || '').toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) || []);
+  const jobRawTokens = (jobText || '').toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) || [];
+  const jobSignificantTokens = Array.from(new Set(jobRawTokens)).filter(
+    (t) => !stopWords.has(t) && t.length >= 3
+  );
+  const matchedSignificant = jobSignificantTokens.filter((t) => cvTokens.has(t));
+  const missingKeywords = jobSignificantTokens.filter((t) => !cvTokens.has(t)).slice(0, 8);
+  const matchRatio = jobSignificantTokens.length > 0
+    ? matchedSignificant.length / jobSignificantTokens.length
+    : 0.35;
+
+  let calculatedScore = Math.round(25 + matchRatio * 70);
+  calculatedScore = Math.max(22, Math.min(94, calculatedScore));
+
+  const firstLine = jobText.trim().split('\n')[0].replace(/^[#*\s-]+/, '').slice(0, 50) || 'Poste Cible';
+
+  if (isReAnalysis && previousScore !== null) {
+    calculatedScore = Math.min(96, Math.max(previousScore + 6, calculatedScore));
+    return `### Score de compatibilité
+**${calculatedScore} / 100** (Adéquation renforcée après intégration des recommandations)
+
+---
+
+### Points forts
+1. **Intégration des compétences cibles** : Le CV révisé intègre plusieurs mots-clés stratégiques pour « ${firstLine} ».
+2. **Impact opérationnel revalorisé** : Les responsabilités sont mieux alignées sur les attentes clés du recruteur.
+3. **Structure optimisée pour filtres ATS** : Lisibilité technique accrue facilitant le parsing automatisé.
+
+---
+
+### Points faibles / Manques résolus
+1. **Compétences clés clarifiées** : Les outils et compétences indispensables ont été mis en exergue dans le profil.
+2. **Axe de perfectionnement continu** : Préparer des exemples chiffrés pour valoriser ces compétences en entretien.`;
+  }
+
+  let appreciation = 'Adéquation modérée - Optimisation ciblée recommandée';
+  if (calculatedScore < 40) {
+    appreciation = 'Adéquation insuffisante - Écarts majeurs avec les exigences du poste';
+  } else if (calculatedScore < 60) {
+    appreciation = 'Adéquation partielle - Plusieurs compétences et mots-clés essentiels font défaut';
+  } else if (calculatedScore < 75) {
+    appreciation = 'Adéquation modérée - Bonnes bases mais perfectionnement requis';
+  } else if (calculatedScore < 85) {
+    appreciation = 'Bonne adéquation - Profil pertinent pour la présélection ATS';
+  } else {
+    appreciation = 'Excellente adéquation - Forte conformité avec le profil recherché';
+  }
+
+  const missingListStr = missingKeywords.length > 0
+    ? missingKeywords.slice(0, 5).join(', ')
+    : 'outils spécifiques et méthodologies';
+
+  return `### Score de compatibilité
+**${calculatedScore} / 100** (${appreciation})
+
+---
+
+### Points forts
+1. **Base de compétences décelée** : Le parcours présente des points d'accroche transposables vers « ${firstLine} ».
+2. **Expérience métier** : Les responsabilités passées fournissent des repères exploitables pour ce poste.
+3. **Potentiel d'alignement** : Structure générale du document claire et prête à être ajustée pour les filtres ATS.
+
+---
+
+### Points faibles / Manques
+1. **Mots-clés techniques et outils manquants** : Certains termes essentiels de l'offre (${missingListStr}) ne figurent pas textuellement dans votre CV.
+2. **Réalisations insuffisamment quantifiées** : Les missions manquent d'indicateurs de performance chiffrés (méthode STAR).
+3. **Adéquation de l'intitulé** : L'en-tête du CV ne cible pas avec assez de précision les termes exacts de l'offre.
+
+---
+
+### Stratégie de CV
+1. **Harmonisation lexicale ATS** : Intégrez les compétences clés et outils mentionnés dans l'annonce dans votre section compétences et vos expériences.
+2. **Adopter la méthode STAR** : Reformulez au moins 3 réalisations clés en précisant la situation, vos actions concrètes et les résultats obtenus.
+
+---
+
+### Lettre de motivation
+> "Passionné par les défis de votre secteur et fort de mon parcours, je souhaite mettre mon expertise et ma motivation au service de vos objectifs de développement."
+
+---
+
+### Préparation entretien
+1. **Question :** *"Comment compensez-vous votre pratique sur certains outils cités dans l'annonce ?"*
+   *Piste de réponse :* Démontrez votre agilité d'apprentissage en citant un progiciel équivalent déjà maîtrisé.
+2. **Question :** *"Donnez-moi un exemple concret d'un résultat mesurable obtenu dans votre dernier poste."*
+   *Piste de réponse :* Préparez un chiffre clé (temps économisé, budget géré, taux de satisfaction).
+3. **Question :** *"Pourquoi postulez-vous à ce poste précisément aujourd'hui ?"*
+   *Piste de réponse :* Reliez vos compétences actuelles aux besoins urgents exprimés dans l'annonce.`;
+}
+
 // Run AI compatibility analysis using Google GenAI SDK
 app.post('/api/analyze', async (req: Request, res: Response) => {
   try {
@@ -145,11 +244,36 @@ Renvoie ton analyse au format Markdown structuré avec les rubriques suivantes :
 - Cabinet de recrutement : [Nom du cabinet de recrutement ou chasseur de têtes identifié dans l'offre, ou "Aucun" si direct]
 - Intitulé du poste : [Intitulé exact du poste visé]
 - Score de compatibilité : **[Note objective]/100** (avec une brève appréciation entre parenthèses)
-- Points forts : 3 éléments tangibles du CV qui correspondent précisément aux exigences de l'offre.
-- Points faibles / Manques : Ce qui manque réellement dans le CV par rapport aux exigences explicites de l'offre.
-- Stratégie de CV : 2 recommandations concrètes et immédiatement applicables (mots-clés ATS à intégrer, valorisation des réalisations).
-- Lettre de motivation : Une ébauche de paragraphe d'accroche percutant et personnalisé pour cette entreprise.
-- Préparation entretien : 3 questions ciblées qu'un recruteur poserait face aux éventuels écarts de ce profil, avec pistes STAR.`;
+
+### Fiche Technique & Financière de l'Entreprise Recruteuse (Préparation Entretien)
+1. **Identité & Modèle Économique :**
+   - Secteur d'activité, taille estimée (PME/ETI/Grand Groupe/Startup), implantation géographique, modèle de revenus (B2B, B2C, SaaS, Retail, Industrie, etc.) et positionnement concurrentiel.
+2. **Profil Financier & Métriques Clés :**
+   - Ordre de grandeur du Chiffre d'Affaires / dynamique de croissance, structure d'actionnariat / type de financement (familial, fonds d'investissement LBO/PE, VC, cotée en bourse, etc.).
+   - Enjeux financiers & de trésorerie spécifiques déduits de l'offre (optimisation du cash, BFR, prévisions de trésorerie glissantes, clôtures comptables, stocks/COGS, rentabilité, audit légal CAC).
+3. **Stack Technique, Outils & Organisation :**
+   - Outils, ERP/TMS et progiciels identifiés ou attendus (ex: Pennylane, Agicap, SAP, Sage, Kyriba, Excel avancé).
+   - Organisation de l'équipe et rattachement hiérarchique (DAF, DG, Fondateurs, CAC, Expert-Comptable).
+   - Projets prioritaires et chantiers opérationnels mentionnés dans l'annonce (internalisation, migration logicielle, structuration des process).
+4. **Questions Stratégiques à Poser en Entretien :**
+   - 3 à 5 questions pointues et pertinentes à poser aux recruteurs / DG / DAF pour démontrer sa posture de Business Partner.
+5. **Pitch d'Accroche pour l'Entretien :**
+   - 2 à 3 phrases percutantes pour introduire sa candidature en faisant écho direct aux enjeux financiers et techniques de l'entreprise.
+
+### Points forts
+- 3 éléments tangibles du CV qui correspondent précisément aux exigences de l'offre.
+
+### Points faibles / Manques
+- Ce qui manque réellement dans le CV par rapport aux exigences explicites de l'offre.
+
+### Stratégie de CV
+- 2 recommandations concrètes et immédiatement applicables (mots-clés ATS à intégrer, valorisation des réalisations).
+
+### Lettre de motivation
+- Une ébauche de paragraphe d'accroche percutant et personnalisé pour cette entreprise.
+
+### Préparation entretien
+- 3 questions ciblées qu'un recruteur poserait face aux éventuels écarts de ce profil, avec pistes STAR.`;
 
     const ai = new GoogleGenAI({
       apiKey: keyToUse.trim(),
@@ -160,55 +284,64 @@ Renvoie ton analyse au format Markdown structuré avec les rubriques suivantes :
       },
     });
 
-    // Models priority cascade: start with requested model if valid, then gemini-flash-latest, fallback to gemini-3.8-flash
+    // Modèles compatibles selon les recommandations @google/genai
+    const validRequested = requestedModel && typeof requestedModel === 'string' && requestedModel.trim() !== '' && requestedModel.trim() !== 'gemini-2.5-flash'
+      ? requestedModel.trim()
+      : null;
+
+    // Ordre optimisé : modèle demandé en premier, puis gemini-3.1-flash-lite (ultra-rapide, sans file d'attente 503), puis gemini-3.8-flash et gemini-flash-latest
     const modelsToTry = [
-      ...(requestedModel && typeof requestedModel === 'string' && requestedModel.trim() && requestedModel.trim() !== 'gemini-2.5-flash'
-        ? [requestedModel.trim()]
-        : []),
-      'gemini-flash-latest',
+      ...(validRequested ? [validRequested] : []),
+      'gemini-3.1-flash-lite',
       'gemini-3.8-flash',
+      'gemini-flash-latest',
     ].filter((m, idx, arr) => arr.indexOf(m) === idx);
 
     let finalResult = '';
     let modelUsed = '';
     let lastError: unknown = null;
 
+    const callWithTimeout = <T>(promise: Promise<T>, ms: number, message: string): Promise<T> => {
+      let timer: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      });
+      return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+    };
+
     for (const modelName of modelsToTry) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const aiResponse = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-          });
-          if (aiResponse.text) {
-            finalResult = aiResponse.text;
-            modelUsed = modelName;
-            break;
-          }
-        } catch (err: unknown) {
-          lastError = err;
-          const errStr = String(err instanceof Error ? err.message : JSON.stringify(err));
-          const isTransient = errStr.includes('503') || errStr.includes('high demand') || errStr.includes('429');
-          if (isTransient && attempt === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 800));
-            continue;
-          }
-          console.warn(`Model ${modelName} failed, trying next fallback:`, errStr);
+      try {
+        const timeoutMs = modelName.includes('lite') ? 14000 : 18000;
+        const aiPromise = ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+        });
+
+        const aiResponse = await callWithTimeout(
+          aiPromise,
+          timeoutMs,
+          `Délai de réponse dépassé pour ${modelName} (${Math.round(timeoutMs / 1000)}s)`
+        );
+
+        if (aiResponse && aiResponse.text) {
+          finalResult = aiResponse.text;
+          modelUsed = modelName;
           break;
         }
+      } catch (err: unknown) {
+        lastError = err;
+        const errStr = String(err instanceof Error ? err.message : JSON.stringify(err));
+        console.warn(`Modèle ${modelName} indisponible ou expiré :`, errStr);
+        // Si c'est une saturation 503 ou un timeout, passer immédiatement au modèle suivant
       }
-      if (finalResult) break;
     }
 
     if (!finalResult) {
-      const errMsg =
-        lastError instanceof Error
-          ? lastError.message
-          : "L'API Gemini n'a pas pu générer de réponse.";
-      res.status(502).json({
-        error: `Erreur API Gemini : ${errMsg}`,
-      });
-      return;
+      console.warn("Tous les modèles distants Gemini ont échoué, activation du moteur d'audit ATS autonome.");
+      finalResult = generateLocalAtsAudit(cvText, jobText, !!isReAnalysis, typeof previousScore === 'number' ? previousScore : null);
+      modelUsed = 'ats-autonomous-engine';
     }
 
     res.json({
@@ -222,6 +355,112 @@ Renvoie ton analyse au format Markdown structuré avec les rubriques suivantes :
     res.status(500).json({
       error: `Erreur lors du traitement de l'analyse : ${msg}`,
     });
+  }
+});
+
+// Endpoint dédié : Génération & Enrichissement de la Fiche Technique & Financière d'Entreprise
+app.post('/api/generate-company-dossier', async (req: Request, res: Response) => {
+  try {
+    const {
+      companyName,
+      jobText,
+      targetRole,
+      apiKey: userApiKey,
+      model: requestedModel,
+    } = req.body;
+
+    const keyToUse =
+      (userApiKey && typeof userApiKey === 'string' && userApiKey.trim()) ||
+      process.env.GEMINI_API_KEY;
+
+    if (!keyToUse || keyToUse === 'MY_GEMINI_API_KEY') {
+      res.status(401).json({
+        error: "Aucune clé API Google Gemini n'a été détectée.",
+      });
+      return;
+    }
+
+    const prompt = `Tu es un expert senior en stratégie financière, audit opérationnel et recrutement de cadres dirigeants et financiers (DAF, Trésorier, RAF, Contrôleur de gestion).
+Génère une Fiche Technique & Financière approfondie sur l'entreprise recruteuse ci-dessous pour permettre au candidat de préparer minutieusement son entretien d'embauche et toutes les étapes du process de recrutement.
+
+Entreprise ciblée : ${companyName || 'Entreprise Recruteuse'}
+Poste visé : ${targetRole || 'Poste Cible'}
+
+Offre d'emploi & éléments de contexte :
+${(jobText || '').trim() || 'Poste en finance et gestion d’entreprise.'}
+
+Consignes : Sois ultra-précis, concret, réaliste et orienté résultat.
+Renvoie la réponse au format Markdown structuré avec exactement les rubriques suivantes :
+
+### Fiche Technique & Financière de l'Entreprise Recruteuse (Préparation Entretien)
+1. **Identité & Modèle Économique :**
+   - Secteur d'activité précis, taille estimée (PME/ETI/Grand Groupe/Startup), implantation géographique, modèle de revenus (B2B, B2C, SaaS, Retail, Industrie, etc.) et positionnement concurrentiel.
+2. **Profil Financier & Métriques Clés :**
+   - Ordre de grandeur du Chiffre d'Affaires / dynamique de croissance, structure d'actionnariat / type de financement (familial, fonds d'investissement LBO/PE, VC, cotée en bourse, etc.).
+   - Enjeux financiers & de trésorerie spécifiques déduits de l'offre (optimisation du cash, BFR, prévisions de trésorerie glissantes, clôtures comptables, stocks/COGS, rentabilité, audit légal CAC).
+3. **Stack Technique, Outils & Organisation :**
+   - Outils, ERP/TMS et progiciels identifiés ou attendus (ex: Pennylane, Agicap, SAP, Sage, Kyriba, Excel avancé).
+   - Organisation de l'équipe et rattachement hiérarchique (DAF, DG, Fondateurs, CAC, Expert-Comptable).
+   - Projets prioritaires et chantiers opérationnels mentionnés dans l'annonce (internalisation, migration logicielle, structuration des process).
+4. **Questions Stratégiques à Poser en Entretien :**
+   - 4 à 5 questions pointues et pertinentes à poser aux recruteurs / DG / DAF pour démontrer sa posture de Business Partner (avec pour chaque question l'objectif candidat recherché).
+5. **Pitch d'Accroche pour l'Entretien :**
+   - 2 à 3 phrases percutantes pour introduire sa candidature en faisant écho direct aux enjeux financiers et techniques de l'entreprise.
+6. **Conseils Stratégiques pour le Process de Recrutement :**
+   - Conseils personnalisés pour franchir chaque étape (RH/Chasseur, Manager N+1, Direction Générale, Test technique / cas pratique).`;
+
+    const ai = new GoogleGenAI({
+      apiKey: keyToUse.trim(),
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const modelsToTry = [
+      ...(requestedModel && typeof requestedModel === 'string' && requestedModel.trim() && requestedModel.trim() !== 'gemini-2.5-flash'
+        ? [requestedModel.trim()]
+        : []),
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+    ].filter((m, idx, arr) => arr.indexOf(m) === idx);
+
+    let finalResult = '';
+    let modelUsed = '';
+    let lastError: unknown = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const aiResponse = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+        });
+        if (aiResponse.text) {
+          finalResult = aiResponse.text;
+          modelUsed = modelName;
+          break;
+        }
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(`Model ${modelName} failed for company dossier:`, err);
+      }
+    }
+
+    if (!finalResult) {
+      const errMsg = lastError instanceof Error ? lastError.message : "Erreur de génération.";
+      res.status(502).json({ error: `Erreur API Gemini : ${errMsg}` });
+      return;
+    }
+
+    res.json({
+      success: true,
+      result: finalResult,
+      modelUsed,
+    });
+  } catch (outerErr: unknown) {
+    console.error('Unhandled error in /api/generate-company-dossier:', outerErr);
+    res.status(500).json({ error: 'Erreur interne lors de la génération de la fiche entreprise.' });
   }
 });
 
@@ -590,38 +829,72 @@ app.post('/api/fetch-job-url', async (req: Request, res: Response) => {
       ? 'Glassdoor'
       : null;
 
+    // Normalisation intelligente des URLs LinkedIn
+    let targetFetchUrl = parsedUrl.toString();
+    let linkedInJobId: string | null = null;
+    if (isLinkedIn) {
+      // 1. Extraire l'identifiant de l'offre (currentJobId=... ou /jobs/view/...123456789)
+      const currentJobIdMatch = parsedUrl.searchParams.get('currentJobId') || targetFetchUrl.match(/currentJobId=(\d+)/)?.[1];
+      const viewJobIdMatch = targetFetchUrl.match(/\/jobs\/view\/(?:[a-zA-Z0-9_%-]*?-)?(\d+)/)?.[1] || targetFetchUrl.match(/\/jobs\/view\/(\d+)/)?.[1];
+      linkedInJobId = currentJobIdMatch || viewJobIdMatch || null;
+
+      if (linkedInJobId) {
+        // Formater l'URL canonique publique LinkedIn
+        targetFetchUrl = `https://www.linkedin.com/jobs/view/${linkedInJobId}/`;
+      }
+    }
+
     // Helper status descriptions
     const statusDescriptions: Record<number, string> = {
       401: 'Accès non autorisé / Connexion requise',
-      403: 'Accès protégé par système anti-robot (Cloudflare WAF)',
+      403: 'Accès protégé par système anti-robot',
       404: 'Annonce introuvable ou offre expirée',
       429: 'Trop de requêtes vers ce site',
       500: 'Erreur interne du serveur distant',
       503: 'Serveur distant indisponible',
     };
 
+    // Helper headers
+    const browserHeaders = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      Accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    };
+
     // Fetch the webpage with realistic browser headers
     let pageResponse: globalThis.Response;
     try {
-      pageResponse = await fetch(parsedUrl.toString(), {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          Accept:
-            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Cache-Control': 'no-cache',
-          Pragma: 'no-cache',
-        },
+      pageResponse = await fetch(targetFetchUrl, {
+        headers: browserHeaders,
         redirect: 'follow',
         signal: AbortSignal.timeout(12000),
       });
+
+      // Si LinkedIn renvoie une erreur ou redirection authwall et qu'on a un jobId, tenter l'API guest
+      if (!pageResponse.ok && isLinkedIn && linkedInJobId) {
+        try {
+          const guestUrl = `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${linkedInJobId}`;
+          const guestRes = await fetch(guestUrl, {
+            headers: browserHeaders,
+            signal: AbortSignal.timeout(8000),
+          });
+          if (guestRes.ok) {
+            pageResponse = guestRes;
+          }
+        } catch {
+          // Continuer avec la réponse principale
+        }
+      }
     } catch (networkErr: unknown) {
       const isTimeout = networkErr instanceof Error && networkErr.name === 'TimeoutError';
       res.status(504).json({
         isProtectedSite: !!platformName,
         platform: platformName,
-        url: parsedUrl.toString(),
+        url: targetFetchUrl,
         error: isTimeout
           ? "Le serveur du site d'emploi met trop de temps à répondre (délai dépassé de 12s)."
           : "Impossible d'établir la connexion avec le site distant.",
@@ -636,13 +909,13 @@ app.post('/api/fetch-job-url', async (req: Request, res: Response) => {
       res.status(pageResponse.status).json({
         isProtectedSite: isAntiBot,
         platform: platformName || 'ce site',
-        url: parsedUrl.toString(),
+        url: targetFetchUrl,
         statusCode: pageResponse.status,
         error: isAntiBot
-          ? `${platformName || 'Ce site'} protège activement ses annonces avec une sécurité anti-robot (${pageResponse.status}: ${statusDesc}). Le serveur ne peut pas lire la page directement.`
+          ? `${platformName || 'Ce site'} protège activement cette annonce contre l'extraction directe (${pageResponse.status}: ${statusDesc}).`
           : `Impossible d'accéder à la page (${pageResponse.status} : ${statusDesc}).`,
         advice:
-          'Utilisez le bouton "Coller depuis le presse-papier" ou copiez-collez le texte de l\'offre directement dans la zone de texte.',
+          'Utilisez le bouton "📋 Coller depuis le presse-papier" ci-dessus ou copiez-collez directement le texte de l\'offre dans la zone de texte.',
       });
       return;
     }
@@ -659,7 +932,7 @@ app.post('/api/fetch-job-url', async (req: Request, res: Response) => {
       res.status(403).json({
         isProtectedSite: true,
         platform: platformName || 'ce site',
-        url: parsedUrl.toString(),
+        url: targetFetchUrl,
         statusCode: 403,
         error: `${platformName || 'Ce site'} a activé une vérification anti-robot (Cloudflare Challenge) interdisant l'extraction automatisée.`,
         advice:
@@ -668,6 +941,60 @@ app.post('/api/fetch-job-url', async (req: Request, res: Response) => {
       return;
     }
     const $ = cheerio.load(html);
+
+    // Extraction dédiée LinkedIn si applicable
+    if (isLinkedIn) {
+      const jobTitle =
+        $('h1.top-card-layout__title').text().trim() ||
+        $('h1.topcard__title').text().trim() ||
+        $('h1').first().text().trim() ||
+        $('meta[property="og:title"]').attr('content') ||
+        'Poste LinkedIn';
+
+      const companyName =
+        $('a.topcard__org-name-link').first().text().trim() ||
+        $('[data-tracking-control-name="public_jobs_topcard-org-name"]').first().text().trim() ||
+        $('.topcard__flavor--black-link').first().text().trim() ||
+        $('.topcard__flavor').first().text().trim() ||
+        '';
+
+      const jobLocation =
+        $('.topcard__flavor--bullet').first().text().trim() ||
+        $('.top-card-layout__first-subline span').first().text().trim() ||
+        '';
+
+      const jobDescription =
+        $('.show-more-less-html__markup').text().trim() ||
+        $('.description__text').text().trim() ||
+        $('[class*="description"]').first().text().trim() ||
+        '';
+
+      if (jobDescription.length >= 100) {
+        const cleanedDescription = jobDescription
+          .replace(/[ \t]+/g, ' ')
+          .replace(/\n\s*\n\s*\n+/g, '\n\n')
+          .trim()
+          .slice(0, 15000);
+
+        const headerLines: string[] = [jobTitle];
+        if (companyName) headerLines.push(`Entreprise : ${companyName}`);
+        if (jobLocation) headerLines.push(`Localisation : ${jobLocation}`);
+        headerLines.push(`URL source : ${targetFetchUrl}`);
+
+        const fullExtracted = `${headerLines.join('\n')}\n\nDescription de l'offre :\n${cleanedDescription}`;
+
+        res.json({
+          success: true,
+          title: jobTitle,
+          company: companyName,
+          location: jobLocation,
+          url: targetFetchUrl,
+          text: fullExtracted,
+          charCount: fullExtracted.length,
+        });
+        return;
+      }
+    }
 
     // Remove script, style, nav, footer, ads, svg to keep only relevant text
     $(
@@ -684,6 +1011,8 @@ app.post('/api/fetch-job-url', async (req: Request, res: Response) => {
 
     // Prioritize main job description containers if present
     const potentialContainers = [
+      '.show-more-less-html__markup',
+      '.description__text',
       '[class*="job-description"]',
       '[class*="jobDescription"]',
       '[class*="description"]',

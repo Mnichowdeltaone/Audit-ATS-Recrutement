@@ -403,6 +403,14 @@ export default function Sidebar({
                           ✉️ Lettre
                         </span>
                       )}
+                      {(item.companyDossier || item.company) && (
+                        <span
+                          className="text-[9px] font-bold text-blue-800 bg-blue-50 px-1 py-0.2 rounded border border-blue-200"
+                          title="Fiche Technique & Financière d'Entreprise disponible"
+                        >
+                          🏛️ Fiche
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] font-bold text-gray-800 truncate group-hover:text-purple-700 transition-colors mt-0.5">
                       {item.title}

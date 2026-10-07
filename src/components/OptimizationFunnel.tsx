@@ -36,6 +36,7 @@ import {
   Paperclip,
   Eye,
   X,
+  Building2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -51,6 +52,7 @@ import { parseAnalysisResult, extractScore } from '../utils/analysisParser';
 import { detectCvChanges, buildEvolutionStep } from '../utils/cvEvolutionHelper';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from '../utils/sampleData';
 import AttachLetterModal from './AttachLetterModal';
+import CompanyDossierView from './CompanyDossierView';
 
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
@@ -127,6 +129,9 @@ interface OptimizationFunnelProps {
   currentAnalysisTitle?: string;
   onRenameAnalysis?: (id: string, newTitle: string) => Promise<void> | void;
   onUpdateAnalysisCoverLetter?: (analysisId: string, letter: SavedCoverLetter | null) => void;
+  analysisError?: string | null;
+  onClearAnalysisError?: () => void;
+  onPasteJobFromClipboard?: () => Promise<void>;
 }
 
 export type FunnelStepId = 1 | 2 | 3 | 4;
@@ -174,6 +179,9 @@ export default function OptimizationFunnel({
   currentAnalysisTitle,
   onRenameAnalysis,
   onUpdateAnalysisCoverLetter,
+  analysisError,
+  onClearAnalysisError,
+  onPasteJobFromClipboard,
 }: OptimizationFunnelProps) {
   // États de renommage de l'analyse active
   const [isEditingActiveTitle, setIsEditingActiveTitle] = useState(false);
@@ -210,7 +218,8 @@ export default function OptimizationFunnel({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [isSavingNewCv, setIsSavingNewCv] = useState(false);
   const [newCvTitle, setNewCvTitle] = useState('CV Optimisé Final');
-  const [activeDossierTab, setActiveDossierTab] = useState<'cv' | 'letter'>('cv');
+  const [step2ViewMode, setStep2ViewMode] = useState<'audit' | 'company'>('audit');
+  const [activeDossierTab, setActiveDossierTab] = useState<'cv' | 'letter' | 'company'>('cv');
   const [finalCoverLetter, setFinalCoverLetter] = useState<string>('');
   const [coverLetterTitle, setCoverLetterTitle] = useState<string>('Lettre de Motivation Sur-Mesure');
   const [attachedLetterId, setAttachedLetterId] = useState<string | null>(null);
@@ -319,12 +328,12 @@ export default function OptimizationFunnel({
 
   // Synchronisation automatique de l'étape selon l'état des données
   useEffect(() => {
-    if (!analysisResult && currentStep > 1) {
+    if (!analysisResult && currentStep > 1 && !isLoadingAnalysis) {
       setCurrentStep(1);
     } else if (analysisResult && currentStep === 1) {
       setCurrentStep(2);
     }
-  }, [analysisResult]);
+  }, [analysisResult, isLoadingAnalysis, currentStep]);
 
   // Titres par défaut pour le CV final et la lettre de motivation
   useEffect(() => {
@@ -398,8 +407,16 @@ export default function OptimizationFunnel({
       return;
     }
     setFunnelError(null);
-    await onRunAnalysis(!apiKey && !hasServerKey, { openModal: false, isReAnalysis: false });
-    setCurrentStep(2);
+    onClearAnalysisError?.();
+    try {
+      const res = await onRunAnalysis(!apiKey && !hasServerKey, { openModal: false, isReAnalysis: false });
+      if (res) {
+        setCurrentStep(2);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setFunnelError(`Erreur lors du lancement de l'audit : ${msg}`);
+    }
   };
 
   // Étape 3 : Générer l'enrichissement IA du CV
@@ -628,15 +645,18 @@ export default function OptimizationFunnel({
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in">
       {/* Alerte d'erreur éventuelle */}
-      {funnelError && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in">
+      {(funnelError || analysisError) && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in shadow-xs">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>{funnelError}</span>
+            <span>{funnelError || analysisError}</span>
           </div>
           <button
             type="button"
-            onClick={() => setFunnelError(null)}
+            onClick={() => {
+              setFunnelError(null);
+              onClearAnalysisError?.();
+            }}
             className="text-red-500 hover:text-red-800 text-xs font-bold cursor-pointer px-2 py-1"
           >
             Fermer ✕
@@ -1120,11 +1140,11 @@ export default function OptimizationFunnel({
                 {hasCompletedAnalysis ? (
                   <div className="space-y-3 py-1">
                     <p className="text-xs text-indigo-950 leading-relaxed font-medium">
-                      Cette analyse est rattachée de façon unique à l&apos;offre d&apos;emploi ci-contre. <strong>Règle stricte : 1 analyse = 1 offre d&apos;emploi.</strong>
+                      Cette analyse est rattachée de façon unique à l&apos;offre d&apos;emploi ci-contre. <strong>Règle : 1 analyse = 1 offre d&apos;emploi.</strong>
                     </p>
                     <div className="p-3 bg-indigo-50/80 border border-indigo-200/90 rounded-xl text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                       <span className="text-[11px] text-indigo-900 font-semibold">
-                        Vous souhaitez comparer votre CV à une autre offre ?
+                        Vous souhaitez analyser une autre annonce (LinkedIn, Indeed...) ?
                       </span>
                       <button
                         type="button"
@@ -1132,14 +1152,14 @@ export default function OptimizationFunnel({
                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-all"
                       >
                         <PlusCircle className="w-3.5 h-3.5" />
-                        <span>Nouvelle analyse</span>
+                        <span>Importer une autre offre</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   <>
                     <p className="text-xs text-gray-500 mb-2">
-                      Collez le lien de l&apos;annonce pour en extraire automatiquement le texte :
+                      Collez le lien de l&apos;annonce pour en extraire automatiquement le descriptif complet :
                     </p>
 
                     <div className="space-y-2">
@@ -1147,28 +1167,50 @@ export default function OptimizationFunnel({
                         type="url"
                         value={jobUrl}
                         onChange={(e) => setJobUrl(e.target.value)}
-                        placeholder="https://www.exemple.com/offres/poste-cdi..."
+                        placeholder="https://www.linkedin.com/jobs/view/... ou Indeed, HelloWork, France Travail..."
                         className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-gray-50/40"
                       />
 
-                      <button
-                        type="button"
-                        disabled={isFetchingUrl || !jobUrl.trim()}
-                        onClick={onFetchJobFromUrl}
-                        className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-                      >
-                        {isFetchingUrl ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Récupération de l&apos;annonce...</span>
-                          </>
-                        ) : (
-                          <>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            <span>📥 Extraire l&apos;annonce depuis ce lien</span>
-                          </>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isFetchingUrl || !jobUrl.trim()}
+                          onClick={onFetchJobFromUrl}
+                          className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                        >
+                          {isFetchingUrl ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Extraction en cours...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                              <span>📥 Importer l&apos;annonce</span>
+                            </>
+                          )}
+                        </button>
+
+                        {onPasteJobFromClipboard && (
+                          <button
+                            type="button"
+                            onClick={onPasteJobFromClipboard}
+                            className="py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-gray-200"
+                            title="Coller directement le texte copié depuis LinkedIn / Indeed"
+                          >
+                            <span>📋 Presse-papier</span>
+                          </button>
                         )}
-                      </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 pt-1 text-[10px] text-gray-500 flex-wrap">
+                        <span className="font-semibold text-gray-600">Compatible :</span>
+                        <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium border border-blue-100">LinkedIn</span>
+                        <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium border border-indigo-100">Indeed</span>
+                        <span className="bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-medium border border-sky-100">France Travail</span>
+                        <span className="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded font-medium border border-purple-100">HelloWork</span>
+                        <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-medium border border-amber-100">Apec</span>
+                      </div>
                     </div>
 
                     {urlFetchSuccess && (
@@ -1179,9 +1221,22 @@ export default function OptimizationFunnel({
                     )}
 
                     {urlFetchErrorInfo && (
-                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                        <span className="text-[11px]">{urlFetchErrorInfo.message}</span>
+                      <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-950 text-xs space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <span className="text-[11px] font-medium leading-relaxed">{urlFetchErrorInfo.message}</span>
+                        </div>
+                        {onPasteJobFromClipboard && (
+                          <div className="pl-6 pt-1">
+                            <button
+                              type="button"
+                              onClick={onPasteJobFromClipboard}
+                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs cursor-pointer"
+                            >
+                              <span>📋 Coller le texte copié depuis mon presse-papier</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </>
@@ -1459,80 +1514,127 @@ export default function OptimizationFunnel({
             </div>
           </div>
 
-          {/* Les 5 Piliers d'évaluation */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
-            <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-indigo-600" />
-              <span>Évaluation sur les 5 Piliers Clés du Recrutement</span>
-            </h4>
+          {/* Sélecteur de vue Étape 2 : Rapport ATS vs Fiche Entreprise & Entretien */}
+          <div className="flex bg-gray-100/80 p-1.5 rounded-2xl border border-gray-200 gap-2">
+            <button
+              type="button"
+              onClick={() => setStep2ViewMode('audit')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                step2ViewMode === 'audit'
+                  ? 'bg-white text-purple-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+              }`}
+            >
+              <FileCheck className="w-4 h-4 text-purple-600" />
+              <span>1. Diagnostic ATS & Écarts ({parsedAnalysis.globalScore}/100)</span>
+            </button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-              {parsedAnalysis.axisScores.map((ax, idx) => (
-                <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-gray-800 text-[11px] truncate">{ax.axis}</span>
-                    <span className="font-black text-indigo-600 text-xs">{ax.score}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-indigo-600 h-1.5 rounded-full"
-                      style={{ width: `${ax.score}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-500 line-clamp-2">{ax.description}</p>
+            <button
+              type="button"
+              onClick={() => setStep2ViewMode('company')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                step2ViewMode === 'company'
+                  ? 'bg-white text-blue-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+              }`}
+            >
+              <Building2 className="w-4 h-4 text-blue-600" />
+              <span>2. 🏛️ Fiche Technique & Financière Entreprise</span>
+              <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold hidden sm:inline">
+                Préparation Entretien
+              </span>
+            </button>
+          </div>
+
+          {/* VUE 1 : DIAGNOSTIC ATS & PILIERS */}
+          {step2ViewMode === 'audit' && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Les 5 Piliers d'évaluation */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-indigo-600" />
+                  <span>Évaluation sur les 5 Piliers Clés du Recrutement</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                  {parsedAnalysis.axisScores.map((ax, idx) => (
+                    <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-gray-800 text-[11px] truncate">{ax.axis}</span>
+                        <span className="font-black text-indigo-600 text-xs">{ax.score}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-indigo-600 h-1.5 rounded-full"
+                          style={{ width: `${ax.score}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-500 line-clamp-2">{ax.description}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Points Forts & Lacunes / Mots-clés manquants */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Points Forts */}
-            <div className="bg-white rounded-2xl border border-emerald-200 p-5 shadow-xs space-y-3">
-              <div className="flex items-center gap-2 text-emerald-900 border-b border-emerald-100 pb-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <h4 className="font-extrabold text-xs uppercase tracking-wider">
-                  Vos 3 Points Forts Majeurs
-                </h4>
               </div>
 
-              <div className="space-y-2.5">
-                {parsedAnalysis.strengths.slice(0, 3).map((st, i) => (
-                  <div key={i} className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-1">
-                    <span className="font-bold text-xs text-emerald-950 block">
-                      {st.title}
-                    </span>
-                    <p className="text-xs text-gray-600 leading-relaxed font-normal">
-                      {st.description}
-                    </p>
+              {/* Points Forts & Lacunes / Mots-clés manquants */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Points Forts */}
+                <div className="bg-white rounded-2xl border border-emerald-200 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-900 border-b border-emerald-100 pb-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider">
+                      Vos 3 Points Forts Majeurs
+                    </h4>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Lacunes & Mots-clés manquants */}
-            <div className="bg-white rounded-2xl border border-amber-200 p-5 shadow-xs space-y-3">
-              <div className="flex items-center gap-2 text-amber-900 border-b border-amber-100 pb-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <h4 className="font-extrabold text-xs uppercase tracking-wider">
-                  Écarts & Mots-clés ATS à intégrer
-                </h4>
-              </div>
-
-              <div className="space-y-2.5">
-                {parsedAnalysis.weaknesses.slice(0, 3).map((wk, i) => (
-                  <div key={i} className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 space-y-1">
-                    <span className="font-bold text-xs text-amber-950 block">
-                      {wk.title}
-                    </span>
-                    <p className="text-xs text-gray-600 leading-relaxed font-normal">
-                      {wk.description}
-                    </p>
+                  <div className="space-y-2.5">
+                    {parsedAnalysis.strengths.slice(0, 3).map((st, i) => (
+                      <div key={i} className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-1">
+                        <span className="font-bold text-xs text-emerald-950 block">
+                          {st.title}
+                        </span>
+                        <p className="text-xs text-gray-600 leading-relaxed font-normal">
+                          {st.description}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* Lacunes & Mots-clés manquants */}
+                <div className="bg-white rounded-2xl border border-amber-200 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2 text-amber-900 border-b border-amber-100 pb-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider">
+                      Écarts & Mots-clés ATS à intégrer
+                    </h4>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {parsedAnalysis.weaknesses.slice(0, 3).map((wk, i) => (
+                      <div key={i} className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 space-y-1">
+                        <span className="font-bold text-xs text-amber-950 block">
+                          {wk.title}
+                        </span>
+                        <p className="text-xs text-gray-600 leading-relaxed font-normal">
+                          {wk.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* VUE 2 : FICHE TECHNIQUE & FINANCIÈRE DE L'ENTREPRISE */}
+          {step2ViewMode === 'company' && parsedAnalysis?.companyDossier && (
+            <div className="space-y-4 animate-fade-in">
+              <CompanyDossierView
+                dossier={parsedAnalysis.companyDossier}
+                roleTitle={parsedAnalysis.targetRole}
+              />
+            </div>
+          )}
 
           {/* Boutons de transition Étape 2 */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
@@ -1566,6 +1668,53 @@ export default function OptimizationFunnel({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Fallback Étape 2 si l'analyse est en cours ou non chargée */}
+      {currentStep === 2 && !parsedAnalysis && (
+        <div className="bg-white rounded-3xl border border-blue-200 p-8 sm:p-12 text-center shadow-xs space-y-4 animate-fade-in">
+          {isLoadingAnalysis ? (
+            <div className="space-y-3">
+              <div className="w-16 h-16 mx-auto rounded-full bg-blue-50 flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900">
+                Analyse ATS approfondie en cours...
+              </h3>
+              <p className="text-xs text-gray-600 max-w-md mx-auto">
+                L&apos;IA évalue l&apos;adéquation de votre CV avec les compétences et prérequis de l&apos;offre d&apos;emploi.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-full bg-amber-50 flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-amber-600" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">
+                Le diagnostic n&apos;a pas encore été généré
+              </h3>
+              <p className="text-xs text-gray-600 max-w-md mx-auto">
+                Veuillez renseigner votre CV et l&apos;offre d&apos;emploi, puis lancer l&apos;audit.
+              </p>
+              <div className="flex justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  ⬅ Revenir à l&apos;étape 1
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoToStep2}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  🔄 Lancer le diagnostic
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2244,6 +2393,22 @@ export default function OptimizationFunnel({
                 </span>
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveDossierTab('company')}
+              className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeDossierTab === 'company'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-2xl'
+                  : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>3. 🏛️ Fiche Entreprise & Entretien</span>
+              <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                {parsedAnalysis.targetCompany || 'Entreprise'}
+              </span>
+            </button>
           </div>
 
           {/* =========================================================================
@@ -2657,6 +2822,18 @@ export default function OptimizationFunnel({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* =========================================================================
+              PIÈCE 3 : FICHE TECHNIQUE & FINANCIÈRE DE L'ENTREPRISE RECRUTEUSE
+             ========================================================================= */}
+          {activeDossierTab === 'company' && parsedAnalysis?.companyDossier && (
+            <div className="space-y-4 animate-fade-in">
+              <CompanyDossierView
+                dossier={parsedAnalysis.companyDossier}
+                roleTitle={parsedAnalysis.targetRole}
+              />
             </div>
           )}
 

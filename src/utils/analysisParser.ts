@@ -1,4 +1,6 @@
 import { extractOfferMetadata } from './offerMetadataExtractor';
+import { extractCompanyDossier } from './companyDossierExtractor';
+import type { CompanyFinancialTechnicalDossier } from '../types';
 
 export interface ParsedStrength {
   title: string;
@@ -61,6 +63,7 @@ export interface ParsedAnalysis {
     interviewChance: number;
     missingCriticalCount: number;
   };
+  companyDossier: CompanyFinancialTechnicalDossier;
 }
 
 export function extractScore(text: string | null | undefined): number | null {
@@ -401,6 +404,14 @@ export function parseAnalysisResult(
     missingCriticalCount: skillsBreakdown.filter((s) => s.status === 'missing').length || 1,
   };
 
+  // 13. Fiche Technique & Financière de l'Entreprise Recruteuse (Préparation Entretien)
+  const companyDossier = extractCompanyDossier(
+    rawText,
+    jobText,
+    targetCompany,
+    targetRole
+  );
+
   return {
     globalScore,
     scoreLabel,
@@ -420,5 +431,6 @@ export function parseAnalysisResult(
     skillsBreakdown,
     axisScores,
     kpis,
+    companyDossier,
   };
 }

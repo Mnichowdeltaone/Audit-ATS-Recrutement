@@ -5,7 +5,9 @@
   "type": "module",
   "main": "main.cjs",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
+    "start": "tsx server.ts",
+    "lint": "tsc --noEmit",
     "build": "tsc && vite build",
     "build:server": "node build-server.js",
     "build-exe": "npm run build && npm run build:server && npx electron-builder"

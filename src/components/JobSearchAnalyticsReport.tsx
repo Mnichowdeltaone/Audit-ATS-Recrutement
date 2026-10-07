@@ -28,8 +28,14 @@ import {
   Edit3,
   History,
   Plus,
+  Paperclip,
+  Mail,
 } from 'lucide-react';
 import type { ApplicationItem, ApplicationStatus, AnalysisHistoryItem, UserProfile } from '../types';
+import CompanyDossierModal from './CompanyDossierModal';
+import AttachLetterModal from './AttachLetterModal';
+import { extractCompanyDossier } from '../utils/companyDossierExtractor';
+import { localDbClient } from '../services/localDbClient';
 
 interface JobSearchAnalyticsReportProps {
   applications: ApplicationItem[];
@@ -197,6 +203,8 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
   const [auditFilterType, setAuditFilterType] = useState<'all' | 'company' | 'cabinet' | 'horodated'>('all');
   const [editingAuditId, setEditingAuditId] = useState<string | null>(null);
   const [editingAuditTitle, setEditingAuditTitle] = useState('');
+  const [selectedDossierAnalysis, setSelectedDossierAnalysis] = useState<AnalysisHistoryItem | null>(null);
+  const [selectedAttachLetterAnalysis, setSelectedAttachLetterAnalysis] = useState<AnalysisHistoryItem | null>(null);
 
   // Audits filtrés
   const filteredAnalyses = useMemo(() => {
@@ -1373,13 +1381,44 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
                         {audit.jobSnippet || audit.jobText?.slice(0, 100) || 'Détails de l’offre analysée'}
                       </p>
 
-                      {/* Statut explicite de la lettre de motivation */}
-                      {audit.coverLetterTitle || audit.coverLetterContent || audit.coverLetterId ? (
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>✉️ Lettre rattachée : « {audit.coverLetterTitle || 'Lettre sur-mesure'} »</span>
-                        </div>
-                      ) : null}
+                      {/* Statut explicite de la lettre de motivation & Fiche Entreprise */}
+                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                        {audit.coverLetterTitle || audit.coverLetterContent || audit.coverLetterId ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>✉️ Lettre rattachée : « {audit.coverLetterTitle || 'Lettre sur-mesure'} »</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAttachLetterAnalysis(audit)}
+                              className="ml-1 text-[11px] underline text-emerald-700 hover:text-emerald-900 cursor-pointer font-semibold"
+                              title="Gérer la lettre rattachée"
+                            >
+                              Gérer
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAttachLetterAnalysis(audit)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+                            title="Rattacher une lettre de motivation à cet audit"
+                          >
+                            <Paperclip className="w-3 h-3 text-purple-600" />
+                            <span>📎 Rattacher une lettre</span>
+                          </button>
+                        )}
+
+                        {/* Bouton Fiche Entreprise & Entretien */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDossierAnalysis(audit)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+                          title="Consulter la fiche technique et financière de l'entreprise recruteuse pour préparer l'entretien"
+                        >
+                          <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                          <span>🏛️ Fiche Entreprise (Entretien)</span>
+                        </button>
+                      </div>
 
                       {/* Évolution des scores si multi-versions */}
                       {hasMultipleVersions && pointsGain !== null && (
@@ -1709,6 +1748,59 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal de consultation de la Fiche Technique & Financière */}
+      <CompanyDossierModal
+        isOpen={Boolean(selectedDossierAnalysis)}
+        onClose={() => setSelectedDossierAnalysis(null)}
+        dossier={
+          selectedDossierAnalysis?.companyDossier ||
+          (selectedDossierAnalysis
+            ? extractCompanyDossier(
+                selectedDossierAnalysis.analysisResult,
+                selectedDossierAnalysis.jobText,
+                selectedDossierAnalysis.company || selectedDossierAnalysis.cabinet,
+                selectedDossierAnalysis.role
+              )
+            : null)
+        }
+        roleTitle={selectedDossierAnalysis?.role}
+        analysisTitle={selectedDossierAnalysis?.title}
+      />
+
+      {/* Modal de rattachement de lettre de motivation */}
+      {selectedAttachLetterAnalysis && (
+        <AttachLetterModal
+          isOpen={Boolean(selectedAttachLetterAnalysis)}
+          onClose={() => setSelectedAttachLetterAnalysis(null)}
+          analysisId={selectedAttachLetterAnalysis.id}
+          analysisTitle={selectedAttachLetterAnalysis.title}
+          analysisCompany={selectedAttachLetterAnalysis.company}
+          analysisRole={selectedAttachLetterAnalysis.role}
+          currentAttachedLetterId={selectedAttachLetterAnalysis.coverLetterId}
+          currentAttachedLetterTitle={selectedAttachLetterAnalysis.coverLetterTitle}
+          onLetterAttached={(letter) => {
+            const updated = {
+              ...selectedAttachLetterAnalysis,
+              coverLetterId: letter.id,
+              coverLetterTitle: letter.title,
+              coverLetterContent: letter.content,
+            };
+            localDbClient.saveAnalysis(updated).catch(() => {});
+            setSelectedAttachLetterAnalysis(null);
+          }}
+          onLetterDetached={() => {
+            const updated = {
+              ...selectedAttachLetterAnalysis,
+              coverLetterId: undefined,
+              coverLetterTitle: undefined,
+              coverLetterContent: undefined,
+            };
+            localDbClient.saveAnalysis(updated).catch(() => {});
+            setSelectedAttachLetterAnalysis(null);
+          }}
+        />
       )}
     </div>
   );
