@@ -53,6 +53,7 @@ import { detectCvChanges, buildEvolutionStep } from '../utils/cvEvolutionHelper'
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from '../utils/sampleData';
 import AttachLetterModal from './AttachLetterModal';
 import CompanyDossierView from './CompanyDossierView';
+import CvImprovementBanner from './CvImprovementBanner';
 
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
@@ -338,9 +339,9 @@ export default function OptimizationFunnel({
   // Titres par défaut pour le CV final et la lettre de motivation
   useEffect(() => {
     if (parsedAnalysis?.targetRole) {
-      const companyPart = parsedAnalysis.targetCompany ? ` - ${parsedAnalysis.targetCompany}` : '';
-      setNewCvTitle(`CV Optimisé - ${parsedAnalysis.targetRole}${companyPart}`);
-      setCoverLetterTitle(`Lettre de Motivation - ${parsedAnalysis.targetRole}${companyPart}`);
+      const companyPart = parsedAnalysis?.targetCompany ? ` - ${parsedAnalysis.targetCompany}` : '';
+      setNewCvTitle(`CV Optimisé - ${parsedAnalysis?.targetRole}${companyPart}`);
+      setCoverLetterTitle(`Lettre de Motivation - ${parsedAnalysis?.targetRole}${companyPart}`);
     }
   }, [parsedAnalysis?.targetRole, parsedAnalysis?.targetCompany]);
 
@@ -644,6 +645,9 @@ export default function OptimizationFunnel({
 
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in">
+      {/* Bannière officielle CV Improvement affichée au démarrage */}
+      <CvImprovementBanner />
+
       {/* Alerte d'erreur éventuelle */}
       {(funnelError || analysisError) && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in shadow-xs">
@@ -718,11 +722,11 @@ export default function OptimizationFunnel({
                 <div className="flex items-center gap-1.5 shrink-0">
                   {parsedAnalysis?.company ? (
                     <span className="text-xs font-black bg-blue-100 text-blue-900 border border-blue-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs">
-                      🏢 {parsedAnalysis.company}
+                      🏢 {parsedAnalysis?.company}
                     </span>
                   ) : parsedAnalysis?.cabinet ? (
                     <span className="text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs">
-                      👔 {parsedAnalysis.cabinet}
+                      👔 {parsedAnalysis?.cabinet}
                     </span>
                   ) : (
                     <span
@@ -1472,7 +1476,7 @@ export default function OptimizationFunnel({
                 </span>
                 <span className="text-xs text-gray-400">•</span>
                 <span className="text-xs text-purple-200">
-                  {parsedAnalysis.targetRole} {parsedAnalysis.targetCompany ? `chez ${parsedAnalysis.targetCompany}` : ''}
+                  {parsedAnalysis?.targetRole || 'Poste Cible'} {parsedAnalysis?.targetCompany ? `chez ${parsedAnalysis.targetCompany}` : ''}
                 </span>
               </div>
               <h3 className="text-lg sm:text-xl font-black text-white">
@@ -2406,7 +2410,7 @@ export default function OptimizationFunnel({
               <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
               <span>3. 🏛️ Fiche Entreprise & Entretien</span>
               <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
-                {parsedAnalysis.targetCompany || 'Entreprise'}
+                {parsedAnalysis?.targetCompany || 'Entreprise'}
               </span>
             </button>
           </div>

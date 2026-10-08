@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
 import {
+  Home,
   FileText,
   Briefcase,
   Key,
@@ -343,7 +344,7 @@ export default function App() {
   const jobUrlInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Navigation par onglets
+  // Navigation par onglets (démarrage direct sur l'Analyseur avec bannière officielle)
   const [activeTab, setActiveTab] = useState<'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings'>('app');
 
   // Profil utilisateur et affichage (Multi-profils)
@@ -1748,9 +1749,12 @@ export default function App() {
 
             {/* Logo CV Improvement officiel en tête */}
             <div
-              onClick={() => setActiveTab('app')}
+              onClick={() => {
+                setActiveTab('app');
+                window.dispatchEvent(new CustomEvent('open_cv_improvement_banner'));
+              }}
               className="flex items-center shrink-0 pr-1.5 sm:pr-3 sm:border-r sm:border-gray-200 cursor-pointer"
-              title="CV Improvement - Accueil"
+              title="CV Improvement - Afficher la bannière d'accueil"
             >
               <div className="hidden sm:block">
                 <CvImprovementLogo variant="full" size="xs" showTagline={false} />
@@ -1763,7 +1767,7 @@ export default function App() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate">
-                  {activeTab === 'app' && '🎯 Analyseur d\'Adéquation CV & Offre'}
+                  {activeTab === 'app' && '🎯 Accueil & Analyseur d\'Adéquation CV / Offre'}
                   {activeTab === 'cv-assistant' && '✨ Générateur Assisté CV & Lettre'}
                   {activeTab === 'tracker' && '💼 Suivi des Candidatures'}
                   {activeTab === 'reports' && '📈 Analyses & Rapports de Recherche d\'Emploi'}
@@ -1791,6 +1795,20 @@ export default function App() {
 
           {/* Raccourcis et statut en en-tête */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Bouton pour ré-afficher la bannière de présentation */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('app');
+                window.dispatchEvent(new CustomEvent('open_cv_improvement_banner'));
+              }}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-[#0A2540] border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+              title="Afficher la bannière d'accueil CV Improvement (10s)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Bannière</span>
+            </button>
+
             {/* Statut Clé API & Modèle */}
             <button
               type="button"

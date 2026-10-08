@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Home,
   Layers,
   Sparkles,
   Briefcase,
@@ -114,11 +115,11 @@ export default function Sidebar({
   // Navigation fluide et épurée (sans encombrement)
   const navSections: NavSection[] = [
     {
-      title: 'Analyse & Génération',
+      title: 'Accueil & Analyse',
       items: [
         {
           id: 'app' as const,
-          label: 'Analyseur CV / Offre',
+          label: 'Accueil & Analyseur CV',
           icon: Layers,
           color: 'text-[#FF4B4B]',
           activeBg: 'bg-red-50 text-red-700 border-red-200',
@@ -206,9 +207,12 @@ export default function Sidebar({
       {/* 1. Header Logo & Collapse Button */}
       <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-2 shrink-0">
         <div
-          onClick={() => handleNavClick('app')}
+          onClick={() => {
+            handleNavClick('app');
+            window.dispatchEvent(new CustomEvent('open_cv_improvement_banner'));
+          }}
           className="flex items-center gap-2 cursor-pointer group min-w-0"
-          title="CV Improvement - Votre potentiel mérite un meilleur CV."
+          title="CV Improvement - Afficher la bannière d'accueil"
         >
           {!isCollapsed ? (
             <CvImprovementLogo variant="full" size="sm" showTagline={true} />
