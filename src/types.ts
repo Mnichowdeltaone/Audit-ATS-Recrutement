@@ -81,6 +81,52 @@ export interface AnalysisHistoryItem {
   companyDossier?: CompanyFinancialTechnicalDossier; // Fiche technique et financière de l'entreprise recruteuse
 }
 
+export interface CompanyExecutiveInfo {
+  name: string;
+  title: string;
+  roleDescription?: string;
+}
+
+export interface LegalAndCorporateInfo {
+  legalName?: string; // Raison sociale officielle (ex: VALORIA CAPITAL / GROUPE VALORIA)
+  commercialBrand?: string; // Marque ou groupe
+  websiteUrl?: string; // Site web officiel
+  headquarters?: string; // Siège social / adresse
+  creationYear?: string; // Année de fondation
+  legalForm?: string; // Forme juridique (SAS, SA, etc.)
+  keyExecutives?: CompanyExecutiveInfo[]; // Dirigeants clés & Fondateurs
+  activitiesPillars?: string[]; // Piliers d'activité réels (ex: Gestion privée, Asset Management, M&A)
+  aumOrKeyMetrics?: string; // Actifs sous gestion (AUM), encours, CA
+  shareholdersAndBackers?: string; // Actionnariat & fonds partenaires (ex: TA Associates, Fondateur)
+  recentDealsOrNews?: string[]; // Actualités M&A récentes, acquisitions
+}
+
+export interface StrategicPlanPhase {
+  period: string; // Ex: "J0 - J30 : Immersion & Diagnostic"
+  title: string;
+  description: string;
+  actions: string[];
+  deliverable: string;
+}
+
+export interface CandidateStrategicPlan {
+  roleTitle: string;
+  executiveSummary: string;
+  phases: StrategicPlanPhase[];
+  quickWins: string[];
+  strategicRecommendations: string[];
+}
+
+export interface CompanyStakeholderCommunication {
+  roleCategory: string; // "Direction Générale & Présidence", "Direction Financière (DAF)", "Opérationnels & Associés", "RH & Recrutement"
+  targetName?: string; // Ex: "Romain Lefèvre (Président)"
+  keyPriorities: string[]; // Ce qui l'intéresse / ses priorités
+  recommendedPosture: string; // Posture & ton recommandé
+  verbalPitch: string; // Ce qu'il faut lui dire en entretien
+  outreachMessageSample: string; // Modèle de message direct (LinkedIn / Email d'approche)
+  questionsToAsk: string[]; // Questions ciblées à lui poser
+}
+
 export interface CompanyFinancialTechnicalDossier {
   companyName: string;
   sector?: string;
@@ -88,6 +134,10 @@ export interface CompanyFinancialTechnicalDossier {
   estimatedSize?: string; // PME, ETI, Grand Groupe, 50-250 salariés...
   location?: string; // Siège / Implantation
   ownershipStructure?: string; // Familial, Fonds LBO/PE, VC, Cotée, etc.
+  websiteUrl?: string; // URL officielle du site de l'entreprise
+  legalInfo?: LegalAndCorporateInfo; // Informations légales et corporatives officielles
+  candidateStrategicPlan?: CandidateStrategicPlan; // Plan stratégique d'intégration et feuille de route 30-60-90 jours
+  stakeholdersCommunication?: CompanyStakeholderCommunication[]; // Cartographie et stratégie de communication par interlocuteur
   financialProfile: {
     estimatedRevenue?: string; // Ordre de grandeur CA ou croissance
     growthStage?: string; // Forte croissance, Maturité, Restructuration...

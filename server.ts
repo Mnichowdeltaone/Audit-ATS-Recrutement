@@ -682,12 +682,13 @@ ${input.trim()}
 
 ${jobText ? `OFFRE D'EMPLOI CIBLE (pour aligner les mots-clés) :\n"""\n${jobText.trim()}\n"""\n` : ''}
 
-CONSIGNES :
+CONSIGNES STRICTES (RÈGLE ABSOLUE - ZÉRO INVENTION) :
 - Rédige un CV complet et immédiatement utilisable en français impeccable.
+- AUTHENTICITÉ TOTALE : INTERDICTION FORMELLE d'inventer des entreprises, des diplômes, des missions ou des projets que le candidat n'a pas réalisés. Le but est d'améliorer et de structurer son parcours réel, jamais d'inventer des exemples fictifs.
 - En-tête professionnel avec coordonnées.
-- Rédige un Résumé Professionnel percutant (3-4 lignes).
-- Liste des Compétences Clés (Hard skills & Soft skills catégorisées).
-- Expériences professionnelles détaillées avec puces quantifiées (méthode Google X-Y-Z / STAR).
+- Rédige un Résumé Professionnel percutant (3-4 lignes) valorisant ses réels points forts.
+- Liste des Compétences Clés (Hard skills & Soft skills catégorisées fidèles à son expérience).
+- Expériences professionnelles détaillées avec puces valorisées (formule STAR / verbes d'action puissants) sur la base de ses réalisations effectives.
 - Formations, Certifications et Langues.
 - Assure une mise en page claire en texte structuré / Markdown prêt à l'emploi.`;
     } else if (action === 'generate_cover_letter') {
@@ -712,14 +713,15 @@ OFFRE D'EMPLOI :
 ${(jobText || '').trim()}
 """
 
-CONSIGNES DE RÉDACTION :
+CONSIGNES DE RÉDACTION (ZÉRO INVENTION - AUTHENTICITÉ STRICTE) :
 1. Bannis les formules creuses et génériques ("vivement intéressé par votre annonce parue ce jour...").
-2. Paragraphe 1 : Accroche originale montrant la compréhension immédiate des enjeux actuels de ${companyName || "l'entreprise"} et la valeur ajoutée apportée.
-3. Paragraphe 2 : Démonstration concrète par la preuve : 2 ou 3 réalisations chiffrées du candidat qui répondent directement aux critères majeurs de l'offre.
-4. Paragraphe 3 : Projet commun : pourquoi cette collaboration fait sens et quelle dynamique va être créée.
-5. Paragraphe 4 : Appel à l'action direct et courtois pour convenir d'un entretien + formule de politesse soignée.
-6. Longueur idéale : entre 280 et 380 mots.
-7. Format en Markdown complet avec coordonnées, date du jour, objet clair et corps de texte.`;
+2. Valorise exclusivement les compétences et expériences EFFECTIVES du candidat, sans inventer d'anecdotes ou de projets imaginaires.
+3. Paragraphe 1 : Accroche originale montrant la compréhension immédiate des enjeux réels de ${companyName || "l'entreprise"} et la valeur ajoutée apportée.
+4. Paragraphe 2 : Démonstration concrète par la preuve : 2 ou 3 réalisations authentiques du candidat qui répondent directement aux critères majeurs de l'offre.
+5. Paragraphe 3 : Projet commun : pourquoi cette collaboration fait sens et quelle dynamique va être créée.
+6. Paragraphe 4 : Appel à l'action direct et courtois pour convenir d'un entretien + formule de politesse soignée.
+7. Longueur idéale : entre 280 et 380 mots.
+8. Format en Markdown complet avec coordonnées, date du jour, objet clair et corps de texte.`;
     } else if (action === 'enhance_bullet') {
       prompt = `Tu es un coach expert en rédaction de CV et optimisation ATS.
 Transforme la ou les puces de CV suivantes en 3 propositions d'accomplissements percutants selon la formule STAR (Situation, Action, Résultat).

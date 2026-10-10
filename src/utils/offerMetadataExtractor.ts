@@ -69,6 +69,7 @@ const KNOWN_CABINETS = [
 
 // Liste de grands groupes / marques identifiables
 const KNOWN_COMPANIES = [
+  'Valoria Capital', 'Groupe Valoria', 'Valoria',
   'SUPRATEC', 'Supratec', 'Equans', 'Sanef', 'Abertis', 'Vauban Infrastructure',
   'TotalEnergies', 'Airbus', 'Sanofi', "L'Oréal", 'LVMH', 'BNP Paribas', 'Société Générale',
   'Crédit Agricole', 'Danone', 'Schneider Electric', 'Capgemini', 'Dassault Systèmes',
