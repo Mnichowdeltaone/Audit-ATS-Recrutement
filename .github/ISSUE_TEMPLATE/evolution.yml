@@ -1,0 +1,21 @@
+name: Evolution
+description: Proposer une amelioration avec un resultat mesurable
+title: '[EVOLUTION] '
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Besoin utilisateur
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criteres d'acceptation
+      placeholder: Decrire les conditions qui permettront de valider la fonctionnalite.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests de validation prevus

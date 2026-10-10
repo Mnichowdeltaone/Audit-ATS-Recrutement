@@ -1,0 +1,40 @@
+name: Qualite CV Improvement
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      GEMINI_API_KEY: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Installer les dependances
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Tests unitaires sans cle API
+        run: node scripts/run-tests.mjs unit
+      - name: Verification TypeScript et build de l'interface
+        run: npm run build
+      - name: Compiler le serveur
+        run: npm run build:server
+      - name: Tests API sur base temporaire
+        run: node scripts/run-tests.mjs integration

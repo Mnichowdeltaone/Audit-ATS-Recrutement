@@ -1,0 +1,29 @@
+{
+  "repository": "Mnichowdeltaone/Audit-ATS-Recrutement",
+  "baseline": "e893af1122d5db402edc43bd110d8c1986b54e44",
+  "files": [
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/quality.yml",
+    ".github/ISSUE_TEMPLATE/anomalie.yml",
+    ".github/ISSUE_TEMPLATE/evolution.yml",
+    "configure-quality.cjs",
+    "scripts/publish-quality.mjs",
+    "scripts/run-tests.mjs",
+    "scripts/bootstrap-github-project.mjs",
+    "tests/unit/offer-and-score.test.mjs",
+    "tests/unit/demo.test.mjs",
+    "tests/unit/database.test.mjs",
+    "tests/integration/api.test.mjs",
+    "tests/support/typescript-resolver.mjs",
+    "docs/quality/VALIDATION.md",
+    "docs/quality/STRATEGIE.md",
+    "docs/quality/CAMPAGNE.md",
+    "docs/quality/REFERENTIEL.md",
+    "docs/quality/README.md",
+    "docs/project/backlog.json",
+    "docs/project/README.md",
+    "DEMARRAGE.md",
+    "quality-manifest.json"
+  ]
+}
+

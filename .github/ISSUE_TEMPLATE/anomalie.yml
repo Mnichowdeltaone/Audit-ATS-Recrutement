@@ -1,0 +1,45 @@
+name: Anomalie
+description: Signaler un dysfonctionnement reproductible
+title: '[BUG] '
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version et environnement
+      placeholder: Version application, commit, Windows, installation ou navigateur
+    validations:
+      required: true
+  - type: input
+    id: test
+    attributes:
+      label: Identifiant du test
+      placeholder: MAN-WIN-01 ou AUTO-API-02
+  - type: textarea
+    id: steps
+    attributes:
+      label: Etapes de reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultat attendu
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultat observe et preuves
+      description: Masquer les cles API et les donnees personnelles avant tout ajout.
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Bloquant - installation, demarrage ou perte de donnees
+        - Majeur - fonctionnalite principale indisponible
+        - Mineur - contournement disponible
+    validations:
+      required: true

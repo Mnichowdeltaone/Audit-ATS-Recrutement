@@ -8,3 +8,9 @@ coverage/
 !.env.example
 
 BCKP/
+
+/.qa-tmp/
+
+/qa-reports/
+
+package.json.quality-*.bak
