@@ -550,6 +550,9 @@ export default function App() {
 
   // Réinitialisation complète en mémoire de l'application
   const handleDatabaseReset = () => {
+    localDbClient.saveApiKey('');
+    setApiKey('');
+    setShowApiKey(false);
     setApplications([]);
     setHistory([]);
     setSavedCvs([]);

@@ -518,6 +518,14 @@ export default function SettingsAndProfile({
   };
 
   // Suppression de la clé sauvegardée
+  useEffect(() => {
+    if (!apiKey.trim()) {
+      setIsKeySavedInStorage(false);
+      setShowApiKey(false);
+      setApiTestResult(null);
+    }
+  }, [apiKey]);
+
   const handleClearApiKey = () => {
     setApiKey('');
     localDbClient.saveApiKey('');

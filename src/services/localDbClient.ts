@@ -1307,6 +1307,8 @@ export const localDbClient = {
 
     // 2. Vider toutes les clés localStorage
     const keysToRemove = [
+      'cv_move_gemini_api_key',
+      'gemini_api_key',
       'cv_move_saved_cvs',
       'cv_move_applications',
       'cv_move_user_profile',

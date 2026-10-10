@@ -2081,7 +2081,7 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
                 <span>Zone de Réinitialisation d&apos;Usine</span>
               </div>
               <p className="text-xs text-red-700/80 mt-0.5">
-                Efface les modifications et restaure la base de données locale avec les données d&apos;exemple initiales.
+                Supprime les données personnelles et la clé API enregistrée sur cet appareil. La base sera vide, sans données de démonstration.
               </p>
             </div>
 
