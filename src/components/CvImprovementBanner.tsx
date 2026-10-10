@@ -235,6 +235,9 @@ export const CvImprovementBanner: React.FC<CvImprovementBannerProps> = ({
 
             {/* Crédits de développement et direction de projet */}
             <div className="flex items-center justify-center md:justify-start gap-3 flex-wrap text-xs sm:text-sm text-slate-600 font-medium mt-2 pt-2.5 border-t border-slate-200/80">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-[#0A2540]">
+                Version {__APP_VERSION__}
+              </span>
               <span className="inline-flex items-center gap-1 text-slate-700 font-semibold">
                 <span>by DeltaOne Developpement</span>
               </span>
