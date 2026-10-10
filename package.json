@@ -1,5 +1,5 @@
 {
-  "name": "audit-ats-recrutement",
+  "name": "cv-improvement",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -19,16 +19,47 @@
     "project:apply": "node scripts/bootstrap-github-project.mjs --apply"
   },
   "build": {
-    "appId": "com.audit.ats",
-    "productName": "Audit ATS Recrutement",
+    "appId": "com.cv.improvement",
+    "productName": "CV Improvement",
+    "artifactName": "CV Improvement Setup ${version}.${ext}",
     "electronVersion": "30.0.0",
     "files": [
       "dist/**/*",
       "main.cjs"
     ],
     "win": {
-      "target": "dir"
-    }
+      "target": [
+        "nsis",
+        "dir"
+      ],
+      "icon": "build/cv-improvement.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CV Improvement",
+      "deleteAppDataOnUninstall": false,
+      "include": "build/deltaone-installer.nsh",
+      "installerLanguages": [
+        "fr_FR"
+      ],
+      "language": "1036",
+      "displayLanguageSelector": false,
+      "installerIcon": "build/cv-improvement.ico",
+      "uninstallerIcon": "build/cv-improvement.ico",
+      "installerHeaderIcon": "build/cv-improvement.ico",
+      "installerSidebar": "build/installer-sidebar.bmp",
+      "uninstallerSidebar": "build/installer-sidebar.bmp"
+    },
+    "copyright": "Copyright © 2026 DeltaOne Developpement",
+    "extraResources": [
+      {
+        "from": "build/cv-improvement.ico",
+        "to": "cv-improvement.ico"
+      }
+    ]
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -61,5 +92,9 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "author": {
+    "name": "DeltaOne Developpement"
+  },
+  "description": "CV Improvement - by DeltaOne Developpement. Direction de projet : François Delrieu."
 }
