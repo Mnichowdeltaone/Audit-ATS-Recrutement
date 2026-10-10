@@ -249,7 +249,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
       if (a.evolutionSteps && a.evolutionSteps.length > 1) {
         const v1 = a.evolutionSteps[0]?.score;
         const vLast = a.evolutionSteps[a.evolutionSteps.length - 1]?.score;
-        if (v1 && vLast) {
+        if (typeof v1 === 'number' && Number.isFinite(v1) && typeof vLast === 'number' && Number.isFinite(vLast)) {
           v1Sum += v1;
           vLastSum += vLast;
           evolutionCount += 1;
@@ -257,8 +257,8 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
       }
     });
 
-    const avgV1Score = evolutionCount > 0 ? Math.round(v1Sum / evolutionCount) : (avgScore ? Math.max(50, avgScore - 18) : 64);
-    const avgVLastScore = evolutionCount > 0 ? Math.round(vLastSum / evolutionCount) : (avgScore || 85);
+    const avgV1Score = evolutionCount > 0 ? Math.round(v1Sum / evolutionCount) : (avgScore ?? 0);
+    const avgVLastScore = evolutionCount > 0 ? Math.round(vLastSum / evolutionCount) : (avgScore ?? 0);
     const avgProgression = avgVLastScore - avgV1Score;
 
     return {
@@ -373,13 +373,13 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
       if (a.evolutionSteps && a.evolutionSteps.length > 1) {
         const v1 = a.evolutionSteps[0]?.score;
         const vLast = a.evolutionSteps[a.evolutionSteps.length - 1]?.score;
-        if (v1 && vLast) {
+        if (typeof v1 === 'number' && Number.isFinite(v1) && typeof vLast === 'number' && Number.isFinite(vLast)) {
           totalScoreGain += vLast - v1;
           gainsCount += 1;
         }
       }
     });
-    const avgScoreGain = gainsCount > 0 ? Math.round(totalScoreGain / gainsCount) : 18;
+    const avgScoreGain = gainsCount > 0 ? Math.round(totalScoreGain / gainsCount) : 0;
 
     // Relances dues
     const today = new Date().toISOString().split('T')[0];
@@ -547,7 +547,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
 - Candidatures envoyées : ${metrics.submittedCount}
 - Entretiens obtenus : ${metrics.interview} (${metrics.interviewRate}% de conversion)
 - Offres finales reçues : ${metrics.offer}
-- Score moyen ATS initial : ${metrics.avgAuditScore || 65}%
+- Score moyen ATS initial : ${metrics.avgAuditScore ?? 0}%
 - Gain moyen après révision CV : +${metrics.avgScoreGain} points
 - Discipline de relance : ${metrics.followUpDiscipline}%
 - Cabinets de recrutement : ${metrics.cabinetCount} dossiers (taux entretien : ${metrics.cabinetInterviewRate}%)
@@ -573,7 +573,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
 
 #### 1. Bilan d'Efficacité du Pipeline
 - **Dynamique d'engagement :** Vous avez enregistré **${metrics.total} démarches ciblées**, avec un taux de conversion en entretien de **${metrics.interviewRate}%** (la moyenne du marché pour les cadres se situe entre 8% et 12%). Votre positionnement est solide.
-- **Impact de l'optimisation ATS :** Vos candidatures optimisées affichent un score moyen de **${metrics.avgAppScore || 85}%**, soit un gain net de **+${metrics.avgScoreGain} points** par rapport aux premiers audits. Ce gain explique directement l'augmentation des réponses positives.
+- **Impact de l'optimisation ATS :** Vos candidatures optimisées affichent un score moyen de **${metrics.avgAppScore ?? metrics.avgAuditScore ?? 0}%**, soit un gain net de **+${metrics.avgScoreGain} points** par rapport aux premiers audits. Ce gain explique directement l'augmentation des réponses positives.
 - **Comparatif Canaux :** Les **cabinets de recrutement** affichent un taux d'entretien de **${metrics.cabinetInterviewRate}%** contre **${metrics.directInterviewRate}%** pour les candidatures directes. Les cabinets valorisent particulièrement vos compétences clés sur progiciels.
 
 #### 2. Facteurs Clés d'Accélération
@@ -824,7 +824,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl sm:text-3xl font-black text-emerald-950">
-                  {metrics.avgAppScore ? `${metrics.avgAppScore}%` : '86%'}
+                  {`${metrics.avgAppScore ?? metrics.avgAuditScore ?? 0}%`}
                 </span>
                 <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
                   +{metrics.avgScoreGain} pts gain V2
@@ -904,10 +904,10 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
                     </span>
                     <span>1. Audits & Offres Analysées</span>
                   </span>
-                  <span className="text-gray-500">{analyses.length || metrics.total} opportunités (100%)</span>
+                  <span className="text-gray-500">{analyses.length || metrics.total} opportunités ({analyses.length || metrics.total ? 100 : 0}%)</span>
                 </div>
                 <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
-                  <div className="bg-slate-700 h-full rounded-full transition-all duration-500" style={{ width: '100%' }} />
+                  <div className="bg-slate-700 h-full rounded-full transition-all duration-500" style={{ width: analyses.length || metrics.total ? '100%' : '0%' }} />
                 </div>
               </div>
 
