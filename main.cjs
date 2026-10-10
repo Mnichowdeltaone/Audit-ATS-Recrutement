@@ -1,10 +1,33 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, session, dialog } = require('electron');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 let mainWindow;
 let serverProcess;
+
+async function resetAfterInstallation({ resourcesPath, userDataPath, clearBrowserStorage }) {
+  const markerPath = path.join(resourcesPath, 'installation-reset.id');
+  if (!fs.existsSync(markerPath)) return false;
+  const installationId = fs.readFileSync(markerPath, 'utf8').trim();
+  if (!/^\{?[0-9a-f-]{36}\}?$/i.test(installationId)) {
+    throw new Error('Identifiant de remise a zero invalide.');
+  }
+  const receiptPath = path.join(userDataPath, 'installation-reset-receipt.json');
+  let previousId;
+  try {
+    previousId = JSON.parse(fs.readFileSync(receiptPath, 'utf8')).installationId;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (previousId === installationId) return false;
+  await clearBrowserStorage();
+  fs.rmSync(path.join(userDataPath, 'data'), { recursive: true, force: true });
+  fs.mkdirSync(userDataPath, { recursive: true });
+  fs.writeFileSync(receiptPath, JSON.stringify({ installationId }), 'utf8');
+  return true;
+}
 
 function startServer() {
   const serverPath = path.join(app.getAppPath(), 'dist', 'server.js');
@@ -72,6 +95,22 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (app.isPackaged) {
+    try {
+      await resetAfterInstallation({
+        resourcesPath: process.resourcesPath,
+        userDataPath: app.getPath('userData'),
+        clearBrowserStorage: async () => {
+          await session.defaultSession.clearStorageData();
+          await session.defaultSession.clearCache();
+        },
+      });
+    } catch (error) {
+      dialog.showErrorBox('Remise a zero impossible', String(error.message));
+      app.quit();
+      return;
+    }
+  }
   startServer();
   await waitForServer();
   createWindow();
