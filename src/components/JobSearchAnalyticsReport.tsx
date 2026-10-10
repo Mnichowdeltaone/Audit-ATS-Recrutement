@@ -42,6 +42,8 @@ interface JobSearchAnalyticsReportProps {
   setApplications: React.Dispatch<React.SetStateAction<ApplicationItem[]>>;
   analyses: AnalysisHistoryItem[];
   userProfile: UserProfile | null;
+  isDemoMode?: boolean;
+  onToggleDemoMode?: (enable: boolean) => void;
   onNavigateToTab: (tab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'reports') => void;
   onOpenAnalysis?: (analysisId: string) => void;
   onRenameAnalysis?: (id: string, newTitle: string) => Promise<void> | void;
@@ -185,6 +187,8 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
   setApplications,
   analyses,
   userProfile,
+  isDemoMode = false,
+  onToggleDemoMode,
   onNavigateToTab,
   onOpenAnalysis,
   onRenameAnalysis,
@@ -587,19 +591,24 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
     }, 1000);
   };
 
-  // Charger les données de démo
-  const handleLoadDemoData = () => {
-    setApplications(SAMPLE_BENCHMARK_APPLICATIONS);
-    try {
-      localStorage.setItem('cv_move_applications', JSON.stringify(SAMPLE_BENCHMARK_APPLICATIONS));
-    } catch {
-      // ignore
-    }
+  // Basculer le mode démo de manière sécurisée sans écraser ni toucher les données personnelles réelles
+  const handleToggleDemoData = () => {
+    onToggleDemoMode?.(!isDemoMode);
   };
 
-  const candidateFullName = userProfile && (userProfile.firstName || userProfile.lastName)
+  const candidateFullName = isDemoMode
+    ? 'Thomas Laurent (Démonstration)'
+    : userProfile && (userProfile.firstName || userProfile.lastName)
     ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()
     : 'Candidat';
+
+  const candidateEmail = isDemoMode
+    ? 'thomas.laurent.demo@exemple.fr'
+    : userProfile?.email || 'Email candidat';
+
+  const candidatePhone = isDemoMode
+    ? '06 00 00 00 00'
+    : userProfile?.phone || '';
 
   return (
     <div className="w-full space-y-6 pb-12 print:p-0 print:space-y-4">
@@ -628,16 +637,28 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
 
         {/* Contrôles d'actions & Export */}
         <div className="flex items-center gap-2 flex-wrap shrink-0 print:hidden">
-          {applications.length === 0 && (
+          {isDemoMode ? (
             <button
               type="button"
-              onClick={handleLoadDemoData}
-              className="text-xs px-3 py-2 bg-amber-400 hover:bg-amber-300 text-gray-950 font-black rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-102"
-              title="Charger un jeu d'exemples réalistes pour visualiser les métriques"
+              onClick={() => onToggleDemoMode?.(false)}
+              className="text-xs px-3 py-2 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Quitter la démonstration et revenir à vos données réelles"
             >
-              <Sparkles className="w-3.5 h-3.5 fill-current" />
-              <span>Charger Démo</span>
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Quitter Démo</span>
             </button>
+          ) : (
+            applications.length === 0 && (
+              <button
+                type="button"
+                onClick={handleToggleDemoData}
+                className="text-xs px-3 py-2 bg-amber-400 hover:bg-amber-300 text-gray-950 font-black rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-102"
+                title="Charger un jeu d'exemples réalistes fictif (Thomas Laurent)"
+              >
+                <Sparkles className="w-3.5 h-3.5 fill-current" />
+                <span>Tester la Démo Fictive</span>
+              </button>
+            )
           )}
 
           <button
@@ -1556,9 +1577,16 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
               </div>
 
               <div className="text-right text-xs text-gray-600 shrink-0">
-                <div className="font-black text-gray-900 text-sm">{candidateFullName}</div>
-                <div>{userProfile?.email || 'Email candidat'}</div>
-                <div>{userProfile?.phone || ''}</div>
+                <div className="font-black text-gray-900 text-sm flex items-center justify-end gap-1.5">
+                  <span>{candidateFullName}</span>
+                  {isDemoMode && (
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded">
+                      SPÉCIMEN DÉMO
+                    </span>
+                  )}
+                </div>
+                <div>{candidateEmail}</div>
+                {candidatePhone && <div>{candidatePhone}</div>}
                 <div className="text-[10px] text-gray-400 mt-0.5">Édité le {new Date().toLocaleDateString('fr-FR')}</div>
               </div>
             </div>
@@ -1672,7 +1700,15 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
           {/* Attestation sur l'honneur pour justificatif officiel */}
           <div className="mt-8 pt-4 border-t-2 border-gray-300 text-xs text-gray-600 space-y-2">
             <p className="font-semibold text-gray-800">
-              Attestation sur l&apos;honneur : Je soussigné(e) {candidateFullName}, certifie l&apos;exactitude des démarches de recherche d&apos;emploi et des candidatures répertoriées ci-dessus.
+              {isDemoMode ? (
+                <>
+                  Attestation sur l&apos;honneur (Spécimen d&apos;exemple pour Démonstration) : Document exemple illustrant la génération de justificatifs pour le candidat fictif <strong>Thomas Laurent</strong>.
+                </>
+              ) : (
+                <>
+                  Attestation sur l&apos;honneur : Je soussigné(e) {candidateFullName}, certifie l&apos;exactitude des démarches de recherche d&apos;emploi et des candidatures répertoriées ci-dessus.
+                </>
+              )}
             </p>
             <div className="flex justify-between items-end pt-4">
               <div>

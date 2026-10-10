@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
 import { GoogleGenAI } from '@google/genai';
 import * as localDb from './server/localDb.ts';
+import { extractCompanyDossier } from './src/utils/companyDossierExtractor.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -140,6 +141,9 @@ function generateLocalAtsAudit(cvText: string, jobText: string, isReAnalysis = f
     ? missingKeywords.slice(0, 5).join(', ')
     : 'outils spécifiques et méthodologies';
 
+  const companyDossier = extractCompanyDossier('', jobText);
+  const dossierMd = companyDossier?.rawBriefText ? `\n\n---\n\n${companyDossier.rawBriefText}` : '';
+
   return `### Score de compatibilité
 **${calculatedScore} / 100** (${appreciation})
 
@@ -154,14 +158,14 @@ function generateLocalAtsAudit(cvText: string, jobText: string, isReAnalysis = f
 
 ### Points faibles / Manques
 1. **Mots-clés techniques et outils manquants** : Certains termes essentiels de l'offre (${missingListStr}) ne figurent pas textuellement dans votre CV.
-2. **Réalisations insuffisamment quantifiées** : Les missions manquent d'indicateurs de performance chiffrés (méthode STAR).
+2. **Réalisations insuffisamment quantifiées** : Les missions méritent une meilleure valorisation de leur impact (méthode STAR).
 3. **Adéquation de l'intitulé** : L'en-tête du CV ne cible pas avec assez de précision les termes exacts de l'offre.
 
 ---
 
 ### Stratégie de CV
-1. **Harmonisation lexicale ATS** : Intégrez les compétences clés et outils mentionnés dans l'annonce dans votre section compétences et vos expériences.
-2. **Adopter la méthode STAR** : Reformulez au moins 3 réalisations clés en précisant la situation, vos actions concrètes et les résultats obtenus.
+1. **Harmonisation lexicale ATS** : Intégrez les compétences clés et outils mentionnés dans l'annonce dans votre section compétences et vos expériences réelles.
+2. **Adopter la méthode STAR authentique** : Reformulez vos réalisations existantes en précisant la situation, vos actions concrètes et les résultats obtenus sans inventer de faux projets.
 
 ---
 
@@ -176,7 +180,7 @@ function generateLocalAtsAudit(cvText: string, jobText: string, isReAnalysis = f
 2. **Question :** *"Donnez-moi un exemple concret d'un résultat mesurable obtenu dans votre dernier poste."*
    *Piste de réponse :* Préparez un chiffre clé (temps économisé, budget géré, taux de satisfaction).
 3. **Question :** *"Pourquoi postulez-vous à ce poste précisément aujourd'hui ?"*
-   *Piste de réponse :* Reliez vos compétences actuelles aux besoins urgents exprimés dans l'annonce.`;
+   *Piste de réponse :* Reliez vos compétences actuelles aux besoins urgents exprimés dans l'annonce.${dossierMd}`;
 }
 
 // Run AI compatibility analysis using Google GenAI SDK
@@ -246,8 +250,9 @@ Renvoie ton analyse au format Markdown structuré avec les rubriques suivantes :
 - Score de compatibilité : **[Note objective]/100** (avec une brève appréciation entre parenthèses)
 
 ### Fiche Technique & Financière de l'Entreprise Recruteuse (Préparation Entretien)
+(ATTENTION VIGILANCE ABSOLUE : Analyse scrupuleusement le secteur réel d'activité de l'entreprise. Ex: SUPRATEC est un groupe industriel d'ingénierie et d'équipements, et NON de la mode ou bijouterie ! Ne JAMAIS confondre les expressions de travail courantes telles que "en mode projet", "mode agile" ou "mode hybride" avec le secteur de la mode. Si l'offre mentionne des machines, de la mécanique, de la production, de l'ingénierie ou du B2B, classe rigoureusement dans l'Industrie / Ingénierie.)
 1. **Identité & Modèle Économique :**
-   - Secteur d'activité, taille estimée (PME/ETI/Grand Groupe/Startup), implantation géographique, modèle de revenus (B2B, B2C, SaaS, Retail, Industrie, etc.) et positionnement concurrentiel.
+   - Secteur d'activité précis et fidèle à l'entreprise, taille estimée (PME/ETI/Grand Groupe/Startup), implantation géographique, modèle de revenus (B2B, B2C, SaaS, Retail, Industrie, etc.) et positionnement concurrentiel.
 2. **Profil Financier & Métriques Clés :**
    - Ordre de grandeur du Chiffre d'Affaires / dynamique de croissance, structure d'actionnariat / type de financement (familial, fonds d'investissement LBO/PE, VC, cotée en bourse, etc.).
    - Enjeux financiers & de trésorerie spécifiques déduits de l'offre (optimisation du cash, BFR, prévisions de trésorerie glissantes, clôtures comptables, stocks/COGS, rentabilité, audit légal CAC).
@@ -374,8 +379,11 @@ app.post('/api/generate-company-dossier', async (req: Request, res: Response) =>
       process.env.GEMINI_API_KEY;
 
     if (!keyToUse || keyToUse === 'MY_GEMINI_API_KEY') {
-      res.status(401).json({
-        error: "Aucune clé API Google Gemini n'a été détectée.",
+      const fallbackDossier = extractCompanyDossier('', jobText || '', companyName, targetRole);
+      res.json({
+        success: true,
+        result: fallbackDossier.rawBriefText || '',
+        modelUsed: 'autonomous-benchmark-engine',
       });
       return;
     }
@@ -389,12 +397,14 @@ Poste visé : ${targetRole || 'Poste Cible'}
 Offre d'emploi & éléments de contexte :
 ${(jobText || '').trim() || 'Poste en finance et gestion d’entreprise.'}
 
-Consignes : Sois ultra-précis, concret, réaliste et orienté résultat.
+Consignes : Sois ultra-précis, concret, réaliste et rigoureusement fidèle au secteur d'activité de l'entreprise.
+(ATTENTION VIGILANCE ABSOLUE : Analyse scrupuleusement le secteur réel d'activité de l'entreprise. Ex: SUPRATEC est un groupe industriel d'ingénierie, de robotique et d'équipements pour l'industrie, et NON de la mode ou bijouterie ! Ne JAMAIS confondre les expressions de travail courantes telles que "en mode projet", "mode agile" ou "mode hybride" avec le secteur de la mode. Si l'offre mentionne des machines, de la mécanique, de la production, de l'ingénierie ou du B2B, classe rigoureusement dans l'Industrie / Ingénierie.)
+
 Renvoie la réponse au format Markdown structuré avec exactement les rubriques suivantes :
 
 ### Fiche Technique & Financière de l'Entreprise Recruteuse (Préparation Entretien)
 1. **Identité & Modèle Économique :**
-   - Secteur d'activité précis, taille estimée (PME/ETI/Grand Groupe/Startup), implantation géographique, modèle de revenus (B2B, B2C, SaaS, Retail, Industrie, etc.) et positionnement concurrentiel.
+   - Secteur d'activité précis et fidèle à l'entreprise, taille estimée (PME/ETI/Grand Groupe/Startup), implantation géographique, modèle de revenus (B2B, B2C, SaaS, Retail, Industrie, etc.) et positionnement concurrentiel.
 2. **Profil Financier & Métriques Clés :**
    - Ordre de grandeur du Chiffre d'Affaires / dynamique de croissance, structure d'actionnariat / type de financement (familial, fonds d'investissement LBO/PE, VC, cotée en bourse, etc.).
    - Enjeux financiers & de trésorerie spécifiques déduits de l'offre (optimisation du cash, BFR, prévisions de trésorerie glissantes, clôtures comptables, stocks/COGS, rentabilité, audit légal CAC).
@@ -448,9 +458,9 @@ Renvoie la réponse au format Markdown structuré avec exactement les rubriques 
     }
 
     if (!finalResult) {
-      const errMsg = lastError instanceof Error ? lastError.message : "Erreur de génération.";
-      res.status(502).json({ error: `Erreur API Gemini : ${errMsg}` });
-      return;
+      const fallbackDossier = extractCompanyDossier('', jobText || '', companyName, targetRole);
+      finalResult = fallbackDossier.rawBriefText || '';
+      modelUsed = 'autonomous-benchmark-engine';
     }
 
     res.json({
@@ -584,6 +594,12 @@ Je serais ravi d'échanger avec vous de vive voix lors d'un entretien pour vous 
 Dans cette attente, je vous prie d’agréer, Madame, Monsieur, l’expression de mes salutations distinguées.
 
 ${candidateName || 'Alex Martin'}`;
+        } else if (action === 'coach_chat') {
+          mockResult = `Salut ! En tant que coach ATS, voici ce que je te recommande pour valoriser ton profil de **${targetRole || 'candidat'}** :
+
+> « Professionnel rigoureux et orienté résultats, cumulant une expérience solide en **${targetRole || 'gestion de projets'}**. Expert dans la livraison d'initiatives complexes, l'optimisation des flux de travail et l'atteinte d'objectifs chiffrés. Reconnu pour ma capacité à fédérer des équipes transverses et à délivrer un impact mesurable dès les premières semaines. »
+
+💡 **L'astuce de Félix :** Place cette phrase d'accroche tout en haut de ton CV. Elle répond directement aux critères des filtres ATS et accroche le regard du recruteur en moins de 6 secondes !`;
         } else {
           mockResult = `Proposition d'amélioration simulée (Mode démonstration)`;
         }
@@ -623,20 +639,27 @@ CONTEXTE COMPLÉMENTAIRE :
 - Entreprise ciblée : ${companyName || 'Non spécifié'}
 ${keyArguments ? `- Consignes spécifiques du candidat : ${keyArguments}` : ''}
 
-CONSIGNES STRICTES :
-1. Conserve la véracité et la cohérence du parcours du candidat (ne pas inventer d'entreprises ou de diplômes imaginaires), mais reformule les titres, le résumé d'accroche et les puces d'expériences pour mettre en avant les compétences clés attendues par l'offre.
-2. Intègre naturellement les mots-clés ATS manquants relevés dans l'audit.
-3. Reformule les missions en réalisations percutantes avec des métriques chiffrées selon la méthode STAR / Google X-Y-Z (Accompli [X], mesuré par [Y], en faisant [Z]).
-4. Rédige un profil / résumé professionnel d'accroche (3-4 lignes) percutant qui crée un pont évident entre le profil et les besoins de l'entreprise.
-5. Structure le document de manière claire, sobre et compatible ATS (En-tête, Titre & Résumé, Compétences clés, Expériences professionnelles avec réalisations chiffrées, Formation & Certifications, Langues).
+CONSIGNES STRICTES D'AUTHENTICITÉ ET D'AMÉLIORATION DU CV (RÈGLE ABSOLUE - ZÉRO INVENTION) :
+1. LE BUT EST D'AMÉLIORER LE CV DU CANDIDAT, PAS D'INVENTER :
+   - INTERDICTION FORMELLE d'ajouter des projets fictifs, des faux exemples de réalisations ou des missions imaginaires que le candidat n'a pas indiqués dans son CV initial !
+   - Ne JAMAIS fabriquer de faux chantiers (ex: faux déploiement d'un progiciel qu'il n'a pas utilisé, fausse opération de fusion-acquisition, faux projet international) simplement pour "coller" artificiellement avec les exigences de l'offre. Cela enrichit faussement le CV et disqualifierait le candidat lors des questions pointues en entretien.
+   - Si une compétence demandée par l'offre n'apparaît absolument pas dans le parcours du candidat, NE PAS INVENTER de fausse mission pour l'illustrer.
+
+2. CE QUE SIGNIFIE AMÉLIORER LE CV EN RESTANT 100% AUTHENTIQUE :
+   - Mettre en valeur le parcours RÉEL : Révéler la véritable valeur ajoutée des missions existantes en remplaçant les tournures passives ou vagues par des verbes d'action percutants (ex: "Participation à la trésorerie" -> "Pilotage opérationnel des flux de trésorerie et modélisation des prévisions glissantes").
+   - Harmoniser le vocabulaire métier : Utiliser les formulations professionnelles et mots-clés de l'offre pour décrire ce que le candidat fait déjà dans ses missions réelles (sans s'attribuer d'outils ou d'expériences non vécues).
+   - Structurer avec la méthode STAR sans falsification : Mettre en lumière le contexte, les actions concrètes et les résultats réels.
+   - Gestion honnête des chiffres : Ne JAMAIS inventer de données chiffrées ou de pourcentages fantaisistes sortis de nulle part. Si un chiffre n'est pas présent dans le CV, valoriser l'impact qualitatif réel (responsabilités, régularité, livrables), ou indiquer un repère entre crochets pour que le candidat le personnalise : [ex: préciser budget ou volume géré], sans jamais l'inventer à sa place !
+   - Rédiger une accroche professionnelle honnête (3-4 lignes) qui valorise les atouts réels et transposables du candidat pour ce poste.
+   - Structure le document de manière claire, sobre et compatible ATS (En-tête, Titre & Résumé, Compétences clés, Expériences professionnelles détaillées, Formation & Certifications, Langues).
 
 FORMAT DE RÉPONSE ATTENDU :
 Renvoie d'abord un bloc de synthèse des modifications :
-### 📋 Synthèse des modifications appliquées :
-- [Puce 1 : Mots-clés ATS intégrés]
-- [Puce 2 : Réalisations quantifiées STAR]
-- [Puce 3 : Accroche réalignée avec l'offre]
-- [Puce 4 : Compétences catégorisées]
+### 📋 Synthèse des améliorations authentiques appliquées :
+- [Puce 1 : Vocabulaire et mots-clés métiers harmonisés avec l'offre (sans ajout d'outils fictifs)]
+- [Puce 2 : Formulation STAR renforcée sur les missions réelles]
+- [Puce 3 : Accroche professionnelle réalignée sur les atouts du candidat]
+- [Puce 4 : Clarté et lisibilité ATS optimisées]
 
 Puis sépare par la ligne stricte "---" et fournis le texte complet du nouveau CV optimisé :
 ---
@@ -699,11 +722,12 @@ CONSIGNES DE RÉDACTION :
 7. Format en Markdown complet avec coordonnées, date du jour, objet clair et corps de texte.`;
     } else if (action === 'enhance_bullet') {
       prompt = `Tu es un coach expert en rédaction de CV et optimisation ATS.
-Transforme la ou les puces de CV suivantes en 3 propositions d'accomplissements percutants selon la formule STAR et Google X-Y-Z (Accompli [X], mesuré par [Y], en faisant [Z]).
-Pour chaque proposition :
-- Utilise un verbe d'action fort au passé ou présent professionnel.
-- Intègre des données chiffrées réalistes ou des métriques d'impact (%, temps, budget, volume).
-- Optimise les mots-clés pour les logiciels ATS.
+Transforme la ou les puces de CV suivantes en 3 propositions d'accomplissements percutants selon la formule STAR (Situation, Action, Résultat).
+
+CONSIGNE STRICTE D'AUTHENTICITÉ (ZÉRO INVENTION) :
+- Ne JAMAIS inventer de faux exemples, de projets non réalisés ou d'outils imaginaires.
+- Améliore la puissance du verbe d'action, la clarté et la structure de ce que le candidat a réellement fait.
+- Si le texte d'origine ne contient pas de données chiffrées, ne PAS inventer de faux pourcentages ou montants arbitraires : suggère une formulation d'impact qualitatif ou propose un repère entre crochets : [ex: volume de dossiers gérés ou % de gain].
 
 Texte initial :
 "${input.trim()}"
@@ -711,7 +735,7 @@ Texte initial :
 Contexte de rôle cible : ${targetRole || 'Non spécifié'}
 
 Renvoie une réponse en Markdown structurée avec :
-### 🌟 3 Versions d'impact optimisées
+### 🌟 3 Versions d'impact optimisées (100% authentiques)
 (avec pour chacune une brève explication du gain pour le recruteur)
 ### 🔑 Mots-clés valorisés`;
     } else if (action === 'generate_bio') {
@@ -739,6 +763,23 @@ Rédige une analyse en Markdown comprenant :
 - ### ⚠️ Les axes d'amélioration prioritaires (3 points)
 - ### 📈 Exemples concrets de puces à quantifier
 - ### 💡 5 mots-clés indispensables à intégrer`;
+    } else if (action === 'coach_chat') {
+      prompt = `Tu es Félix, coach expert en recrutement et optimisation ATS bienveillant, vif et dynamique.
+Tu accompagnes un candidat dans la rédaction et le perfectionnement de son CV.
+
+Rôle visé : ${targetRole || 'Professionnel'}
+${companyName ? `Entreprise cible : ${companyName}` : ''}
+
+Demande ou question du candidat :
+"""
+${input.trim()}
+"""
+
+Consignes :
+1. Adopte un ton chaleureux, motivant et direct (tutoiement courtois et professionnel).
+2. Fournis des conseils immédiatement actionnables et pragmatiques.
+3. Si le candidat demande de formuler une accroche, des puces d'expérience ou des compétences, donne une version clé en main percutante (chiffrée selon la méthode STAR) encadrée entre guillemets pour qu'il puisse l'insérer dans son CV en 1 clic.
+4. Reste concis (140 à 220 mots maximum) avec des puces claires adaptées à une interface de messagerie.`;
     } else {
       prompt = `Tu es un expert en recrutement. Améliore et enrichis le contenu suivant pour un CV professionnel ciblant le rôle de "${targetRole || 'Professionnel'}" :
 "${input.trim()}"`;

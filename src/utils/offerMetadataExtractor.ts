@@ -69,6 +69,7 @@ const KNOWN_CABINETS = [
 
 // Liste de grands groupes / marques identifiables
 const KNOWN_COMPANIES = [
+  'SUPRATEC', 'Supratec', 'Equans', 'Sanef', 'Abertis', 'Vauban Infrastructure',
   'TotalEnergies', 'Airbus', 'Sanofi', "L'Oréal", 'LVMH', 'BNP Paribas', 'Société Générale',
   'Crédit Agricole', 'Danone', 'Schneider Electric', 'Capgemini', 'Dassault Systèmes',
   'Dassault Aviation', 'Orange', 'Renault', 'Stellantis', 'Michelin', 'Saint-Gobain',

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import {
   Home,
+  LayoutDashboard,
   Layers,
   Sparkles,
+  FilePlus2,
   Briefcase,
   History,
   Database,
@@ -22,8 +24,10 @@ import {
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
 import CvImprovementLogo from './CvImprovementLogo';
 
+export type SidebarTabType = 'dashboard' | 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
+
 export interface NavItem {
-  id: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
+  id: SidebarTabType;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
@@ -38,8 +42,8 @@ export interface NavSection {
 }
 
 interface SidebarProps {
-  activeTab: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
-  setActiveTab: (tab: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => void;
+  activeTab: SidebarTabType;
+  setActiveTab: (tab: SidebarTabType) => void;
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
   userProfile: UserProfile | null;
@@ -56,6 +60,8 @@ interface SidebarProps {
   onLoadHistoryItem?: (item: AnalysisHistoryItem) => void;
   isMobileOpen: boolean;
   setIsMobileOpen: (open: boolean) => void;
+  isDemoMode?: boolean;
+  onToggleDemoMode?: (enable: boolean) => void;
 }
 
 export default function Sidebar({
@@ -77,49 +83,50 @@ export default function Sidebar({
   onLoadHistoryItem,
   isMobileOpen,
   setIsMobileOpen,
+  isDemoMode = false,
+  onToggleDemoMode,
 }: SidebarProps) {
-  const [tipIndex, setTipIndex] = useState(0);
-
-  const RECRUITER_TIPS = [
-    "Les robots ATS détestent les colonnes multiples : restez linéaire pour un score maximal !",
-    "Relancez votre recruteur entre 9h et 10h le mardi : c'est le créneau statistique le plus lu.",
-    "Un chiffre vaut 1000 adjectifs : 'Trésorerie consolidée de 45 M€' surpasse 'Trésorier rigoureux'.",
-    "Citez toujours vos progiciels phares (AGICAP, Kyriba, Excel VBA) dans vos compétences clés.",
-    "Le test des 6 secondes : les 3 premières lignes de votre CV décident de l'attention du recruteur.",
-    "Une lettre courte en 3 paragraphes ciblés est 3 fois plus lue qu'un long pavé d'une page !",
-  ];
-
-  const nextTip = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTipIndex((prev) => (prev + 1) % RECRUITER_TIPS.length);
-  };
-
   // Navigation cliquable avec gestion du menu mobile
-  const handleNavClick = (tab: 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => {
+  const handleNavClick = (tab: SidebarTabType) => {
     setActiveTab(tab);
     if (isMobileOpen) {
       setIsMobileOpen(false);
     }
   };
 
-  const candidateInitials = userProfile && (userProfile.firstName || userProfile.lastName)
+  const candidateInitials = isDemoMode
+    ? 'TL'
+    : userProfile && (userProfile.firstName || userProfile.lastName)
     ? `${userProfile.firstName?.[0] || ''}${userProfile.lastName?.[0] || ''}`.toUpperCase() || 'CV'
     : '👤';
 
-  const candidateFullName = userProfile && (userProfile.firstName || userProfile.lastName)
+  const candidateFullName = isDemoMode
+    ? 'Thomas Laurent (Démo)'
+    : userProfile && (userProfile.firstName || userProfile.lastName)
     ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()
     : 'Mon Espace Candidat';
 
-  const candidateTitle = userProfile?.currentTitle || 'Espace Personnel & Recrutement';
+  const candidateTitle = isDemoMode
+    ? 'Candidat Fictif • Démonstration'
+    : userProfile?.currentTitle || 'Espace Personnel & Recrutement';
 
   // Navigation fluide et épurée (sans encombrement)
   const navSections: NavSection[] = [
     {
-      title: 'Accueil & Analyse',
+      title: 'Accueil & Recherche',
       items: [
         {
+          id: 'dashboard' as const,
+          label: 'Accueil : Tableau de Bord',
+          icon: LayoutDashboard,
+          color: 'text-blue-600',
+          activeBg: 'bg-blue-50 text-blue-700 border-blue-200',
+          badge: 'Vue globale',
+          badgeColor: 'bg-blue-100 text-blue-800 font-bold',
+        },
+        {
           id: 'app' as const,
-          label: 'Accueil & Analyseur CV',
+          label: 'Analyseur d\'Adéquation ATS',
           icon: Layers,
           color: 'text-[#FF4B4B]',
           activeBg: 'bg-red-50 text-red-700 border-red-200',
@@ -127,11 +134,12 @@ export default function Sidebar({
         },
         {
           id: 'cv-assistant' as const,
-          label: 'Générateur CV & Lettre',
-          icon: Sparkles,
-          color: 'text-purple-600',
-          activeBg: 'bg-purple-50 text-purple-700 border-purple-200',
-          badge: 'IA',
+          label: 'Création CV (Page Blanche)',
+          icon: FilePlus2,
+          color: 'text-emerald-600',
+          activeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          badge: 'CV Brut',
+          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
         },
       ],
     },
@@ -174,7 +182,7 @@ export default function Sidebar({
       ],
     },
     {
-      title: 'Guide & Aide',
+      title: 'Aide & Paramètres',
       items: [
         {
           id: 'guide' as const,
@@ -184,14 +192,9 @@ export default function Sidebar({
           activeBg: 'bg-amber-50 text-amber-950 border-amber-300 font-bold',
           badge: null,
         },
-      ],
-    },
-    {
-      title: 'Espace Personnel & Technique',
-      items: [
         {
           id: 'settings' as const,
-          label: 'Espace Personnel & Technique',
+          label: 'Paramètres & Profil',
           icon: Sliders,
           color: 'text-indigo-600',
           activeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
@@ -244,55 +247,96 @@ export default function Sidebar({
       {/* 2. Mini Carte Profil Utilisateur */}
       {!isCollapsed ? (
         <div className="p-3 border-b border-gray-100 bg-gray-50/70 shrink-0">
-          <div
-            onClick={() => handleNavClick('settings')}
-            className="p-2 bg-white rounded-xl border border-gray-200/80 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group space-y-1.5"
-            title="Ouvrir l'onglet Paramétrage & Profil"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                {candidateInitials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-gray-900 truncate flex items-center justify-between">
-                  <span>{candidateFullName}</span>
-                  <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-purple-600 transition-colors shrink-0" />
+          {isDemoMode ? (
+            <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-300 shadow-2xs space-y-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-linear-to-tr from-amber-500 to-orange-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                  TL
                 </div>
-                <div className="text-[10px] text-gray-500 truncate font-medium">
-                  {candidateTitle}
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-black text-amber-950 truncate flex items-center gap-1.5">
+                    <span>Thomas Laurent</span>
+                    <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded font-black uppercase tracking-wider">
+                      Démo
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-amber-800 truncate font-medium">
+                    Candidat Fictif de Démonstration
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* Sélecteur de profil actif si plusieurs profils */}
-            {userProfiles.length > 1 ? (
-              <div
-                className="pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]"
-                onClick={(e) => e.stopPropagation()}
+              <button
+                type="button"
+                onClick={() => onToggleDemoMode?.(false)}
+                className="w-full py-1.5 px-2 bg-gray-950 hover:bg-gray-800 text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors text-center shadow-2xs flex items-center justify-center gap-1.5"
               >
-                <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider shrink-0">
-                  Profil :
-                </span>
-                <select
-                  value={userProfile?.id || ''}
-                  onChange={(e) => onSelectProfile?.(e.target.value)}
-                  className="bg-purple-50/80 hover:bg-purple-100 border border-purple-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-purple-900 truncate max-w-[130px] cursor-pointer focus:outline-none"
-                  title="Changer de profil actif"
-                >
-                  {userProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.isDefault ? '⭐ ' : ''}{p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil'}
-                    </option>
-                  ))}
-                </select>
+                <span>Quitter la Démo</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              <div
+                onClick={() => handleNavClick('settings')}
+                className="p-2 bg-white rounded-xl border border-gray-200/80 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group space-y-1.5"
+                title="Ouvrir l'onglet Paramétrage & Profil"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-linear-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                    {candidateInitials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-gray-900 truncate flex items-center justify-between">
+                      <span>{candidateFullName}</span>
+                      <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-purple-600 transition-colors shrink-0" />
+                    </div>
+                    <div className="text-[10px] text-gray-500 truncate font-medium">
+                      {candidateTitle}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sélecteur de profil actif si plusieurs profils */}
+                {userProfiles.length > 1 ? (
+                  <div
+                    className="pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider shrink-0">
+                      Profil :
+                    </span>
+                    <select
+                      value={userProfile?.id || ''}
+                      onChange={(e) => onSelectProfile?.(e.target.value)}
+                      className="bg-purple-50/80 hover:bg-purple-100 border border-purple-200 rounded px-1.5 py-0.5 text-[10px] font-bold text-purple-900 truncate max-w-[130px] cursor-pointer focus:outline-none"
+                      title="Changer de profil actif"
+                    >
+                      {userProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.isDefault ? '⭐ ' : ''}{p.name || p.currentTitle || `${p.firstName} ${p.lastName}` || 'Profil'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="pt-1 border-t border-gray-100/80 flex items-center justify-between text-[10px] text-gray-400">
+                    <span className="truncate">{userProfile?.name || 'Profil Principal'}</span>
+                    <span className="text-purple-600 font-semibold">Gérer</span>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="pt-1 border-t border-gray-100/80 flex items-center justify-between text-[10px] text-gray-400">
-                <span className="truncate">{userProfile?.name || 'Profil Principal'}</span>
-                <span className="text-purple-600 font-semibold">Gérer</span>
-              </div>
-            )}
-          </div>
+
+              {/* Raccourci vers le mode démo sans encombrer */}
+              <button
+                type="button"
+                onClick={() => onToggleDemoMode?.(true)}
+                className="w-full mt-2 py-1 px-2 bg-white hover:bg-amber-50 border border-gray-200 hover:border-amber-300 rounded-lg text-[10px] text-gray-600 hover:text-amber-900 font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="Tester toutes les fonctionnalités avec le candidat fictif Thomas Laurent"
+              >
+                <span>🎭</span>
+                <span>Mode Démo (Données Fictives)</span>
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="p-2 border-b border-gray-100 flex justify-center shrink-0">
@@ -355,113 +399,6 @@ export default function Sidebar({
             </div>
           </div>
         ))}
-
-        {/* Widget Analyses Récentes Identifiables */}
-        {!isCollapsed && history && history.length > 0 && (
-          <div className="mx-2 mb-2 p-2.5 bg-gray-50/90 border border-gray-200/90 rounded-xl space-y-1.5 shadow-2xs">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                <History className="w-3 h-3 text-purple-600" />
-                Dernières Analyses
-              </span>
-              <button
-                type="button"
-                onClick={() => handleNavClick('history')}
-                className="text-[10px] text-purple-700 hover:underline font-bold cursor-pointer"
-              >
-                Tout voir ({history.length})
-              </button>
-            </div>
-            <div className="space-y-1 pt-0.5">
-              {history.slice(0, 3).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onLoadHistoryItem?.(item);
-                    handleNavClick('app');
-                  }}
-                  className="w-full text-left p-1.5 rounded-lg hover:bg-white hover:shadow-2xs transition-all border border-transparent hover:border-gray-200 group flex items-center justify-between gap-1.5 cursor-pointer"
-                  title={`Charger : ${item.title}`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {item.company ? (
-                        <span className="text-[9px] font-extrabold text-blue-800 bg-blue-100/80 px-1 py-0.2 rounded truncate max-w-[85px]">
-                          🏢 {item.company}
-                        </span>
-                      ) : item.cabinet ? (
-                        <span className="text-[9px] font-extrabold text-purple-800 bg-purple-100/80 px-1 py-0.2 rounded truncate max-w-[85px]">
-                          👔 {item.cabinet}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-bold text-amber-800 bg-amber-100/80 px-1 py-0.2 rounded truncate">
-                          🕒 Horodatée
-                        </span>
-                      )}
-                      {(item.coverLetterTitle || item.coverLetterContent || item.coverLetterId) && (
-                        <span
-                          className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1 py-0.2 rounded"
-                          title={`Lettre rattachée : ${item.coverLetterTitle || 'Sur-mesure'}`}
-                        >
-                          ✉️ Lettre
-                        </span>
-                      )}
-                      {(item.companyDossier || item.company) && (
-                        <span
-                          className="text-[9px] font-bold text-blue-800 bg-blue-50 px-1 py-0.2 rounded border border-blue-200"
-                          title="Fiche Technique & Financière d'Entreprise disponible"
-                        >
-                          🏛️ Fiche
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] font-bold text-gray-800 truncate group-hover:text-purple-700 transition-colors mt-0.5">
-                      {item.title}
-                    </div>
-                  </div>
-                  {item.score !== null && (
-                    <span
-                      className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
-                        item.score >= 80
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : item.score >= 60
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}
-                    >
-                      {item.score}%
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Widget Astuce Recruteur Express & Fun */}
-        {!isCollapsed && (
-          <div className="mx-2 mb-2 p-3 bg-linear-to-br from-amber-50/90 to-orange-50/70 border border-amber-200/90 rounded-xl space-y-1.5 shadow-2xs">
-            <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
-              <span className="flex items-center gap-1">
-                <span>💡</span>
-                <span>Astuce Recruteur</span>
-              </span>
-              <button
-                type="button"
-                onClick={nextTip}
-                className="px-1.5 py-0.5 bg-amber-200/60 hover:bg-amber-300 text-amber-900 rounded text-[10px] font-bold cursor-pointer transition-colors"
-                title="Afficher une autre astuce"
-              >
-                🎲 Autre
-              </button>
-            </div>
-            <p className="text-[10px] text-amber-950 leading-relaxed font-medium">
-              &laquo; {RECRUITER_TIPS[tipIndex]} &raquo;
-            </p>
-          </div>
-        )}
-
       </div>
 
       {/* 4. Pied de page / Statut API Google Gemini */}

@@ -241,7 +241,7 @@ export const CvImprovementBanner: React.FC<CvImprovementBannerProps> = ({
               <span className="text-slate-300 hidden sm:inline">•</span>
               <span className="inline-flex items-center gap-1.5 text-slate-900 font-bold">
                 <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>Direction de projet : François Delrieu</span>
+                <span>Architecture & Conception : DeltaOne Solutions</span>
               </span>
             </div>
 

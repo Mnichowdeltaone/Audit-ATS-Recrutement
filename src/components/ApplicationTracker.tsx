@@ -43,6 +43,8 @@ interface ApplicationTrackerProps {
   onOpenAnalysis?: (analysisId: string) => void;
   onNewAnalysisWithJob?: (jobText: string, jobUrl?: string) => void;
   onNavigateToReports?: () => void;
+  isDemoMode?: boolean;
+  onToggleDemoMode?: (enable: boolean) => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -106,6 +108,8 @@ export default function ApplicationTracker({
   onOpenAnalysis,
   onNewAnalysisWithJob,
   onNavigateToReports,
+  isDemoMode = false,
+  onToggleDemoMode,
 }: ApplicationTrackerProps) {
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
@@ -536,6 +540,25 @@ export default function ApplicationTracker({
 
   return (
     <div className="space-y-6 w-full max-w-7xl mx-auto">
+      {/* Alerte si Mode Démonstration Actif */}
+      {isDemoMode && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Kanban en Mode Démonstration :</strong> Vous consultez les 6 candidatures fictives de test de <strong>Thomas Laurent</strong>. Vos vraies candidatures personnelles sont intactes et isolées.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggleDemoMode?.(false)}
+            className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-bold text-[11px] cursor-pointer shrink-0 transition-colors"
+          >
+            Quitter la Démo & Revenir à mes candidatures
+          </button>
+        </div>
+      )}
+
       {/* En-tête du tableau de bord */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
         <div>

@@ -68,11 +68,13 @@ import { extractProfileFromCv } from './utils/profileExtractor';
 import { extractOfferMetadata } from './utils/offerMetadataExtractor';
 import ApplicationTracker from './components/ApplicationTracker';
 import JobSearchAnalyticsReport from './components/JobSearchAnalyticsReport';
+import JobSearchDashboardView from './components/JobSearchDashboardView';
+import CvImprovementBanner from './components/CvImprovementBanner';
 import CvAssistant from './components/CvAssistant';
 import DatabaseManager from './components/DatabaseManager';
 import CvOptimizationModal from './components/CvOptimizationModal';
 import SettingsAndProfile from './components/SettingsAndProfile';
-import Sidebar from './components/Sidebar';
+import Sidebar, { SidebarTabType } from './components/Sidebar';
 import InteractiveGuide from './components/InteractiveGuide';
 import InteractiveTourModal from './components/InteractiveTourModal';
 import VisualAnalysisModal from './components/VisualAnalysisModal';
@@ -83,6 +85,15 @@ import CvImprovementLogo from './components/CvImprovementLogo';
 import { parseAnalysisResult } from './utils/analysisParser';
 import { extractCompanyDossier } from './utils/companyDossierExtractor';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from './utils/sampleData';
+import {
+  DEMO_FICTITIOUS_PROFILE,
+  DEMO_FICTITIOUS_APPLICATIONS,
+  DEMO_FICTITIOUS_ANALYSIS,
+  DEMO_FICTITIOUS_CV,
+  DEMO_FICTITIOUS_JOB,
+  isDemoApplication,
+  isDemoId,
+} from './utils/demoData';
 import { localDbClient } from './services/localDbClient';
 import {
   ApplicationItem,
@@ -344,8 +355,8 @@ export default function App() {
   const jobUrlInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Navigation par onglets (démarrage direct sur l'Analyseur avec bannière officielle)
-  const [activeTab, setActiveTab] = useState<'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings'>('app');
+  // Navigation par onglets (démarrage sur le Tableau de Bord de recherche d'emploi)
+  const [activeTab, setActiveTab] = useState<SidebarTabType>('dashboard');
 
   // Profil utilisateur et affichage (Multi-profils)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -363,24 +374,85 @@ export default function App() {
   const [evolutionSteps, setEvolutionSteps] = useState<EvolutionStep[]>([]);
   const [currentEvolutionVersion, setCurrentEvolutionVersion] = useState<number>(1);
 
-  // Suivi des candidatures persistant
+  // Suivi des candidatures persistant (filtré strictement pour exclure toute démo)
   const [applications, setApplications] = useState<ApplicationItem[]>(() => {
-    return localDbClient.getLocalApplications();
+    return localDbClient.getLocalApplications().filter((a) => !isDemoApplication(a));
   });
+
+  // Mode Démonstration (100% fictif et strictement isolé des données personnelles de l'utilisateur)
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('cv_move_demo_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Bascule sécurisée du mode démo
+  const handleToggleDemoMode = (enable: boolean) => {
+    setIsDemoMode(enable);
+    try {
+      if (enable) {
+        localStorage.setItem('cv_move_demo_mode', 'true');
+        // Sauvegarder les textes réels de l'utilisateur s'ils existent avant de charger la démo
+        if (cvText && cvText !== DEMO_FICTITIOUS_CV) {
+          localStorage.setItem('cv_move_saved_real_cv', cvText);
+        }
+        if (jobText && jobText !== DEMO_FICTITIOUS_JOB) {
+          localStorage.setItem('cv_move_saved_real_job', jobText);
+        }
+        setCvText(DEMO_FICTITIOUS_CV);
+        setJobText(DEMO_FICTITIOUS_JOB);
+        setSelectedCvId('');
+        setCvSaveSuccess("🎭 Mode Démonstration activé : Jeu de données 100% fictif (Thomas Laurent). Vos données personnelles sont soigneusement protégées et isolées.");
+      } else {
+        localStorage.removeItem('cv_move_demo_mode');
+        // Restaurer les textes réels
+        const savedRealCv = localStorage.getItem('cv_move_saved_real_cv');
+        const savedRealJob = localStorage.getItem('cv_move_saved_real_job');
+        if (savedRealCv) setCvText(savedRealCv);
+        else if (cvText === DEMO_FICTITIOUS_CV) setCvText('');
+        if (savedRealJob) setJobText(savedRealJob);
+        else if (jobText === DEMO_FICTITIOUS_JOB) setJobText('');
+        setCvSaveSuccess("✅ Mode Démo désactivé : Retour à votre espace personnel et à vos vraies données.");
+      }
+      setTimeout(() => setCvSaveSuccess(null), 4000);
+    } catch {}
+  };
+
+  // Nettoyage au démarrage de tout vestige de démo qui se serait mélangé aux candidatures réelles
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('cv_move_applications');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((a: any) => !isDemoApplication(a));
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('cv_move_applications', JSON.stringify(cleaned));
+            setApplications(cleaned);
+          }
+        }
+      }
+    } catch {}
+  }, []);
 
   // Base de données locale
   const [savedCvs, setSavedCvs] = useState<SavedCv[]>([]);
   const [selectedCvId, setSelectedCvId] = useState<string>('');
   const [dbStats, setDbStats] = useState<DatabaseStats | null>(null);
 
-  // Synchronisation des candidatures dans le localStorage
+  // Synchronisation des candidatures réelles dans le localStorage (JAMAIS les démos)
   useEffect(() => {
     try {
-      localStorage.setItem('cv_move_applications', JSON.stringify(applications));
+      if (!isDemoMode) {
+        const realOnly = applications.filter((a) => !isDemoApplication(a));
+        localStorage.setItem('cv_move_applications', JSON.stringify(realOnly));
+      }
     } catch {
       // ignore
     }
-  }, [applications]);
+  }, [applications, isDemoMode]);
 
   // État formulaire avec persistance automatique
   const [apiKey, setApiKey] = useState<string>(() => {
@@ -743,6 +815,12 @@ export default function App() {
   const [history, setHistory] = useState<AnalysisHistoryItem[]>(() => {
     return localDbClient.getLocalAnalyses();
   });
+
+  // Données actives (strictement isolées selon que le mode démo fictif est actif ou non)
+  const effectiveProfile = isDemoMode ? DEMO_FICTITIOUS_PROFILE : userProfile;
+  const effectiveProfiles = isDemoMode ? [DEMO_FICTITIOUS_PROFILE] : userProfiles;
+  const effectiveApplications = isDemoMode ? DEMO_FICTITIOUS_APPLICATIONS : applications.filter((a) => !isDemoApplication(a));
+  const effectiveAnalyses = isDemoMode ? [DEMO_FICTITIOUS_ANALYSIS] : history.filter((h) => !isDemoId(h.id));
 
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -1708,6 +1786,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F0F2F6] text-[#262730] flex flex-row font-sans">
+      {/* Bannière officielle CV Improvement au centre de l'écran (10 secondes) */}
+      <CvImprovementBanner />
+
       {/* =========================================================================
           MENU LATÉRAL (SIDEBAR) RÉORGANISÉ FONCTIONNELLEMENT
          ========================================================================= */}
@@ -1716,20 +1797,22 @@ export default function App() {
         setActiveTab={setActiveTab}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
-        userProfile={userProfile}
-        userProfiles={userProfiles}
+        userProfile={effectiveProfile}
+        userProfiles={effectiveProfiles}
         onSelectProfile={handleSelectProfile}
         onOpenTour={() => setIsTourModalOpen(true)}
         apiKey={apiKey}
         hasServerKey={hasServerKey}
         selectedModel={selectedModel}
-        applicationsCount={applications.length}
-        historyCount={history.length}
+        applicationsCount={effectiveApplications.length}
+        historyCount={effectiveAnalyses.length}
         dbStats={dbStats}
-        history={history}
+        history={effectiveAnalyses}
         onLoadHistoryItem={handleLoadHistoryItem}
         isMobileOpen={isMobileSidebarOpen}
         setIsMobileOpen={setIsMobileSidebarOpen}
+        isDemoMode={isDemoMode}
+        onToggleDemoMode={handleToggleDemoMode}
       />
 
       {/* Conteneur Principal de l'Application */}
@@ -1767,8 +1850,9 @@ export default function App() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate">
-                  {activeTab === 'app' && '🎯 Accueil & Analyseur d\'Adéquation CV / Offre'}
-                  {activeTab === 'cv-assistant' && '✨ Générateur Assisté CV & Lettre'}
+                  {activeTab === 'dashboard' && '📊 Accueil : Tableau de Bord de Recherche d\'Emploi'}
+                  {activeTab === 'app' && '🎯 Analyseur d\'Adéquation ATS (CV vs Offre)'}
+                  {activeTab === 'cv-assistant' && '✍️ Aide à la Création de CV (Page Blanche & CV Brut)'}
                   {activeTab === 'tracker' && '💼 Suivi des Candidatures'}
                   {activeTab === 'reports' && '📈 Analyses & Rapports de Recherche d\'Emploi'}
                   {activeTab === 'history' && '🕒 Historique des Audits'}
@@ -1781,8 +1865,9 @@ export default function App() {
                 </span>
               </div>
               <p className="text-[11px] text-gray-500 hidden sm:block truncate">
+                {activeTab === 'dashboard' && 'Vue d\'ensemble de votre recherche d\'emploi, indicateurs clés explicatifs (KPIs) et suivi de vos démarches'}
                 {activeTab === 'app' && 'Comparez votre CV à l\'offre, identifiez les écarts ATS et boostez vos chances d\'entretien'}
-                {activeTab === 'cv-assistant' && 'Rédigez un CV sur-mesure ou une lettre de motivation percutante avec l\'IA'}
+                {activeTab === 'cv-assistant' && 'Assistance simple pour créer un CV brut depuis une page blanche, à enrichir et améliorer par la suite'}
                 {activeTab === 'tracker' && 'Gérez vos candidatures, relances et entretiens en mode Kanban interactif'}
                 {activeTab === 'reports' && 'Mesurez vos taux de conversion, l\'impact de vos scores ATS et générez vos justificatifs officiels d\'activité'}
                 {activeTab === 'history' && 'Retrouvez vos rapports d\'audit passés et comparez les scores d\'adéquation'}
@@ -1854,6 +1939,32 @@ export default function App() {
           </div>
         </header>
 
+        {/* Bandeau d'information Mode Démonstration persistant */}
+        {isDemoMode && (
+          <div className="bg-linear-to-r from-amber-600 via-orange-600 to-purple-800 text-white px-4 py-2.5 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs z-30 sticky top-0">
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg">🎭</span>
+              <div>
+                <span className="font-extrabold uppercase tracking-wider text-amber-200 text-[10px] bg-amber-950/60 px-2 py-0.5 rounded-full mr-2 border border-amber-300/30">
+                  Mode Démonstration Actif
+                </span>
+                <span className="text-white/95">
+                  Vous explorez l&apos;application avec un jeu de données <strong>100% fictif</strong> (Candidat exemple : <strong>Thomas Laurent</strong>). Vos données personnelles et candidatures réelles sont entièrement protégées et isolées.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleToggleDemoMode(false)}
+                className="px-3.5 py-1.5 bg-white text-gray-950 hover:bg-amber-50 rounded-xl font-black text-xs shadow-xs transition-all cursor-pointer hover:scale-102"
+              >
+                Quitter la Démo & Revenir à mes données
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Espace de Travail Principal */}
         <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
           {/* Notification Toast Globale */}
@@ -1872,6 +1983,36 @@ export default function App() {
               </button>
             </div>
           )}
+          {/* =========================================================================
+              ONGLET ACCUEIL : TABLEAU DE BORD DE RECHERCHE D'EMPLOI & KPIS
+             ========================================================================= */}
+          {activeTab === 'dashboard' && (
+            <JobSearchDashboardView
+              applications={effectiveApplications}
+              setApplications={setApplications}
+              analyses={effectiveAnalyses}
+              savedCvs={isDemoMode ? [] : savedCvs}
+              userProfile={effectiveProfile}
+              isDemoMode={isDemoMode}
+              onToggleDemoMode={handleToggleDemoMode}
+              onNavigateToTab={(tab) => {
+                setActiveTab(tab as any);
+              }}
+              onOpenAnalysis={(analysisId) => {
+                const item = (isDemoMode ? effectiveAnalyses : history).find((h) => h.id === analysisId);
+                if (item) {
+                  handleLoadHistoryItem(item);
+                } else {
+                  setActiveTab('history');
+                }
+              }}
+              onSelectCvForAnalyzer={(text) => {
+                setCvText(text);
+                setActiveTab('app');
+              }}
+            />
+          )}
+
           {/* =========================================================================
               ONGLET 1 : PARCOURS D'OPTIMISATION DE CANDIDATURE EN 4 ÉTAPES GUIDÉES
              ========================================================================= */}
@@ -1924,8 +2065,8 @@ export default function App() {
               }}
               onAddToTracker={(options) => handleAddAnalysisToTracker(options)}
               onOpenVisualModal={() => setIsVisualModalOpen(true)}
-              userProfile={userProfile}
-              userProfiles={userProfiles}
+              userProfile={effectiveProfile}
+              userProfiles={effectiveProfiles}
               onSelectProfile={handleSelectProfile}
               savedCvs={savedCvs}
               selectedCvId={selectedCvId}
@@ -1964,11 +2105,13 @@ export default function App() {
            ========================================================================= */}
         {activeTab === 'tracker' && (
           <ApplicationTracker
-            applications={applications}
+            applications={effectiveApplications}
             setApplications={setApplications}
-            analyses={history}
+            analyses={effectiveAnalyses}
+            isDemoMode={isDemoMode}
+            onToggleDemoMode={handleToggleDemoMode}
             onOpenAnalysis={(analysisId) => {
-              const item = history.find((h) => h.id === analysisId);
+              const item = (isDemoMode ? effectiveAnalyses : history).find((h) => h.id === analysisId);
               if (item) {
                 handleLoadHistoryItem(item);
               } else {
@@ -1989,15 +2132,17 @@ export default function App() {
            ========================================================================= */}
         {activeTab === 'reports' && (
           <JobSearchAnalyticsReport
-            applications={applications}
+            applications={effectiveApplications}
             setApplications={setApplications}
-            analyses={history}
-            userProfile={userProfile}
+            analyses={effectiveAnalyses}
+            userProfile={effectiveProfile}
+            isDemoMode={isDemoMode}
+            onToggleDemoMode={handleToggleDemoMode}
             onNavigateToTab={(tab) => {
               setActiveTab(tab as any);
             }}
             onOpenAnalysis={(analysisId) => {
-              const item = history.find((h) => h.id === analysisId);
+              const item = (isDemoMode ? effectiveAnalyses : history).find((h) => h.id === analysisId);
               if (item) {
                 handleLoadHistoryItem(item);
               } else {
@@ -2030,7 +2175,7 @@ export default function App() {
             }}
             apiKey={apiKey}
             hasServerKey={hasServerKey}
-            userProfile={userProfile}
+            userProfile={effectiveProfile}
           />
         )}
 
@@ -2474,12 +2619,8 @@ export default function App() {
         {activeTab === 'guide' && (
           <InteractiveGuide
             onNavigateToTab={(tab) => setActiveTab(tab)}
-            onLoadSampleData={(sampleCv, sampleJob) => {
-              setCvText(sampleCv);
-              setJobText(sampleJob);
-              setSelectedCvId('');
-              setCvSaveSuccess("🚀 Données d'exemple (CV Trésorier + Offre) chargées avec succès !");
-              setTimeout(() => setCvSaveSuccess(null), 3500);
+            onLoadSampleData={() => {
+              handleToggleDemoMode(true);
             }}
             userProfilesCount={userProfiles.length}
             onOpenTour={() => setIsTourModalOpen(true)}
@@ -2563,12 +2704,8 @@ export default function App() {
         isOpen={isTourModalOpen}
         onClose={() => setIsTourModalOpen(false)}
         onNavigateToTab={(tab) => setActiveTab(tab)}
-        onLoadSampleData={(sampleCv, sampleJob) => {
-          setCvText(sampleCv);
-          setJobText(sampleJob);
-          setSelectedCvId('');
-          setCvSaveSuccess("🚀 Données de démonstration chargées avec succès !");
-          setTimeout(() => setCvSaveSuccess(null), 3500);
+        onLoadSampleData={() => {
+          handleToggleDemoMode(true);
         }}
       />
 

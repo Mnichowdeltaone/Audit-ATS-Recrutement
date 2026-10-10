@@ -19,10 +19,14 @@ import {
   ChevronUp,
   Database,
   Mail,
+  Globe,
+  MessageCircle,
 } from 'lucide-react';
 import { localDbClient } from '../services/localDbClient';
 import CvGeneratorTool from './CvGeneratorTool';
 import CoverLetterGeneratorTool from './CoverLetterGeneratorTool';
+import CvTemplatesCatalogView from './CvTemplatesCatalogView';
+import CvCoachChatbot from './CvCoachChatbot';
 import { UserProfile } from '../types';
 
 const API_BASE_URL =
@@ -135,7 +139,9 @@ export default function CvAssistant({
   hasServerKey,
   userProfile,
 }: CvAssistantProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'generator_cv' | 'generator_letter' | 'ai_tools' | 'guide' | 'templates'>('generator_cv');
+  const [activeSubTab, setActiveSubTab] = useState<'generator_cv' | 'templates' | 'coach_chat' | 'generator_letter' | 'ai_tools' | 'guide'>('generator_cv');
+  const [loadedTemplateText, setLoadedTemplateText] = useState<string>('');
+  const [loadedTemplateRole, setLoadedTemplateRole] = useState<string>('');
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   // Tool 1: Bullet Enhancer
@@ -333,43 +339,43 @@ export default function CvAssistant({
       <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+            <span className="p-2 bg-emerald-50 text-emerald-700 rounded-lg">
               <Sparkles className="w-5 h-5" />
             </span>
             <h1 className="text-xl font-bold text-gray-900">
-              Générateurs & Assistant de Candidature IA
+              Aide à la Création de CV — Départ Page Blanche
             </h1>
-            <span className="text-xs bg-purple-100 text-purple-800 font-semibold px-2.5 py-0.5 rounded-full">
-              CV, Lettres & Optimisation ATS
+            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full">
+              CV Brut Prêt à Enrichir
             </span>
           </div>
           <p className="text-xs text-gray-500 max-w-3xl">
-            Générez votre CV et votre lettre de motivation sur-mesure pour chaque offre d&apos;emploi, formulez des puces STAR quantifiées et appliquez les critères d&apos;évaluation des recruteurs.
+            Renseignez simplement quelques informations essentielles pour générer un <strong>CV brut clair et structuré</strong>, que vous pourrez ensuite enrichir avec l'IA et tester face à vos offres cibles.
           </p>
         </div>
 
-        {/* Sous-onglets */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl self-start md:self-auto flex-wrap">
+        {/* Sous-onglets épurés et clairs */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl self-start md:self-auto flex-wrap">
           <button
             type="button"
             onClick={() => setActiveSubTab('generator_cv')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'generator_cv'
-                ? 'bg-white text-purple-700 shadow-xs'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-emerald-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-            <span>Générateur de CV</span>
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>✍️ Création CV (Page Blanche)</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('generator_letter')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'generator_letter'
                 ? 'bg-white text-blue-700 shadow-xs'
-                : 'text-gray-600 hover:text-gray-900'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Mail className="w-3.5 h-3.5 text-blue-600" />
@@ -378,48 +384,48 @@ export default function CvAssistant({
 
           <button
             type="button"
-            onClick={() => setActiveSubTab('ai_tools')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              activeSubTab === 'ai_tools'
-                ? 'bg-white text-gray-900 shadow-xs'
-                : 'text-gray-600 hover:text-gray-900'
+            onClick={() => setActiveSubTab('templates')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'templates'
+                ? 'bg-white text-purple-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-amber-500" />
-            <span>Ateliers STAR & Bio</span>
+            <Globe className="w-3.5 h-3.5 text-purple-600" />
+            <span>Modèles & Exemples</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveSubTab('templates')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-              activeSubTab === 'templates'
-                ? 'bg-white text-gray-900 shadow-xs'
-                : 'text-gray-600 hover:text-gray-900'
+            onClick={() => setActiveSubTab('coach_chat')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'coach_chat'
+                ? 'bg-white text-[#0A2540] shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <FileText className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Modèles ATS Prêts</span>
+            <MessageCircle className="w-3.5 h-3.5 text-blue-600" />
+            <span>Coach Félix</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('guide')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'guide'
-                ? 'bg-white text-gray-900 shadow-xs'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Guide & FAQ</span>
+            <BookOpen className="w-3.5 h-3.5 text-slate-700" />
+            <span>Règles d&apos;Or ATS</span>
           </button>
         </div>
       </div>
 
       {/* Notification Toast */}
       {saveNotice && (
-        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs font-semibold text-emerald-900 flex items-center gap-2 shadow-xs">
+        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-2xl text-xs font-semibold text-emerald-900 flex items-center gap-2 shadow-xs animate-fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{saveNotice}</span>
         </div>
@@ -437,7 +443,31 @@ export default function CvAssistant({
           apiKey={apiKey}
           hasServerKey={hasServerKey}
           userProfile={userProfile}
+          initialTemplateText={loadedTemplateText}
+          initialTargetRole={loadedTemplateRole}
+          onOpenTemplatesCatalog={() => setActiveSubTab('templates')}
+          onOpenCoachChat={() => setActiveSubTab('coach_chat')}
         />
+      )}
+
+      {/* =========================================================================
+          SOUS-ONGLET NOUVEAU : CHATBOT COACH CV (FÉLIX)
+         ========================================================================= */}
+      {activeSubTab === 'coach_chat' && (
+        <div className="space-y-4">
+          <CvCoachChatbot
+            currentCvText={currentCvText || loadedTemplateText}
+            targetRole={loadedTemplateRole || userProfile?.currentTitle || ''}
+            apiKey={apiKey}
+            hasServerKey={hasServerKey}
+            userProfile={userProfile}
+            onApplyTextToCv={(newText) => {
+              onApplyToCv(newText);
+              setSaveNotice('✨ Texte inséré dans votre CV actif !');
+              setTimeout(() => setSaveNotice(null), 3000);
+            }}
+          />
+        </div>
       )}
 
       {/* =========================================================================
@@ -970,66 +1000,22 @@ Bien cordialement,
       )}
 
       {/* =========================================================================
-          SOUS-ONGLET 3 : MODÈLES ATS PRÊTS À L'EMPLOI
+          SOUS-ONGLET 2 : CATALOGUE DE MODÈLES DE CV (SECTEURS, LANGUES & PROFILS)
          ========================================================================= */}
       {activeSubTab === 'templates' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xs">
-            <h2 className="text-base font-bold text-gray-900 mb-1">
-              Modèles de CV Textuels Prêts à l&apos;Emploi (Format ATS)
-            </h2>
-            <p className="text-xs text-gray-500 mb-5">
-              Ces trames respectent l&apos;ordre de lecture idéal des logiciels de recrutement. Vous pouvez copier un modèle ou l&apos;injecter en 1 clic dans l&apos;Analyseur pour tester son adéquation avec une offre.
-            </p>
-
-            <div className="grid grid-cols-1 gap-5">
-              {TEMPLATES.map((tmpl, idx) => (
-                <div
-                  key={idx}
-                  className="border border-gray-200 rounded-xl p-5 bg-gray-50/50 space-y-3"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-200 pb-3">
-                    <div>
-                      <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">
-                        {tmpl.category}
-                      </span>
-                      <h3 className="text-sm font-bold text-gray-900 mt-1">
-                        {tmpl.title}
-                      </h3>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(tmpl.content)}
-                        className="text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copier</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onApplyToCv(tmpl.content);
-                          onNavigateToAnalyzer();
-                        }}
-                        className="text-xs font-bold text-white bg-[#FF4B4B] hover:bg-[#ff3333] px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-xs"
-                      >
-                        <ArrowRight className="w-3.5 h-3.5" />
-                        <span>Tester dans l&apos;Analyseur</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto font-mono text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {tmpl.content}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <CvTemplatesCatalogView
+          onSelectTemplateForEditor={(templateText, role) => {
+            setLoadedTemplateText(templateText);
+            setLoadedTemplateRole(role);
+            setActiveSubTab('generator_cv');
+            setSaveNotice(`✨ Modèle « ${role || 'professionnel'} » chargé dans le générateur assisté !`);
+            setTimeout(() => setSaveNotice(null), 4000);
+          }}
+          onSendTemplateToAnalyzer={(templateText) => {
+            onApplyToCv(templateText);
+            onNavigateToAnalyzer();
+          }}
+        />
       )}
     </div>
   );

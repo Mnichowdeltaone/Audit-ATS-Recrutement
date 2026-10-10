@@ -424,14 +424,16 @@ export default function OptimizationFunnel({
   const handleGenerateOptimization = async () => {
     setIsGeneratingOptimizedCv(true);
     try {
-      let keyArg = '';
+      let keyArg = 'RÈGLE ABSOLUE D\'AUTHENTICITÉ : ZÉRO INVENTION. Ne jamais inventer d\'exemples de projets, d\'outils ou de missions non réalisés par le candidat. Le but est d\'améliorer et de sublimer le parcours réel, sans inventer de faux exemples.';
       if (optimizationMode === 'star') {
-        keyArg = 'Appliquer rigoureusement la méthode STAR : reformuler les réalisations avec Situation, Tâche, Action et Résultats chiffrés mesurables (%, M€, gains de temps).';
+        keyArg += ' Formuler les accomplissements réels avec la méthode STAR (Situation, Action, Résultat concret). Ne pas inventer de faux chiffres : valoriser l\'impact qualitatif ou indiquer un repère [préciser montant/volume si pertinent].';
       } else if (optimizationMode === 'keywords') {
-        keyArg = 'Intégrer de façon exhaustive les mots-clés techniques ATS, outils progiciels et compétences requises par l\'offre.';
+        keyArg += ' Harmoniser le vocabulaire métier avec l\'offre en restant strictement fidèle aux missions réelles du candidat (ne pas prétendre maîtriser des outils non abordés).';
+      } else {
+        keyArg += ' Optimisation équilibrée : verbes d\'action percutants, accroche professionnelle fidèle et clarté ATS sans fabrication d\'expériences.';
       }
       if (customInstructions.trim()) {
-        keyArg = `${keyArg} ${customInstructions.trim()}`.trim();
+        keyArg = `${keyArg} Consigne candidat : ${customInstructions.trim()}`.trim();
       }
 
       const res = await apiFetch('/api/assist-cv', {
@@ -645,9 +647,6 @@ export default function OptimizationFunnel({
 
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in">
-      {/* Bannière officielle CV Improvement affichée au démarrage */}
-      <CvImprovementBanner />
-
       {/* Alerte d'erreur éventuelle */}
       {(funnelError || analysisError) && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-fade-in shadow-xs">
@@ -1817,8 +1816,17 @@ export default function OptimizationFunnel({
                   <span>Option A : Optimisation Automatisée avec l&apos;IA (1 Clic)</span>
                 </h4>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  L&apos;IA injecte les compétences manquantes et formule des réalisations chiffrées selon la méthode STAR.
+                  L&apos;IA optimise la formulation et met en valeur vos réalisations réelles, <strong>sans jamais inventer d&apos;expériences ou de faux exemples</strong>.
                 </p>
+              </div>
+            </div>
+
+            {/* Charte d'authenticité et zéro invention */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-emerald-900">
+              <span className="text-base leading-none">🛡️</span>
+              <div className="leading-relaxed">
+                <strong className="font-bold text-emerald-950">Garantie Zéro Invention & 100% Fidélité au Réel :</strong>{' '}
+                Le but est de <em>sublimer votre parcours</em>, pas d&apos;inventer. L&apos;IA ne fabrique <strong>aucun faux projet, aucune mission imaginaire ni chiffres fantaisistes</strong>. Elle améliore la clarté, l&apos;impact rédactionnel et l&apos;alignement lexical pour que vous puissiez défendre 100% de votre CV en entretien.
               </div>
             </div>
 
@@ -1833,11 +1841,11 @@ export default function OptimizationFunnel({
                 }`}
               >
                 <div className="font-bold text-xs text-purple-950 flex items-center justify-between">
-                  <span>⚖️ Équilibré & Naturel</span>
+                  <span>⚖️ Authentique & Valorisé</span>
                   {optimizationMode === 'balanced' && <Check className="w-3.5 h-3.5 text-purple-600" />}
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Style fluide et professionnel, intégration harmonieuse des prérequis.
+                  Sublime votre parcours réel avec des verbes d&apos;action précis et une accroche honnête.
                 </p>
               </button>
 
@@ -1851,11 +1859,11 @@ export default function OptimizationFunnel({
                 }`}
               >
                 <div className="font-bold text-xs text-purple-950 flex items-center justify-between">
-                  <span>🎯 Boost Mots-clés ATS</span>
+                  <span>🎯 Vocabulaire & Mots-clés ATS</span>
                   {optimizationMode === 'keywords' && <Check className="w-3.5 h-3.5 text-purple-600" />}
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Maximise la densité lexicale des progiciels et protocoles requis.
+                  Harmonise la terminologie avec l&apos;offre sans prétendre maîtriser des outils non abordés.
                 </p>
               </button>
 
@@ -1869,11 +1877,11 @@ export default function OptimizationFunnel({
                 }`}
               >
                 <div className="font-bold text-xs text-purple-950 flex items-center justify-between">
-                  <span>📊 Méthode STAR & Chiffres</span>
+                  <span>📊 Méthode STAR Réelle</span>
                   {optimizationMode === 'star' && <Check className="w-3.5 h-3.5 text-purple-600" />}
                 </div>
                 <p className="text-[11px] text-gray-500 mt-1">
-                  Accentue l&apos;impact avec métriques chiffrées (%, M€, gains de temps).
+                  Structure vos vrais accomplissements (Situation, Action, Résultat) sans inventer de métriques factices.
                 </p>
               </button>
             </div>

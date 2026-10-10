@@ -1,28 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles,
   FileText,
-  Save,
+  Sparkles,
+  ArrowRight,
   Copy,
   Check,
   Download,
   RotateCcw,
-  Sliders,
+  Save,
   CheckCircle2,
   AlertCircle,
-  Briefcase,
+  HelpCircle,
+  Lightbulb,
+  FilePlus2,
+  Wand2,
   Layers,
-  Award,
-  BookOpen,
-  ArrowRight,
-  Database,
-  RefreshCw,
-  Eye,
-  CheckCircle,
+  ChevronRight,
+  ChevronLeft,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { localDbClient } from '../services/localDbClient';
-import { SavedCv, UserProfile } from '../types';
+import { UserProfile, SavedCv } from '../types';
 
 const API_BASE_URL =
   typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'http://localhost:3000' : '';
@@ -39,6 +37,10 @@ interface CvGeneratorToolProps {
   apiKey?: string;
   hasServerKey?: boolean;
   userProfile?: UserProfile | null;
+  initialTemplateText?: string;
+  initialTargetRole?: string;
+  onOpenTemplatesCatalog?: () => void;
+  onOpenCoachChat?: () => void;
 }
 
 export default function CvGeneratorTool({
@@ -49,10 +51,17 @@ export default function CvGeneratorTool({
   apiKey,
   hasServerKey,
   userProfile,
+  initialTemplateText = '',
+  initialTargetRole = '',
+  onOpenTemplatesCatalog,
 }: CvGeneratorToolProps) {
-  // Formulaire de saisie initialisé avec le profil utilisateur ou vide
+  // Mode de création : 'assistant' (4 questions simples) ou 'blank_page' (page blanche directe)
+  const [creationMode, setCreationMode] = useState<'assistant' | 'blank_page'>('assistant');
+  const [step, setStep] = useState<number>(1);
+
+  // 1. Coordonnées simples
   const [candidateName, setCandidateName] = useState(() => {
-    if (userProfile && (userProfile.firstName || userProfile.lastName)) {
+    if (userProfile?.firstName || userProfile?.lastName) {
       return `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
     }
     return '';
@@ -60,564 +69,731 @@ export default function CvGeneratorTool({
 
   const [contactInfo, setContactInfo] = useState(() => {
     if (userProfile) {
-      const parts = [userProfile.location, userProfile.phone, userProfile.email, userProfile.linkedinUrl].filter(Boolean);
+      const parts = [userProfile.location, userProfile.phone, userProfile.email].filter(Boolean);
       return parts.join(' | ');
     }
     return '';
   });
 
+  // 2. Poste / Métier visé
   const [targetRole, setTargetRole] = useState(() => {
-    return userProfile?.targetRoles?.[0] || userProfile?.currentTitle || '';
+    return initialTargetRole || userProfile?.targetRoles?.[0] || userProfile?.currentTitle || '';
   });
 
-  const [targetCompany, setTargetCompany] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState<'ats_standard' | 'impact_star' | 'tech_modern' | 'executive'>('impact_star');
-  
-  const [notesOrExperience, setNotesOrExperience] = useState(currentCvText || '');
-  const [jobOfferText, setJobOfferText] = useState(currentJobText || '');
+  // 3. Vos 2 ou 3 expériences clés (Poste, Entreprise, Période, missions simples)
+  const [experiences, setExperiences] = useState('');
 
-  // Synchronisation dynamique quand le profil ou le CV actif change
-  useEffect(() => {
-    if (userProfile && !candidateName) {
-      const name = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
-      if (name) setCandidateName(name);
-    }
-    if (userProfile && !contactInfo) {
-      const parts = [userProfile.location, userProfile.phone, userProfile.email, userProfile.linkedinUrl].filter(Boolean);
-      if (parts.length > 0) setContactInfo(parts.join(' | '));
-    }
-    if (userProfile && !targetRole) {
-      const role = userProfile.targetRoles?.[0] || userProfile.currentTitle || '';
-      if (role) setTargetRole(role);
-    }
-  }, [userProfile]);
+  // 4. Compétences & Formation
+  const [skills, setSkills] = useState(() => {
+    return userProfile?.skills?.join(', ') || '';
+  });
+  const [education, setEducation] = useState('');
 
-  useEffect(() => {
-    if (currentCvText && !notesOrExperience) {
-      setNotesOrExperience(currentCvText);
-    }
-  }, [currentCvText]);
+  // Résultat : le CV brut obtenu
+  const [rawCvText, setRawCvText] = useState(initialTemplateText || currentCvText || '');
+  const [isAssembling, setIsAssembling] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
 
-  // États de génération
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedCv, setGeneratedCv] = useState<string>('');
-  const [savedCvs, setSavedCvs] = useState<SavedCv[]>([]);
-  const [selectedDbCvId, setSelectedDbCvId] = useState<string>('');
-  
-  // États d'action
+  // Actions
   const [copied, setCopied] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'info'; message: string } | null>(null);
 
-  // Charger les CVs de la BDD locale pour pré-remplissage éventuel
+  // Synchronisation dynamique si un modèle est injecté
   useEffect(() => {
-    localDbClient
-      .getCvs()
-      .then((cvs) => setSavedCvs(cvs))
-      .catch((err) => console.warn('Impossible de charger les CVs BDD:', err));
-  }, []);
+    if (initialTemplateText) {
+      setRawCvText(initialTemplateText);
+      if (initialTargetRole) setTargetRole(initialTargetRole);
+    }
+  }, [initialTemplateText, initialTargetRole]);
 
-  // Déclencher la génération
-  const handleGenerateCv = async () => {
-    if (!notesOrExperience.trim()) {
-      setActionNotice({ type: 'error', message: 'Veuillez saisir au moins vos notes ou expériences de base.' });
-      setTimeout(() => setActionNotice(null), 3000);
-      return;
+  // Trame minimale vierge pour le mode page blanche directe
+  const blankTemplate = `PRÉNOM NOM
+${targetRole || 'INTITULÉ DU POSTE VISÉ'}
+${contactInfo || 'Ville, France | 06 00 00 00 00 | prenom.nom@email.com'}
+
+RÉSUMÉ PROFESSIONNEL
+[Décrivez en 2 à 3 phrases simples votre profil, vos atouts et ce que vous recherchez...]
+
+EXPÉRIENCES PROFESSIONNELLES
+[INTITULÉ DU POSTE] | Entreprise, Ville | 2021 - Présent
+- [Mission ou réalisation principale...]
+- [Outils ou résultats...]
+
+[POSTE PRÉCÉDENT] | Entreprise, Ville | 2018 - 2021
+- [Mission principale...]
+
+COMPÉTENCES CLÉS
+- Compétences métier : [Listez vos savoir-faire...]
+- Outils & Logiciels : [Outils informatiques maîtrisés...]
+
+FORMATION & DIPLÔMES
+- [Diplôme le plus récent] | Établissement (Année)`;
+
+  // Assembler les 4 réponses simples en un CV brut clair
+  const handleAssembleRawCv = () => {
+    setIsAssembling(true);
+
+    const nameLine = (candidateName.trim() || 'PRÉNOM NOM').toUpperCase();
+    const roleLine = targetRole.trim() || 'TITRE DU POSTE VISÉ';
+    const contactLine = contactInfo.trim() || 'Ville, France | 06 00 00 00 00 | email@exemple.com';
+
+    let assembled = `${nameLine}\n${roleLine}\n${contactLine}\n\n`;
+
+    // Résumé simple
+    assembled += `RÉSUMÉ PROFESSIONNEL\nProfessionnel motivé et rigoureux dans le domaine de : ${roleLine}. Capacité démontrée à mener à bien des missions variées, à travailler en équipe et à s'adapter rapidement aux exigences du poste.\n\n`;
+
+    // Expériences
+    assembled += `EXPÉRIENCES PROFESSIONNELLES\n`;
+    if (experiences.trim()) {
+      assembled += `${experiences.trim()}\n\n`;
+    } else {
+      assembled += `${roleLine.toUpperCase()} | Entreprise | 2021 - Présent\n- Gestion opérationnelle des missions quotidiennes du poste.\n- Collaboration avec l'équipe et atteinte des objectifs fixés.\n\n`;
     }
 
-    setIsGenerating(true);
-    setActionNotice(null);
+    // Compétences
+    assembled += `COMPÉTENCES CLÉS\n`;
+    if (skills.trim()) {
+      assembled += `${skills
+        .split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => `- ${s}`)
+        .join('\n')}\n\n`;
+    } else {
+      assembled += `- Gestion des priorités, Autonomie, Rigueur, Outils bureautiques\n\n`;
+    }
 
+    // Formation
+    assembled += `FORMATION & DIPLÔMES\n`;
+    if (education.trim()) {
+      assembled += `${education.trim()}\n`;
+    } else {
+      assembled += `- Diplôme ou Titre Professionnel validé\n`;
+    }
+
+    setRawCvText(assembled);
+    setIsAssembling(false);
+    confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+    setNotice({
+      type: 'success',
+      message: '🎉 Votre CV brut est généré ! Vous pouvez le relire et passer à l’enrichissement ci-dessous.',
+    });
+    setTimeout(() => setNotice(null), 4000);
+  };
+
+  // Réinitialiser vers une vraie page blanche
+  const handleResetToBlank = () => {
+    setRawCvText('');
+    setCandidateName('');
+    setTargetRole('');
+    setContactInfo('');
+    setExperiences('');
+    setSkills('');
+    setEducation('');
+    setStep(1);
+    setNotice({
+      type: 'info',
+      message: 'Page blanche réinitialisée.',
+    });
+    setTimeout(() => setNotice(null), 2500);
+  };
+
+  // Passer à l'enrichissement dans l'Analyseur ATS (exactement ce que demande l'utilisateur)
+  const handleSendToAnalyzer = () => {
+    if (!rawCvText.trim()) return;
+    onApplyToCv(rawCvText);
+    setNotice({
+      type: 'success',
+      message: 'CV brut injecté dans l’Analyseur d’Adéquation ! Redirection...',
+    });
+    setTimeout(() => {
+      onNavigateToAnalyzer();
+    }, 1000);
+  };
+
+  // Enrichissement IA facultatif direct
+  const handleAiEnhanceRawCv = async () => {
+    if (!rawCvText.trim()) return;
+    setIsEnhancing(true);
     try {
       const res = await apiFetch('/api/assist-cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'generate_cv',
-          input: notesOrExperience.trim(),
-          candidateName: candidateName.trim(),
-          contactInfo: contactInfo.trim(),
-          targetRole: targetRole.trim(),
-          companyName: targetCompany.trim() || undefined,
-          jobText: jobOfferText.trim() || undefined,
-          style: selectedStyle,
+          action: 'optimize_cv',
+          input: rawCvText,
+          targetRole: targetRole || 'Poste visé',
+          keyArguments: "Consigne d'authenticité : Zéro invention. Ne jamais fabriquer de projets ou d'exemples non réalisés. Améliorer la clarté et la force des verbes d'action sur le parcours réel.",
           apiKey: apiKey || undefined,
           demoFallback: !apiKey && !hasServerKey,
         }),
       });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Erreur lors de la génération du CV.');
+      const data = await res.json().catch(() => ({}));
+      if (data?.result) {
+        // Nettoyer la synthèse pour garder le CV optimisé
+        const parts = data.result.split('---');
+        const enhancedText = parts.length > 1 ? parts.slice(1).join('---').trim() : data.result;
+        setRawCvText(enhancedText);
+        confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+        setNotice({
+          type: 'success',
+          message: '✨ CV enrichi avec des verbes d’action et des puces d’impact !',
+        });
+        setTimeout(() => setNotice(null), 4000);
       }
-
-      setGeneratedCv(data.result);
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
-      setActionNotice({ type: 'success', message: '✨ CV généré avec succès par l\'IA ! Vous pouvez le retoucher ci-dessous.' });
-      setTimeout(() => setActionNotice(null), 4000);
-    } catch (err: unknown) {
-      setActionNotice({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+    } catch (err) {
+      console.warn('Erreur enrichissement:', err);
     } finally {
-      setIsGenerating(false);
+      setIsEnhancing(false);
     }
   };
 
-  // Pré-remplir avec le CV actif de l'analyseur
-  const handleImportCurrentCv = () => {
-    if (currentCvText && currentCvText.trim()) {
-      setNotesOrExperience(currentCvText);
-      setActionNotice({ type: 'success', message: 'Contenu du CV actuel importé dans le générateur !' });
-      setTimeout(() => setActionNotice(null), 3000);
+  // Pré-remplir instantanément depuis le profil candidat
+  const handlePreFillFromProfile = () => {
+    if (!userProfile) return;
+    if (userProfile.firstName || userProfile.lastName) {
+      setCandidateName(`${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim());
     }
-  };
-
-  // Pré-remplir depuis l'offre active de l'analyseur
-  const handleImportCurrentJob = () => {
-    if (currentJobText && currentJobText.trim()) {
-      setJobOfferText(currentJobText);
-      setActionNotice({ type: 'success', message: 'Descriptif de l\'offre actuelle injecté pour le ciblage ATS !' });
-      setTimeout(() => setActionNotice(null), 3000);
+    const parts = [userProfile.location, userProfile.phone, userProfile.email].filter(Boolean);
+    if (parts.length) setContactInfo(parts.join(' | '));
+    if (userProfile.targetRoles?.[0] || userProfile.currentTitle) {
+      setTargetRole(userProfile.targetRoles?.[0] || userProfile.currentTitle || '');
     }
-  };
-
-  // Charger depuis la BDD locale
-  const handleSelectFromDb = (cvId: string) => {
-    setSelectedDbCvId(cvId);
-    const found = savedCvs.find((c) => c.id === cvId);
-    if (found) {
-      setNotesOrExperience(found.rawText);
-      if (found.targetRole) setTargetRole(found.targetRole);
-      setActionNotice({ type: 'success', message: `CV "${found.title}" chargé dans le générateur !` });
-      setTimeout(() => setActionNotice(null), 3000);
+    if (userProfile.skills?.length) {
+      setSkills(userProfile.skills.join(', '));
     }
+    setNotice({ type: 'info', message: '🪄 Informations pré-remplies depuis votre profil candidat !' });
+    setTimeout(() => setNotice(null), 3000);
   };
 
-  // Définir comme CV actif pour l'analyseur
-  const handleApplyToActiveCv = () => {
-    if (!generatedCv.trim()) return;
-    onApplyToCv(generatedCv);
-    setActionNotice({ type: 'success', message: 'CV défini comme CV actif dans l\'analyseur ! Redirection...' });
-    setTimeout(() => {
-      onNavigateToAnalyzer();
-    }, 1200);
+  // Harmoniser et normaliser les titres de sections pour les ATS
+  const handleHarmonizeStructure = () => {
+    if (!rawCvText.trim()) return;
+    let text = rawCvText;
+    text = text.replace(/résumé professionnel|profil professionnel/gi, 'RÉSUMÉ PROFESSIONNEL');
+    text = text.replace(/expériences professionnelles|expérience professionnelle|parcours professionnel/gi, 'EXPÉRIENCES PROFESSIONNELLES');
+    text = text.replace(/compétences clés|compétences|savoir-faire/gi, 'COMPÉTENCES CLÉS');
+    text = text.replace(/formations? (&|et) diplômes?|études/gi, 'FORMATION & DIPLÔMES');
+    setRawCvText(text);
+    setNotice({ type: 'success', message: '✨ Titres de sections normalisés pour les logiciels de recrutement !' });
+    setTimeout(() => setNotice(null), 3000);
   };
 
-  // Sauvegarder dans la BDD locale
+  // Sauvegarder dans la base locale
   const handleSaveToDb = async () => {
-    if (!generatedCv.trim()) return;
-    setIsSaving(true);
+    if (!rawCvText.trim()) return;
     try {
-      const title = `CV Généré - ${targetRole || 'Profil'}${targetCompany ? ` (${targetCompany})` : ''}`;
-      const now = new Date().toISOString();
+      const title = `CV Brut - ${targetRole || 'Nouveau Profil'} (${new Date().toLocaleDateString('fr-FR')})`;
       await localDbClient.saveCv({
         id: `cv-${Date.now()}`,
         title,
         targetRole: targetRole || 'Général',
-        fileName: `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.txt`,
+        fileName: 'cv_brut.txt',
         fileType: 'manual',
-        rawText: generatedCv,
+        rawText: rawCvText,
         isDefault: false,
-        fileSize: new Blob([generatedCv]).size,
-        createdAt: now,
-        updatedAt: now,
+        fileSize: new Blob([rawCvText]).size,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
-      setActionNotice({ type: 'success', message: `⭐ CV enregistré avec succès dans votre base locale sous « ${title} » !` });
-      setTimeout(() => setActionNotice(null), 3500);
+      setIsSaved(true);
+      setNotice({ type: 'success', message: '⭐ CV brut sauvegardé dans votre base locale !' });
+      setTimeout(() => {
+        setIsSaved(false);
+        setNotice(null);
+      }, 3000);
     } catch {
-      setActionNotice({ type: 'error', message: 'Erreur lors de l\'enregistrement dans la base locale.' });
-    } finally {
-      setIsSaving(false);
+      // ignore
     }
   };
 
   // Copier
   const handleCopy = () => {
-    if (!generatedCv) return;
-    navigator.clipboard.writeText(generatedCv);
+    if (!rawCvText) return;
+    navigator.clipboard.writeText(rawCvText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Télécharger Word .doc
+  // Télécharger Word
   const handleDownloadDoc = () => {
-    if (!generatedCv) return;
-    const blob = new Blob([generatedCv], { type: 'application/msword;charset=utf-8' });
+    if (!rawCvText) return;
+    const blob = new Blob([rawCvText], { type: 'application/msword;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `CV_${(targetRole || 'Profil').replace(/\s+/g, '_')}.doc`;
+    link.download = `CV_Brut_${(targetRole || 'Candidat').replace(/\s+/g, '_')}.doc`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  // Télécharger TXT
+  // Télécharger Texte
   const handleDownloadTxt = () => {
-    if (!generatedCv) return;
-    const blob = new Blob([generatedCv], { type: 'text/plain;charset=utf-8' });
+    if (!rawCvText) return;
+    const blob = new Blob([rawCvText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `CV_${(targetRole || 'Profil').replace(/\s+/g, '_')}.txt`;
+    link.download = `CV_Brut_${(targetRole || 'Candidat').replace(/\s+/g, '_')}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Bandeau d'introduction */}
-      <div className="bg-linear-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-xs shrink-0">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <span>Générateur Assisté de CV Professionnel</span>
-                <span className="text-[10px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full uppercase">
-                  IA & Méthode STAR
-                </span>
+    <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
+      {/* =========================================================================
+          EN-TÊTE ÉPURÉ & ACCUEILLANT : AIDE À LA CRÉATION DEPUIS UNE PAGE BLANCHE
+         ========================================================================= */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 shrink-0">
+            <FilePlus2 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-[#0A2540]">
+                Aide à la Création de CV — Départ Page Blanche
               </h2>
-              <p className="text-xs text-gray-600 mt-1 max-w-2xl">
-                Concevez un CV complet, percutant et 100% calibré pour les logiciels ATS. Saisissez vos notes ou importez un profil existant, et l&apos;IA structure vos réalisations avec des métriques chiffrées.
-              </p>
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+                Simple & Rapide
+              </span>
             </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Posez simplement les bases de votre parcours pour obtenir un <strong>CV brut propre</strong>, que vous pourrez ensuite enrichir et adapter à vos offres cibles.
+            </p>
           </div>
+        </div>
 
-          {/* Raccourcis d'import */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {currentCvText && (
-              <button
-                type="button"
-                onClick={handleImportCurrentCv}
-                className="text-xs px-2.5 py-1.5 bg-white border border-purple-300 text-purple-800 hover:bg-purple-50 rounded-lg font-medium transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
-                title="Importer le texte du CV actuel de l'analyseur"
-              >
-                <ArrowRight className="w-3.5 h-3.5 text-purple-600" />
-                <span>Charger CV actif</span>
-              </button>
-            )}
-
-            {savedCvs.length > 0 && (
-              <select
-                value={selectedDbCvId}
-                onChange={(e) => handleSelectFromDb(e.target.value)}
-                className="text-xs px-2.5 py-1.5 bg-white border border-purple-300 text-purple-900 rounded-lg font-medium cursor-pointer shadow-2xs"
-              >
-                <option value="">-- Charger depuis ma BDD locale ({savedCvs.length}) --</option>
-                {savedCvs.map((cv) => (
-                  <option key={cv.id} value={cv.id}>
-                    {cv.title}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+        {/* Choix de la méthode : Assistant 4 questions vs Page blanche directe */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setCreationMode('assistant')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              creationMode === 'assistant'
+                ? 'bg-white text-[#0A2540] shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            🧙‍♂️ Guide en 4 étapes
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCreationMode('blank_page');
+              if (!rawCvText.trim()) setRawCvText(blankTemplate);
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              creationMode === 'blank_page'
+                ? 'bg-white text-[#0A2540] shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            ✍️ Page blanche libre
+          </button>
         </div>
       </div>
 
-      {/* Notifications de feedback */}
-      {actionNotice && (
+      {/* Toast de notification */}
+      {notice && (
         <div
-          className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 shadow-xs transition-all ${
-            actionNotice.type === 'success'
+          className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center gap-2 shadow-xs transition-all ${
+            notice.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              : 'bg-rose-50 border-rose-200 text-rose-900'
+              : 'bg-blue-50 border-blue-200 text-blue-900'
           }`}
         >
-          {actionNotice.type === 'success' ? (
-            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-          )}
-          <span>{actionNotice.message}</span>
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{notice.message}</span>
         </div>
       )}
 
-      {/* Formulaire en 2 colonnes */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Colonne Gauche : Formulaire & Paramètres (5 cols) */}
+      {/* =========================================================================
+          CONTENU : 2 COLONNES (SAISIE FACILE À GAUCHE / CV BRUT À DROITE)
+         ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* =======================================================================
+            COLONNE GAUCHE (5 colonnes) : LA SAISIE SIMPLIFIÉE
+           ======================================================================= */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Sliders className="w-4 h-4 text-purple-600" />
-              <span>1. Paramètres & Ciblage</span>
-            </h3>
+          {creationMode === 'assistant' ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4">
+              {/* Stepper des 4 étapes simples */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <span className="text-xs font-black text-[#0A2540]">
+                  Étape {step} sur 4 :{' '}
+                  {step === 1 && 'Vos coordonnées'}
+                  {step === 2 && 'Votre métier cible'}
+                  {step === 3 && 'Vos expériences passées'}
+                  {step === 4 && 'Compétences & Diplômes'}
+                </span>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">
-                  Nom & Prénom
-                </label>
-                <input
-                  type="text"
-                  value={candidateName}
-                  onChange={(e) => setCandidateName(e.target.value)}
-                  placeholder="Ex: Votre Nom & Prénom"
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">
-                  Poste / Rôle Cible (Titre du CV)
-                </label>
-                <input
-                  type="text"
-                  value={targetRole}
-                  onChange={(e) => setTargetRole(e.target.value)}
-                  placeholder="Ex: Product Owner Senior, Lead Tech React..."
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">
-                    Entreprise ciblée (optionnel)
-                  </label>
-                  <input
-                    type="text"
-                    value={targetCompany}
-                    onChange={(e) => setTargetCompany(e.target.value)}
-                    placeholder="Ex: Doctolib..."
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1">
-                    Format & Style
-                  </label>
-                  <select
-                    value={selectedStyle}
-                    onChange={(e) => setSelectedStyle(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
-                  >
-                    <option value="impact_star">Impactant STAR (Chiffré)</option>
-                    <option value="ats_standard">ATS Sobre & Standard</option>
-                    <option value="tech_modern">Tech & Ingénierie</option>
-                    <option value="executive">Exécutif & Leadership</option>
-                  </select>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStep(s)}
+                      className={`w-6 h-6 rounded-full text-xs font-black transition-all cursor-pointer flex items-center justify-center ${
+                        step === s
+                          ? 'bg-[#00D287] text-[#0A2540]'
+                          : step > s
+                          ? 'bg-[#0A2540] text-white'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">
-                  Coordonnées & Liens (En-tête)
-                </label>
-                <input
-                  type="text"
-                  value={contactInfo}
-                  onChange={(e) => setContactInfo(e.target.value)}
-                  placeholder="Ville | Tél | Email | LinkedIn | GitHub..."
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-            </div>
-          </div>
+              {/* Étape 1 : Coordonnées */}
+              {step === 1 && (
+                <div className="space-y-3 animate-fade-in">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      1. Votre Nom & Prénom :
+                    </label>
+                    <input
+                      type="text"
+                      value={candidateName}
+                      onChange={(e) => setCandidateName(e.target.value)}
+                      placeholder="Ex: Sophie Martin"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287]"
+                    />
+                  </div>
 
-          {/* Offre d'emploi cible (optionnelle pour aligner les mots-clés) */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Briefcase className="w-4 h-4 text-indigo-600" />
-                <span>2. Offre d&apos;emploi cible (pour l&apos;ATS)</span>
-              </h3>
-              {currentJobText && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      2. Vos coordonnées de contact :
+                    </label>
+                    <input
+                      type="text"
+                      value={contactInfo}
+                      onChange={(e) => setContactInfo(e.target.value)}
+                      placeholder="Ex: Paris | 06 12 34 56 78 | sophie.martin@email.com"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287]"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Simple et direct : ville, téléphone et adresse email.
+                    </p>
+                  </div>
+
+                  {userProfile && (userProfile.firstName || userProfile.email) && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={handlePreFillFromProfile}
+                        className="text-[11px] text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>🪄 Pré-remplir avec mon profil ({userProfile.firstName || 'Candidat'})</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Étape 2 : Poste cible */}
+              {step === 2 && (
+                <div className="space-y-3 animate-fade-in">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Quel métier ou poste visez-vous ?
+                    </label>
+                    <input
+                      type="text"
+                      value={targetRole}
+                      onChange={(e) => setTargetRole(e.target.value)}
+                      placeholder="Ex: Comptable Général, Développeur Web, Chef de Projet..."
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287]"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      💡 <strong>Conseil :</strong> Indiquez un titre clair et compréhensible par tous les recruteurs.
+                    </p>
+                  </div>
+
+                  {/* Suggestions rapides en 1 clic */}
+                  <div className="pt-2">
+                    <span className="text-[11px] text-slate-500 font-semibold block mb-1.5">
+                      Exemples fréquents :
+                    </span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {['Comptable', 'Développeur Fullstack', 'Commercial B2B', 'Chef de Projet', 'Assistant RH', 'Responsable Marketing'].map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setTargetRole(r)}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium cursor-pointer"
+                        >
+                          + {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Étape 3 : Expériences passées */}
+              {step === 3 && (
+                <div className="space-y-3 animate-fade-in">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Vos 2 ou 3 expériences principales :
+                    </label>
+                    <p className="text-[11px] text-slate-500 mb-2">
+                      Listez simplement chaque poste avec l&apos;entreprise, les dates et 2 ou 3 lignes sur ce que vous faisiez.
+                    </p>
+                    <textarea
+                      rows={7}
+                      value={experiences}
+                      onChange={(e) => setExperiences(e.target.value)}
+                      placeholder="Exemple :&#10;COMPTABLE | Entreprise ABC, Paris | 2021 - 2024&#10;- Gestion des écritures courantes et rapprochements bancaires&#10;- Préparation des déclarations de TVA et clôtures mensuelles&#10;&#10;AIDE COMPTABLE | Cabinet XYZ | 2018 - 2021&#10;- Saisie des factures et archivage des pièces comptables"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287] leading-relaxed"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Étape 4 : Compétences & Diplômes */}
+              {step === 4 && (
+                <div className="space-y-3 animate-fade-in">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Vos compétences & outils principaux :
+                    </label>
+                    <input
+                      type="text"
+                      value={skills}
+                      onChange={(e) => setSkills(e.target.value)}
+                      placeholder="Ex: Excel, SAP, Facturation, Esprit d'équipe, Anglais..."
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Votre diplôme ou formation :
+                    </label>
+                    <input
+                      type="text"
+                      value={education}
+                      onChange={(e) => setEducation(e.target.value)}
+                      placeholder="Ex: BTS Comptabilité (2018) ou Titre Professionnel"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Boutons de navigation du guide */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={handleImportCurrentJob}
-                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                  disabled={step === 1}
+                  onClick={() => setStep((s) => Math.max(1, s - 1))}
+                  className="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1"
                 >
-                  Charger l&apos;offre active
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Précédent</span>
                 </button>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-500">
-              Collez ici l&apos;annonce pour que l&apos;IA intègre les mots-clés recherchés par le recruteur.
-            </p>
-            <textarea
-              rows={4}
-              value={jobOfferText}
-              onChange={(e) => setJobOfferText(e.target.value)}
-              placeholder="Collez le descriptif de l'offre d'emploi ici (optionnel mais recommandé)..."
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans"
-            />
-          </div>
 
-          {/* Parcours brut & notes */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-purple-600" />
-                <span>3. Vos Expériences & Compétences</span>
-              </h3>
-              <span className="text-[11px] text-gray-400">
-                {notesOrExperience.length} car.
+                <div className="flex items-center gap-2">
+                  {step < 4 ? (
+                    <button
+                      type="button"
+                      onClick={() => setStep((s) => Math.min(4, s + 1))}
+                      className="px-4 py-2 bg-[#0A2540] hover:bg-[#133557] text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Étape suivante</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleAssembleRawCv}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Générer mon CV brut ➔</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Mode Page Blanche Directe */
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-[#0A2540]">
+                  Page Blanche Électronique
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setRawCvText(blankTemplate)}
+                  className="text-xs text-blue-600 hover:underline font-bold"
+                >
+                  Insérer la trame de base
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Tapez ou collez directement votre texte brut ci-dessous. Pas de formatage complexe nécessaire, restez simple et lisible.
+              </p>
+              <button
+                type="button"
+                onClick={handleResetToBlank}
+                className="text-[11px] text-slate-400 hover:text-red-600 font-medium"
+              >
+                Effacer tout pour repartir à zéro
+              </button>
+            </div>
+          )}
+
+          {/* Lien facultatif vers les modèles si l'utilisateur veut s'inspirer */}
+          {onOpenTemplatesCatalog && (
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs">
+              <span className="text-slate-600">
+                Besoin d&apos;inspiration par secteur ou langue ?
               </span>
+              <button
+                type="button"
+                onClick={onOpenTemplatesCatalog}
+                className="text-xs text-emerald-800 font-bold hover:underline shrink-0"
+              >
+                Voir les modèles ➔
+              </button>
             </div>
-            <p className="text-[11px] text-gray-500">
-              Notes en vrac, missions, outils, chiffres clés ou votre CV actuel brut :
-            </p>
-            <textarea
-              rows={8}
-              value={notesOrExperience}
-              onChange={(e) => setNotesOrExperience(e.target.value)}
-              placeholder="Listez vos postes, entreprises, dates, missions principales, compétences et formations..."
-              className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-
-            <button
-              type="button"
-              onClick={handleGenerateCv}
-              disabled={isGenerating || !notesOrExperience.trim()}
-              className="w-full py-3 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />
-                  <span>Génération du CV par l&apos;IA en cours...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>Générer mon CV optimisé ATS</span>
-                </>
-              )}
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* Colonne Droite : Prévisualisation & Éditeur en direct (7 cols) */}
-        <div className="lg:col-span-7 flex flex-col space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex-1 flex flex-col">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 mb-3">
+        {/* =======================================================================
+            COLONNE DROITE (7 colonnes) : LE CV BRUT & ENRICHISSEMENT
+           ======================================================================= */}
+        <div className="lg:col-span-7 space-y-4">
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs flex flex-col min-h-[580px]">
+            {/* Barre supérieure du CV brut */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3 mb-3">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-purple-600" />
-                  <span>Aperçu & Éditeur du CV Généré</span>
+                <h3 className="text-sm font-black text-[#0A2540] flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-emerald-600" />
+                  <span>Votre CV Brut (Document de Base)</span>
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  {generatedCv ? 'Document prêt à l\'emploi. Vous pouvez modifier directement le texte ci-dessous.' : 'Le CV généré apparaîtra ici avec une structure professionnelle complète.'}
+                <p className="text-[11px] text-slate-500">
+                  {rawCvText
+                    ? 'Ce document brut sert de fondation solide pour vos futures candidatures.'
+                    : 'Le résultat de votre saisie apparaîtra ici dès validation.'}
                 </p>
               </div>
 
-              {generatedCv && (
+              {rawCvText && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-700 flex items-center gap-1 cursor-pointer font-medium"
-                    title="Copier le texte complet"
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    title="Copier le texte"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
                     <span>{copied ? 'Copié !' : 'Copier'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleDownloadDoc}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-700 flex items-center gap-1 cursor-pointer font-medium"
-                    title="Télécharger en Word (.doc)"
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    title="Télécharger en Word .doc"
                   >
                     <Download className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Word (.doc)</span>
+                    <span>Word</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleDownloadTxt}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-700 flex items-center gap-1 cursor-pointer font-medium"
-                    title="Télécharger en Texte (.txt)"
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    title="Télécharger en TXT"
                   >
-                    <Download className="w-3.5 h-3.5 text-gray-600" />
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
                     <span>TXT</span>
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Zone de texte ou Placeholder */}
-            {isGenerating ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3 bg-purple-50/40 rounded-xl border border-dashed border-purple-200">
-                <RefreshCw className="w-8 h-8 text-purple-600 animate-spin" />
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-gray-800">
-                    Rédaction du CV par l&apos;IA en cours...
-                  </p>
-                  <p className="text-xs text-gray-500 max-w-sm">
-                    Structuration des sections, application de la formule Google X-Y-Z et harmonisation des mots-clés ATS.
-                  </p>
+            {/* Zone de texte éditable du CV Brut */}
+            <div className="flex-1 flex flex-col space-y-3">
+              <textarea
+                value={rawCvText}
+                onChange={(e) => setRawCvText(e.target.value)}
+                rows={18}
+                placeholder="Votre CV brut s'affichera ici. Vous pouvez aussi taper directement dessus..."
+                className="w-full flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00D287] leading-relaxed resize-y"
+              />
+
+              {/* =================================================================
+                  LE COEUR DE LA DEMANDE : "POUVOIR PAR LA SUITE ENRICHIR ET AMÉLIORER"
+                 ================================================================= */}
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-[#0A2540]">
+                    🚀 Étape suivante : Enrichir & Améliorer
+                  </span>
+
+                  {rawCvText && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleHarmonizeStructure}
+                        className="text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                        title="Harmoniser les titres de rubriques pour les ATS"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Harmoniser rubriques</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isEnhancing}
+                        onClick={handleAiEnhanceRawCv}
+                        className="text-xs text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                        title="Enrichir automatiquement le CV brut avec des verbes d'action STAR"
+                      >
+                        <Wand2 className="w-3.5 h-3.5 text-purple-600" />
+                        <span>{isEnhancing ? 'Enrichissement en cours...' : '✨ Enrichir les puces (STAR & Chiffres)'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Bouton principal : envoyer vers l'Analyseur d'Adéquation pour enrichir face à l'offre */}
+                  <button
+                    type="button"
+                    disabled={!rawCvText.trim()}
+                    onClick={handleSendToAnalyzer}
+                    className="flex-1 py-3 px-4 bg-linear-to-r from-[#0A2540] to-[#133557] hover:from-[#133557] hover:to-[#1E3A8A] text-white rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed active:scale-98"
+                  >
+                    <span>🎯 Tester & Enrichir ce CV brut dans l&apos;Analyseur ATS</span>
+                    <ArrowRight className="w-4 h-4 text-[#00D287]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!rawCvText.trim()}
+                    onClick={handleSaveToDb}
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-[#0A2540] rounded-2xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                    title="Sauvegarder dans la base locale"
+                  >
+                    <Save className="w-4 h-4 text-emerald-600" />
+                    <span>{isSaved ? 'Sauvegardé !' : 'Sauvegarder en BDD'}</span>
+                  </button>
                 </div>
               </div>
-            ) : generatedCv ? (
-              <div className="flex-1 flex flex-col space-y-3">
-                <textarea
-                  value={generatedCv}
-                  onChange={(e) => setGeneratedCv(e.target.value)}
-                  rows={20}
-                  className="w-full flex-1 p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 leading-relaxed"
-                />
-
-                {/* Barre d'action d'intégration rapide */}
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100">
-                  <div className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      {generatedCv.split(/\s+/).filter(Boolean).length} mots • {generatedCv.length} caractères
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={handleSaveToDb}
-                      disabled={isSaving}
-                      className="flex-1 sm:flex-none px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                      title="Sauvegarder ce CV dans ma base locale"
-                    >
-                      {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      <span>Enregistrer en BDD</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleApplyToActiveCv}
-                      className="flex-1 sm:flex-none px-4 py-2 bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                      title="Remplacer le CV dans l'analyseur pour tester immédiatement le score ATS"
-                    >
-                      <ArrowRight className="w-3.5 h-3.5" />
-                      <span>Définir comme CV actif & Analyser</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4 bg-gray-50/60 rounded-xl border border-dashed border-gray-300">
-                <div className="p-3 bg-purple-100/70 text-purple-700 rounded-full">
-                  <Sparkles className="w-7 h-7" />
-                </div>
-                <div className="space-y-1.5 max-w-md">
-                  <h4 className="text-sm font-bold text-gray-800">
-                    Prêt à créer votre nouveau CV optimisé
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    Complétez les informations sur la gauche ou cliquez sur « Charger CV actif », puis lancez la génération pour obtenir votre CV personnalisé.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGenerateCv}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs"
-                >
-                  Lancer la génération assistée
-                </button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
-
       </div>
     </div>
   );

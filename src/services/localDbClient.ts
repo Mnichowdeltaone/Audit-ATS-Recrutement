@@ -103,12 +103,19 @@ function setStorage<T>(key: string, value: T): void {
   }
 }
 
-// Filtre pour éliminer toute donnée de démonstration (Thomas Dupont, Clara Martin, Alex Martin, etc.)
+// Filtre pour éliminer toute donnée de démonstration (Thomas Laurent, Alexandre Laurent, demo-app, etc.)
 function filterOutDemoCv(cv: SavedCv): boolean {
   if (!cv || !cv.id) return false;
-  if (cv.id === 'cv-default-1' || cv.id === 'cv-tech-2' || cv.id.startsWith('demo-')) return false;
+  if (cv.id === 'cv-default-1' || cv.id === 'cv-tech-2' || cv.id.startsWith('demo-') || (cv as any).isDemo) return false;
   const raw = (cv.rawText || '').toUpperCase();
-  if (raw.includes('THOMAS DUPONT') || raw.includes('CLARA MARTIN') || raw.includes('MAXIME LEROY')) {
+  if (
+    raw.includes('THOMAS DUPONT') ||
+    raw.includes('CLARA MARTIN') ||
+    raw.includes('MAXIME LEROY') ||
+    raw.includes('THOMAS LAURENT') ||
+    raw.includes('ALEXANDRE LAURENT') ||
+    raw.includes('PROFIL CANDIDAT FICTIF')
+  ) {
     return false;
   }
   return true;
@@ -116,7 +123,15 @@ function filterOutDemoCv(cv: SavedCv): boolean {
 
 function filterOutDemoApp(app: ApplicationItem): boolean {
   if (!app || !app.id) return false;
-  if (app.id.startsWith('app-sample-') || app.id === 'app-1' || app.id === 'app-2' || app.id === 'app-3') {
+  if (
+    app.id.startsWith('demo-') ||
+    app.id.startsWith('app-sample-') ||
+    app.id.startsWith('sample-') ||
+    app.id === 'app-1' ||
+    app.id === 'app-2' ||
+    app.id === 'app-3' ||
+    (app as any).isDemo === true
+  ) {
     return false;
   }
   return true;
@@ -124,9 +139,16 @@ function filterOutDemoApp(app: ApplicationItem): boolean {
 
 function filterOutDemoAnalysis(item: AnalysisHistoryItem): boolean {
   if (!item || !item.id) return false;
-  if (item.id.startsWith('sample-')) return false;
+  if (item.id.startsWith('sample-') || item.id.startsWith('demo-') || (item as any).isDemo) return false;
   const cv = (item.cvText || '').toUpperCase();
-  if (cv.includes('THOMAS DUPONT') || cv.includes('CLARA MARTIN') || cv.includes('MAXIME LEROY')) {
+  if (
+    cv.includes('THOMAS DUPONT') ||
+    cv.includes('CLARA MARTIN') ||
+    cv.includes('MAXIME LEROY') ||
+    cv.includes('THOMAS LAURENT') ||
+    cv.includes('ALEXANDRE LAURENT') ||
+    cv.includes('PROFIL CANDIDAT FICTIF')
+  ) {
     return false;
   }
   return true;
@@ -640,6 +662,9 @@ export const localDbClient = {
   },
 
   async saveApplication(app: ApplicationItem): Promise<ApplicationItem> {
+    if (!filterOutDemoApp(app)) {
+      return app;
+    }
     const current = this.getLocalApplications();
     const filtered = current.filter((a) => a.id !== app.id);
     const updated = [app, ...filtered];

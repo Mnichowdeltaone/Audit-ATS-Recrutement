@@ -111,6 +111,8 @@ export default function CvOptimizationModal({
     setSuccessNotice(null);
 
     try {
+      const authGuardedInstructions = `RÈGLE ABSOLUE D'AUTHENTICITÉ : ZÉRO INVENTION. Ne jamais fabriquer d'exemples de projets, de missions ou d'outils non réalisés par le candidat. Le but est d'améliorer la formulation, la clarté et l'impact de son expérience réelle, sans inventer d'accomplissements imaginaires. ${customInstructions.trim()}`.trim();
+
       const res = await apiFetch('/api/assist-cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,7 +123,7 @@ export default function CvOptimizationModal({
           analysisRecommendations: analysisResult || '',
           targetRole: targetRole || '',
           companyName: companyName || '',
-          keyArguments: customInstructions.trim() || undefined,
+          keyArguments: authGuardedInstructions,
           apiKey: apiKey || undefined,
           demoFallback: !apiKey && !hasServerKey,
         }),
@@ -147,17 +149,17 @@ export default function CvOptimizationModal({
           .map((line) => line.replace(/^[-*]\s*/, '').trim());
 
         setModificationsSummary(bullets.length > 0 ? bullets : [
-          'Mots-clés ATS clés de l\'offre intégrés naturellement',
-          'Accomplissements reformulés avec des métriques chiffrées (STAR)',
-          'Phrase d\'accroche et résumé réalignés avec le poste cible',
-          'Structure des compétences réorganisée pour les logiciels de tri',
+          'Vocabulaire et mots-clés de l\'offre harmonisés avec le parcours réel',
+          'Formulation valorisée des réalisations existantes (méthode STAR)',
+          'Phrase d\'accroche et résumé réalignés fidèlement sur vos atouts',
+          'Structure des compétences réorganisée pour les filtres ATS',
         ]);
         setOptimizedCv(cvPart);
       } else {
         setModificationsSummary([
-          'Mots-clés ATS de l\'offre intégrés avec succès',
-          'Puces reformulées selon la méthode STAR',
-          'Résumé professionnel adapté au poste',
+          'Mots-clés de l\'offre intégrés sur les expériences réelles',
+          'Puces reformulées pour valoriser votre impact concret',
+          'Accroche professionnelle adaptée au poste',
         ]);
         setOptimizedCv(rawResult.trim());
       }
@@ -331,7 +333,7 @@ export default function CvOptimizationModal({
                 <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
                   <HelpCircle className="w-3.5 h-3.5 text-purple-500 shrink-0" />
                   <span>
-                    L&apos;IA va scanner le CV actuel, injecter les mots-clés de l&apos;offre et reformuler les puces d&apos;expérience avec des métriques STAR.
+                    L&apos;IA valorise votre parcours réel avec les mots-clés de l&apos;offre et des verbes d&apos;action précis, <strong>sans jamais inventer d&apos;expériences ou de faux exemples</strong>.
                   </span>
                 </p>
 
