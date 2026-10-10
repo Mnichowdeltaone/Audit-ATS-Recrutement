@@ -58,6 +58,7 @@ function waitForServer(timeoutMs = 5000) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    icon: app.isPackaged ? path.join(process.resourcesPath, 'cv-improvement.ico') : path.join(app.getAppPath(), 'build', 'cv-improvement.ico'),
     width: 1200,
     height: 800,
     webPreferences: {
@@ -67,7 +68,7 @@ function createWindow() {
   });
 
   const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
-  mainWindow.loadFile(indexPath);
+  mainWindow.loadURL('http://localhost:3000');
 }
 
 app.whenReady().then(async () => {
