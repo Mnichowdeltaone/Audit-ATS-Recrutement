@@ -32,9 +32,26 @@ import {
   Unlock,
   GripVertical,
   MoveRight,
+  Users,
+  UserPlus,
+  Mail,
+  Phone,
+  MessageSquare,
+  Globe,
+  X,
 } from 'lucide-react';
-import { ApplicationItem, ApplicationStatus, AnalysisHistoryItem } from '../types';
+import {
+  ApplicationItem,
+  ApplicationStatus,
+  AnalysisHistoryItem,
+  ApplicationContact,
+  ApplicationInteraction,
+  ApplicationInteractionType,
+  CompanyFinancialTechnicalDossier,
+} from '../types';
 import { localDbClient } from '../services/localDbClient';
+import CompanyDossierModal from './CompanyDossierModal';
+import { extractCompanyDossier } from '../utils/companyDossierExtractor';
 
 interface ApplicationTrackerProps {
   applications: ApplicationItem[];
@@ -218,6 +235,35 @@ export default function ApplicationTracker({
   const companyInputId = useId();
   const roleInputId = useId();
 
+  // Nouveaux états pour suivi des contacts et annotations (Dossier de candidature enrichi)
+  const [modalActiveTab, setModalActiveTab] = useState<'general' | 'contacts' | 'journal' | 'company'>('general');
+  const [formContacts, setFormContacts] = useState<ApplicationContact[]>([]);
+  const [formInteractions, setFormInteractions] = useState<ApplicationInteraction[]>([]);
+  const [formCompanyPhone, setFormCompanyPhone] = useState('');
+  const [formCompanyAddress, setFormCompanyAddress] = useState('');
+
+  // Ajout de contact
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactRole, setNewContactRole] = useState('Recruteur / RH');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactLinkedin, setNewContactLinkedin] = useState('');
+  const [newContactNotes, setNewContactNotes] = useState('');
+  const [isAddingContact, setIsAddingContact] = useState(false);
+
+  // Ajout d'annotation
+  const [newInteractionType, setNewInteractionType] = useState<ApplicationInteractionType>('note');
+  const [newInteractionTitle, setNewInteractionTitle] = useState('');
+  const [newInteractionContent, setNewInteractionContent] = useState('');
+  const [newInteractionDate, setNewInteractionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isAddingInteraction, setIsAddingInteraction] = useState(false);
+
+  // Fiche Entreprise Modal
+  const [viewingCompanyDossier, setViewingCompanyDossier] = useState<{
+    dossier: CompanyFinancialTechnicalDossier;
+    roleTitle?: string;
+  } | null>(null);
+
   // Écouteur global pour la réinitialisation de la BDD
   useEffect(() => {
     const handleReset = () => {
@@ -233,12 +279,16 @@ export default function ApplicationTracker({
       setFormNotes('');
       setFormCoverLetter('');
       setFormCoverLetterTitle('');
+      setFormContacts([]);
+      setFormInteractions([]);
+      setFormCompanyPhone('');
+      setFormCompanyAddress('');
     };
     window.addEventListener('cv_move_database_reset', handleReset);
     return () => window.removeEventListener('cv_move_database_reset', handleReset);
   }, []);
 
-  // Metrics
+  // Metrics (COMPTEUR DE RELANCES FIABILISÉ : dues en retard/aujourd'hui, prévues, et faites)
   const stats = useMemo(() => {
     const total = applications.length;
     const active = applications.filter((a) => ['applied', 'waiting', 'interview'].includes(a.status)).length;
@@ -247,12 +297,90 @@ export default function ApplicationTracker({
     const conversionRate = total > 0 ? Math.round(((interviews + offers) / total) * 100) : 0;
 
     const today = new Date().toISOString().split('T')[0];
+    // Relances dues / en retard (non cochées comme faites, avec date <= aujourd'hui, excluant refusés/offres)
     const dueFollowUps = applications.filter(
-      (a) => a.followUpDate && a.followUpDate <= today && ['applied', 'waiting'].includes(a.status)
+      (a) => !a.checklist?.followUpDone && !!a.followUpDate && a.followUpDate <= today && a.status !== 'offer' && a.status !== 'rejected'
+    ).length;
+    // Toutes les relances planifiées non encore faites
+    const pendingFollowUps = applications.filter(
+      (a) => !a.checklist?.followUpDone && !!a.followUpDate && a.status !== 'offer' && a.status !== 'rejected'
+    ).length;
+    // Relances effectuées (cochées)
+    const completedFollowUps = applications.filter(
+      (a) => !!a.checklist?.followUpDone
     ).length;
 
-    return { total, active, interviews, offers, conversionRate, dueFollowUps };
+    return { total, active, interviews, offers, conversionRate, dueFollowUps, pendingFollowUps, completedFollowUps };
   }, [applications]);
+
+  // Action rapide : Marquer la relance comme faite / à refaire directement en 1 clic
+  const handleToggleFollowUp = async (appId: string, markDone: boolean) => {
+    const target = applications.find((a) => a.id === appId);
+    if (!target) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const updatedChecklist = {
+      ...(target.checklist || { cvSent: false, coverLetterSent: false, portfolioSent: false }),
+      followUpDone: markDone,
+    };
+
+    const newInteractions = [...(target.interactions || [])];
+    if (markDone) {
+      newInteractions.unshift({
+        id: `inter-${Date.now()}`,
+        date: today,
+        type: 'follow_up',
+        title: 'Relance effectuée',
+        content: `Relance enregistrée pour la candidature chez ${target.company}.`,
+      });
+    }
+
+    const updatedApp: ApplicationItem = {
+      ...target,
+      checklist: updatedChecklist,
+      followUpDoneAt: markDone ? today : undefined,
+      interactions: newInteractions,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setApplications((prev) =>
+      prev.map((item) => (item.id === appId ? updatedApp : item))
+    );
+
+    try {
+      await localDbClient.saveApplication(updatedApp);
+    } catch (err) {
+      console.error('Erreur sauvegarde relance :', err);
+    }
+  };
+
+  // Consultation de la fiche technique & financière entreprise liée
+  const handleOpenCompanyDossier = (app: ApplicationItem) => {
+    const matchingAnalysis = analyses.find(
+      (a) =>
+        (app.analysisId && a.id === app.analysisId) ||
+        (a.company && a.company.toLowerCase().trim() === app.company.toLowerCase().trim())
+    );
+    const baseDossier =
+      matchingAnalysis?.companyDossier ||
+      extractCompanyDossier(
+        matchingAnalysis?.analysisResult || '',
+        matchingAnalysis?.jobText || '',
+        app.company,
+        app.role
+      );
+
+    const mergedDossier: CompanyFinancialTechnicalDossier = {
+      ...baseDossier,
+      customContacts: app.contacts && app.contacts.length > 0 ? app.contacts : baseDossier.customContacts,
+      candidateNotes: app.interactions && app.interactions.length > 0 ? app.interactions : baseDossier.candidateNotes,
+    };
+
+    setViewingCompanyDossier({
+      dossier: mergedDossier,
+      roleTitle: app.role,
+    });
+  };
 
   // Filtered applications
   const filteredApps = useMemo(() => {
@@ -262,9 +390,23 @@ export default function ApplicationTracker({
         app.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (app.location && app.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (app.notes && app.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+        (app.notes && app.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (app.contacts && app.contacts.some((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.role?.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+        (app.interactions && app.interactions.some((i) => i.title.toLowerCase().includes(searchQuery.toLowerCase()) || i.content.toLowerCase().includes(searchQuery.toLowerCase())));
 
-      const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
+      let matchesStatus = true;
+      if (statusFilter === 'all') {
+        matchesStatus = true;
+      } else if (statusFilter === 'follow_up_due') {
+        const today = new Date().toISOString().split('T')[0];
+        matchesStatus = !app.checklist?.followUpDone && !!app.followUpDate && app.followUpDate <= today && app.status !== 'offer' && app.status !== 'rejected';
+      } else if (statusFilter === 'follow_up_done') {
+        matchesStatus = !!app.checklist?.followUpDone;
+      } else if (statusFilter === 'follow_up_pending') {
+        matchesStatus = !app.checklist?.followUpDone && !!app.followUpDate && app.status !== 'offer' && app.status !== 'rejected';
+      } else {
+        matchesStatus = app.status === statusFilter;
+      }
 
       return matchesSearch && matchesStatus;
     });
@@ -273,6 +415,7 @@ export default function ApplicationTracker({
   // Open modal to create or edit
   const handleOpenCreateModal = () => {
     setEditingApp(null);
+    setModalActiveTab('general');
     setFormCompany('');
     setFormRole('');
     setFormStatus('to_apply');
@@ -291,11 +434,18 @@ export default function ApplicationTracker({
     setFormCoverLetter('');
     setFormCoverLetterTitle('');
     setFormChecklist({ cvSent: false, coverLetterSent: false, portfolioSent: false, followUpDone: false });
+    setFormContacts([]);
+    setFormInteractions([]);
+    setFormCompanyPhone('');
+    setFormCompanyAddress('');
+    setIsAddingContact(false);
+    setIsAddingInteraction(false);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (app: ApplicationItem) => {
     setEditingApp(app);
+    setModalActiveTab('general');
     setFormCompany(app.company);
     setFormRole(app.role);
     setFormStatus(app.status);
@@ -317,7 +467,96 @@ export default function ApplicationTracker({
       portfolioSent: false,
       followUpDone: false,
     });
+
+    // Chargement et migration transparente des contacts existants
+    const existingContacts: ApplicationContact[] =
+      app.contacts && app.contacts.length > 0
+        ? [...app.contacts]
+        : app.contact
+        ? [{ id: 'c-init', name: app.contact, role: 'Contact RH / Recruteur' }]
+        : [];
+    setFormContacts(existingContacts);
+
+    // Chargement et migration des interactions
+    const existingInteractions: ApplicationInteraction[] =
+      app.interactions && app.interactions.length > 0
+        ? [...app.interactions]
+        : app.notes
+        ? [
+            {
+              id: 'i-init',
+              date: app.appliedDate || new Date().toISOString().split('T')[0],
+              type: 'note',
+              title: 'Note initiale',
+              content: app.notes,
+            },
+          ]
+        : [];
+    setFormInteractions(existingInteractions);
+
+    setFormCompanyPhone(app.companyPhone || '');
+    setFormCompanyAddress(app.companyAddress || '');
+    setIsAddingContact(false);
+    setIsAddingInteraction(false);
     setIsModalOpen(true);
+  };
+
+  // Gestion des contacts dans le formulaire
+  const handleAddContact = () => {
+    if (!newContactName.trim()) return;
+    const newContact: ApplicationContact = {
+      id: `c-${Date.now()}`,
+      name: newContactName.trim(),
+      role: newContactRole.trim() || 'Contact',
+      email: newContactEmail.trim() || undefined,
+      phone: newContactPhone.trim() || undefined,
+      linkedinUrl: newContactLinkedin.trim() || undefined,
+      notes: newContactNotes.trim() || undefined,
+    };
+    setFormContacts((prev) => [...prev, newContact]);
+    setNewContactName('');
+    setNewContactRole('Recruteur / RH');
+    setNewContactEmail('');
+    setNewContactPhone('');
+    setNewContactLinkedin('');
+    setNewContactNotes('');
+    setIsAddingContact(false);
+  };
+
+  const handleDeleteContact = (contactId: string) => {
+    setFormContacts((prev) => prev.filter((c) => c.id !== contactId));
+  };
+
+  // Gestion des annotations et interactions dans le formulaire
+  const handleAddInteraction = () => {
+    if (!newInteractionContent.trim() && !newInteractionTitle.trim()) return;
+    const newInter: ApplicationInteraction = {
+      id: `inter-${Date.now()}`,
+      date: newInteractionDate || new Date().toISOString().split('T')[0],
+      type: newInteractionType,
+      title:
+        newInteractionTitle.trim() ||
+        (newInteractionType === 'call'
+          ? 'Appel téléphonique'
+          : newInteractionType === 'email'
+          ? 'Email échangé'
+          : newInteractionType === 'interview'
+          ? 'Entretien'
+          : newInteractionType === 'follow_up'
+          ? 'Relance'
+          : 'Annotation'),
+      content: newInteractionContent.trim(),
+    };
+    setFormInteractions((prev) => [newInter, ...prev]);
+    setNewInteractionTitle('');
+    setNewInteractionContent('');
+    setNewInteractionType('note');
+    setNewInteractionDate(new Date().toISOString().split('T')[0]);
+    setIsAddingInteraction(false);
+  };
+
+  const handleDeleteInteraction = (interId: string) => {
+    setFormInteractions((prev) => prev.filter((i) => i.id !== interId));
   };
 
   const handleSaveApplication = async (e: React.FormEvent) => {
@@ -330,6 +569,11 @@ export default function ApplicationTracker({
       ...formChecklist,
       coverLetterSent: finalCoverLetter ? true : formChecklist.coverLetterSent,
     };
+
+    const finalContacts = formContacts;
+    const finalInteractions = formInteractions;
+    const primaryContactStr = formContact.trim() || (finalContacts.length > 0 ? `${finalContacts[0].name} (${finalContacts[0].role || 'Contact'})` : '');
+    const primaryNotesStr = formNotes.trim() || (finalInteractions.length > 0 ? finalInteractions[0].content : '');
 
     if (editingApp) {
       // Update
@@ -344,13 +588,18 @@ export default function ApplicationTracker({
         contractType: formContractType,
         salary: formSalary.trim(),
         jobUrl: formJobUrl.trim(),
-        contact: formContact.trim(),
-        notes: formNotes.trim(),
+        contact: primaryContactStr,
+        contacts: finalContacts,
+        notes: primaryNotesStr,
+        interactions: finalInteractions,
+        companyPhone: formCompanyPhone.trim() || undefined,
+        companyAddress: formCompanyAddress.trim() || undefined,
         score: isNaN(Number(parsedScore)) ? null : parsedScore,
         analysisId: formAnalysisId.trim() || null,
         coverLetter: finalCoverLetter || undefined,
         coverLetterTitle: formCoverLetterTitle.trim() || (finalCoverLetter ? `Lettre - ${formCompany.trim()}` : undefined),
         checklist: finalChecklist,
+        followUpDoneAt: finalChecklist.followUpDone ? (editingApp.followUpDoneAt || new Date().toISOString().split('T')[0]) : undefined,
         updatedAt: new Date().toISOString(),
       };
       setApplications((prev) =>
@@ -387,13 +636,18 @@ export default function ApplicationTracker({
         contractType: formContractType,
         salary: formSalary.trim(),
         jobUrl: formJobUrl.trim(),
-        contact: formContact.trim(),
-        notes: formNotes.trim(),
+        contact: primaryContactStr,
+        contacts: finalContacts,
+        notes: primaryNotesStr,
+        interactions: finalInteractions,
+        companyPhone: formCompanyPhone.trim() || undefined,
+        companyAddress: formCompanyAddress.trim() || undefined,
         score: isNaN(Number(parsedScore)) ? null : parsedScore,
         analysisId: formAnalysisId.trim() || null,
         coverLetter: finalCoverLetter || undefined,
         coverLetterTitle: formCoverLetterTitle.trim() || (finalCoverLetter ? `Lettre - ${formCompany.trim()}` : undefined),
         checklist: finalChecklist,
+        followUpDoneAt: finalChecklist.followUpDone ? new Date().toISOString().split('T')[0] : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -714,34 +968,59 @@ export default function ApplicationTracker({
         </div>
 
         <div
-          className={`p-3.5 rounded-xl border shadow-2xs transition-all ${
+          onClick={() => {
+            if (statusFilter === 'follow_up_due' || statusFilter === 'follow_up_pending' || statusFilter === 'follow_up_done') {
+              setStatusFilter('all');
+            } else if (stats.dueFollowUps > 0) {
+              setStatusFilter('follow_up_due');
+            } else if (stats.pendingFollowUps > 0) {
+              setStatusFilter('follow_up_pending');
+            } else {
+              setStatusFilter('follow_up_done');
+            }
+          }}
+          className={`p-3.5 rounded-xl border shadow-2xs transition-all cursor-pointer hover:shadow-md ${
             stats.dueFollowUps > 0
-              ? 'bg-amber-50 border-amber-300'
+              ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200'
+              : stats.completedFollowUps > 0
+              ? 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
               : 'bg-white border-gray-200'
           }`}
+          title="Cliquer pour filtrer les candidatures selon les relances"
         >
-          <p
-            className={`text-[11px] font-medium uppercase tracking-wider ${
-              stats.dueFollowUps > 0 ? 'text-amber-800' : 'text-gray-500'
-            }`}
-          >
-            Relances dues
-          </p>
+          <div className="flex items-center justify-between">
+            <p
+              className={`text-[11px] font-bold uppercase tracking-wider ${
+                stats.dueFollowUps > 0 ? 'text-amber-800' : 'text-gray-500'
+              }`}
+            >
+              Relances
+            </p>
+            {statusFilter.startsWith('follow_up') && (
+              <span className="text-[9px] bg-gray-900 text-white px-1.5 py-0.2 rounded-full font-bold">
+                Filtré ✕
+              </span>
+            )}
+          </div>
           <div className="flex items-baseline gap-2 mt-1">
             <span
               className={`text-xl font-black ${
                 stats.dueFollowUps > 0 ? 'text-amber-900' : 'text-gray-900'
               }`}
             >
-              {stats.dueFollowUps}
+              {stats.dueFollowUps > 0 ? stats.dueFollowUps : stats.completedFollowUps}
             </span>
             <span
-              className={`text-[11px] ${
-                stats.dueFollowUps > 0 ? 'text-amber-700 font-bold' : 'text-gray-400'
+              className={`text-[11px] font-bold ${
+                stats.dueFollowUps > 0 ? 'text-amber-700' : 'text-emerald-700'
               }`}
             >
-              {stats.dueFollowUps > 0 ? 'à faire !' : 'à jour'}
+              {stats.dueFollowUps > 0 ? 'à faire !' : `${stats.completedFollowUps} faite${stats.completedFollowUps > 1 ? 's' : ''}`}
             </span>
+          </div>
+          <div className="mt-1 flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+            <span>📅 {stats.pendingFollowUps} prévue{stats.pendingFollowUps > 1 ? 's' : ''}</span>
+            <span className="text-emerald-700 font-bold">✓ {stats.completedFollowUps} faite{stats.completedFollowUps > 1 ? 's' : ''}</span>
           </div>
         </div>
       </div>
@@ -754,7 +1033,7 @@ export default function ApplicationTracker({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher par entreprise, poste, lieu, mots-clés..."
+            placeholder="Rechercher par entreprise, poste, lieu, contact, mot-clé..."
             className="w-full pl-9 pr-4 py-2 text-xs border border-gray-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-[#FF4B4B] bg-gray-50/50"
           />
         </div>
@@ -764,9 +1043,13 @@ export default function ApplicationTracker({
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-auto text-xs py-2 px-3 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-hidden focus:ring-2 focus:ring-[#FF4B4B]"
+            className="w-full sm:w-auto text-xs py-2 px-3 border border-gray-200 rounded-lg bg-gray-50/50 focus:outline-hidden focus:ring-2 focus:ring-[#FF4B4B] font-semibold"
           >
-            <option value="all">Tous les statuts</option>
+            <option value="all">Tous les statuts ({applications.length})</option>
+            <option value="follow_up_due">⏰ Relances dues ({stats.dueFollowUps})</option>
+            <option value="follow_up_pending">📅 Toutes relances prévues ({stats.pendingFollowUps})</option>
+            <option value="follow_up_done">✅ Relances effectuées ({stats.completedFollowUps})</option>
+            <option disabled>──────────</option>
             <option value="to_apply">📝 À postuler</option>
             <option value="applied">📤 Postulé</option>
             <option value="waiting">⏳ En attente</option>
@@ -970,6 +1253,7 @@ export default function ApplicationTracker({
                       ) : (
                         columnApps.map((app) => {
                           const isFollowUpDue =
+                            !app.checklist?.followUpDone &&
                             app.followUpDate &&
                             app.followUpDate <= new Date().toISOString().split('T')[0] &&
                             ['applied', 'waiting'].includes(app.status);
@@ -1065,22 +1349,84 @@ export default function ApplicationTracker({
                                 )}
                               </div>
 
-                              {/* Date de relance avec alerte */}
+                              {/* Date de relance avec alerte et action directe 1 clic */}
                               {app.followUpDate && (
                                 <div
-                                  className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border ${
-                                    isFollowUpDue
+                                  className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
+                                    app.checklist?.followUpDone
+                                      ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
+                                      : isFollowUpDue
                                       ? 'bg-amber-50 text-amber-950 font-bold border-amber-300 ring-1 ring-amber-200'
                                       : 'bg-gray-50 text-gray-700 border-gray-200'
                                   }`}
                                 >
                                   <span className="flex items-center gap-1.5">
-                                    <Clock className={`w-3.5 h-3.5 ${isFollowUpDue ? 'text-amber-700' : 'text-gray-500'}`} />
+                                    {app.checklist?.followUpDone ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    ) : (
+                                      <Clock className={`w-3.5 h-3.5 ${isFollowUpDue ? 'text-amber-700' : 'text-gray-500'} shrink-0`} />
+                                    )}
                                     <span>Relance : <strong>{app.followUpDate}</strong></span>
                                   </span>
-                                  {isFollowUpDue && (
-                                    <span className="bg-amber-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">
-                                      À FAIRE !
+
+                                  {app.checklist?.followUpDone ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleFollowUp(app.id, false);
+                                      }}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Relance déjà effectuée. Cliquer pour réinitialiser ou planifier une nouvelle relance"
+                                    >
+                                      <Check className="w-2.5 h-2.5" />
+                                      <span>FAITE</span>
+                                    </button>
+                                  ) : isFollowUpDue ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleFollowUp(app.id, true);
+                                      }}
+                                      className="bg-amber-600 hover:bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                                      title="Cliquer pour marquer la relance comme faite"
+                                    >
+                                      <span>À FAIRE !</span>
+                                      <Check className="w-2.5 h-2.5" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleFollowUp(app.id, true);
+                                      }}
+                                      className="text-[10px] text-gray-400 hover:text-emerald-700 hover:bg-white px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                      title="Marquer la relance comme faite"
+                                    >
+                                      Marquer faite
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Badges résumés pour Contacts et Annotations */}
+                              {((app.contacts && app.contacts.length > 0) || (app.interactions && app.interactions.length > 0)) && (
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  {app.contacts && app.contacts.length > 0 && (
+                                    <span
+                                      className="text-[10px] bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1"
+                                      title={app.contacts.map((c) => `${c.name} (${c.role || 'Contact'})`).join(', ')}
+                                    >
+                                      <Users className="w-3 h-3 text-blue-600" />
+                                      <span>{app.contacts.length} contact{app.contacts.length > 1 ? 's' : ''}</span>
+                                    </span>
+                                  )}
+                                  {app.interactions && app.interactions.length > 0 && (
+                                    <span className="text-[10px] bg-purple-50 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                      <FileText className="w-3 h-3 text-purple-600" />
+                                      <span>{app.interactions.length} note{app.interactions.length > 1 ? 's' : ''}</span>
                                     </span>
                                   )}
                                 </div>
@@ -1172,6 +1518,14 @@ export default function ApplicationTracker({
                                       <Eye className="w-3.5 h-3.5" />
                                     </button>
                                   )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenCompanyDossier(app)}
+                                    className="p-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+                                    title="Consulter la Fiche Entreprise & Stratégie"
+                                  >
+                                    <Building2 className="w-3.5 h-3.5" />
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditModal(app)}
@@ -1275,14 +1629,26 @@ export default function ApplicationTracker({
                   filteredApps.map((app) => {
                     const config = STATUS_CONFIG[app.status];
                     const isFollowUpDue =
-                      app.followUpDate &&
+                      !app.checklist?.followUpDone &&
+                      !!app.followUpDate &&
                       app.followUpDate <= new Date().toISOString().split('T')[0] &&
-                      ['applied', 'waiting'].includes(app.status);
+                      app.status !== 'offer' &&
+                      app.status !== 'rejected';
 
                     return (
                       <tr key={app.id} className="hover:bg-gray-50/70 transition-colors">
                         <td className="py-3 px-4">
-                          <div className="font-bold text-gray-900">{app.company}</div>
+                          <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                            <span>{app.company}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCompanyDossier(app)}
+                              className="text-blue-600 hover:text-blue-800 p-0.5"
+                              title="Consulter la Fiche Entreprise & Stratégie"
+                            >
+                              <Building2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <div className="text-gray-500 text-[11px] line-clamp-1">
                             {app.role}
                           </div>
@@ -1328,20 +1694,56 @@ export default function ApplicationTracker({
                         </td>
 
                         <td className="py-3 px-4 whitespace-nowrap">
-                          {app.followUpDate ? (
-                            <span
-                              className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded ${
-                                isFollowUpDue
-                                  ? 'bg-amber-100 text-amber-900 font-bold'
-                                  : 'text-gray-600'
-                              }`}
-                            >
-                              <Clock className="w-3 h-3" />
-                              {app.followUpDate}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {app.followUpDate ? (
+                              <span
+                                className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded ${
+                                  app.checklist?.followUpDone
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : isFollowUpDue
+                                    ? 'bg-amber-100 text-amber-950 font-bold border border-amber-300 ring-1 ring-amber-200'
+                                    : 'text-gray-600 bg-gray-50 border border-gray-200'
+                                }`}
+                              >
+                                <Clock className="w-3 h-3 text-gray-500" />
+                                {app.followUpDate}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-[11px] italic">Non fixée</span>
+                            )}
+
+                            {/* Action rapide 1-clic pour cocher / décocher la relance */}
+                            {app.checklist?.followUpDone ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFollowUp(app.id, false)}
+                                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                title="Relance effectuée. Cliquer pour réinitialiser ou planifier une nouvelle relance"
+                              >
+                                <Check className="w-2.5 h-2.5" />
+                                <span>Faite</span>
+                              </button>
+                            ) : isFollowUpDue ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFollowUp(app.id, true)}
+                                className="px-2 py-0.5 bg-amber-600 hover:bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-xs animate-pulse"
+                                title="Relance à faire ! Cliquer pour marquer comme effectuée"
+                              >
+                                <span>À faire !</span>
+                                <Check className="w-2.5 h-2.5" />
+                              </button>
+                            ) : app.followUpDate ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFollowUp(app.id, true)}
+                                className="px-1.5 py-0.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 border border-gray-200 rounded text-[10px] font-semibold transition-colors cursor-pointer"
+                                title="Marquer comme faite"
+                              >
+                                Marquer faite
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
 
                         <td className="py-3 px-4 text-gray-600 whitespace-nowrap">
@@ -1349,8 +1751,34 @@ export default function ApplicationTracker({
                           <div className="text-[10px] text-gray-400">{app.contractType}</div>
                         </td>
 
-                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate">
-                          {app.notes || <span className="text-gray-300">-</span>}
+                        <td className="py-3 px-4 text-gray-600 max-w-xs">
+                          <div className="space-y-1">
+                            {((app.contacts && app.contacts.length > 0) || (app.interactions && app.interactions.length > 0)) && (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {app.contacts && app.contacts.length > 0 && (
+                                  <span
+                                    className="text-[10px] bg-blue-50 text-blue-800 border border-blue-200 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1"
+                                    title={app.contacts.map((c) => `${c.name} (${c.role || 'Contact'})`).join(', ')}
+                                  >
+                                    <Users className="w-2.5 h-2.5 text-blue-600" />
+                                    <span>{app.contacts.length} contact{app.contacts.length > 1 ? 's' : ''}</span>
+                                  </span>
+                                )}
+                                {app.interactions && app.interactions.length > 0 && (
+                                  <span
+                                    className="text-[10px] bg-purple-50 text-purple-800 border border-purple-200 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1"
+                                    title={`${app.interactions.length} interactions/annotations`}
+                                  >
+                                    <FileText className="w-2.5 h-2.5 text-purple-600" />
+                                    <span>{app.interactions.length} note{app.interactions.length > 1 ? 's' : ''}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-700 truncate" title={app.notes}>
+                              {app.notes || <span className="text-gray-300">-</span>}
+                            </div>
+                          </div>
                         </td>
 
                         <td className="py-3 px-4 text-right whitespace-nowrap">
@@ -1368,9 +1796,30 @@ export default function ApplicationTracker({
                             )}
                             <button
                               type="button"
+                              onClick={() => handleOpenCompanyDossier(app)}
+                              className="p-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                              title="Consulter la Fiche Entreprise & Stratégie"
+                            >
+                              <Building2 className="w-4 h-4" />
+                            </button>
+                            {app.coverLetter && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedAppForLetter(app);
+                                  setIsLetterModalOpen(true);
+                                }}
+                                className="p-1.5 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded transition-colors cursor-pointer"
+                                title="Consulter la Lettre de motivation"
+                              >
+                                <FileText className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
                               onClick={() => handleOpenEditModal(app)}
-                              className="p-1.5 text-gray-400 hover:text-gray-700 rounded transition-colors"
-                              title="Modifier"
+                              className="p-1.5 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer"
+                              title="Modifier / Annoter cette candidature"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
@@ -1423,332 +1872,990 @@ export default function ApplicationTracker({
         </div>
       )}
 
-      {/* MODAL CRÉATION / MODIFICATION DE CANDIDATURE */}
+      {/* MODAL CRÉATION / MODIFICATION DE CANDIDATURE AVEC ONGLETS ENRICHIS */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-gray-100 my-8">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <span className="p-2 bg-[#FF4B4B]/10 text-[#FF4B4B] rounded-lg">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl border border-gray-100 my-6 max-h-[92vh] flex flex-col">
+            {/* Entête du modal */}
+            <div className="flex items-center justify-between pb-3.5 mb-2 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-[#FF4B4B]/10 text-[#FF4B4B] rounded-xl">
                   <Briefcase className="w-5 h-5" />
                 </span>
-                <h3 className="text-base font-bold text-gray-900">
-                  {editingApp ? 'Modifier la candidature' : 'Ajouter une nouvelle candidature'}
-                </h3>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-gray-900">
+                    {editingApp ? `Dossier de candidature : ${formCompany || 'Entreprise'}` : 'Nouvelle candidature'}
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    {formRole || 'Intitulé du poste'} — Suivi complet, contacts & stratégie
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveApplication} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor={companyInputId} className="block text-xs font-semibold text-gray-700 mb-1">
-                    Nom de l&apos;entreprise *
-                  </label>
-                  <input
-                    id={companyInputId}
-                    type="text"
-                    required
-                    value={formCompany}
-                    onChange={(e) => setFormCompany(e.target.value)}
-                    placeholder="ex: Doctolib, Google, L'Oréal..."
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
+            {/* Navigation des Onglets du Modal */}
+            <div className="flex items-center gap-1.5 border-b border-gray-200 pb-2 mb-4 shrink-0 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setModalActiveTab('general')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  modalActiveTab === 'general'
+                    ? 'bg-[#FF4B4B] text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                <span>Général & Relance</span>
+              </button>
 
-                <div>
-                  <label htmlFor={roleInputId} className="block text-xs font-semibold text-gray-700 mb-1">
-                    Intitulé du poste *
-                  </label>
-                  <input
-                    id={roleInputId}
-                    type="text"
-                    required
-                    value={formRole}
-                    onChange={(e) => setFormRole(e.target.value)}
-                    placeholder="ex: Lead Développeur Python..."
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Statut actuel
-                  </label>
-                  <select
-                    value={formStatus}
-                    onChange={(e) => setFormStatus(e.target.value as ApplicationStatus)}
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+              <button
+                type="button"
+                onClick={() => setModalActiveTab('contacts')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  modalActiveTab === 'contacts'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Contacts & Coordonnées</span>
+                {formContacts.length > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      modalActiveTab === 'contacts' ? 'bg-white text-blue-700' : 'bg-blue-100 text-blue-800'
+                    }`}
                   >
-                    <option value="to_apply">📝 À postuler</option>
-                    <option value="applied">📤 Postulé</option>
-                    <option value="waiting">⏳ En attente</option>
-                    <option value="interview">🎯 Entretien</option>
-                    <option value="offer">🎉 Offre reçue</option>
-                    <option value="rejected">❌ Refusé</option>
-                  </select>
-                </div>
+                    {formContacts.length}
+                  </span>
+                )}
+              </button>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Contrat
-                  </label>
-                  <select
-                    value={formContractType}
-                    onChange={(e) => setFormContractType(e.target.value as any)}
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+              <button
+                type="button"
+                onClick={() => setModalActiveTab('journal')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  modalActiveTab === 'journal'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Journal & Annotations</span>
+                {formInteractions.length > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      modalActiveTab === 'journal' ? 'bg-white text-purple-700' : 'bg-purple-100 text-purple-800'
+                    }`}
                   >
-                    <option value="CDI">CDI</option>
-                    <option value="CDD">CDD</option>
-                    <option value="Freelance">Freelance</option>
-                    <option value="Alternance">Alternance</option>
-                    <option value="Stage">Stage</option>
-                    <option value="Autre">Autre</option>
-                  </select>
-                </div>
+                    {formInteractions.length}
+                  </span>
+                )}
+              </button>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Score ATS (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formScore}
-                    onChange={(e) => setFormScore(e.target.value)}
-                    placeholder="ex: 85"
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setModalActiveTab('company')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  modalActiveTab === 'company'
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Fiche Entreprise & Stratégie</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Date de candidature
-                  </label>
-                  <input
-                    type="date"
-                    value={formAppliedDate}
-                    onChange={(e) => setFormAppliedDate(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
+            <form onSubmit={handleSaveApplication} className="space-y-4 overflow-y-auto flex-1 pr-1">
+              {/* ONGLET 1 : GÉNÉRAL & OFFRE */}
+              {modalActiveTab === 'general' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor={companyInputId} className="block text-xs font-semibold text-gray-700 mb-1">
+                        Nom de l&apos;entreprise *
+                      </label>
+                      <input
+                        id={companyInputId}
+                        type="text"
+                        required
+                        value={formCompany}
+                        onChange={(e) => setFormCompany(e.target.value)}
+                        placeholder="ex: Doctolib, Google, L'Oréal..."
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Date de relance prévue
-                  </label>
-                  <input
-                    type="date"
-                    value={formFollowUpDate}
-                    onChange={(e) => setFormFollowUpDate(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label htmlFor={roleInputId} className="block text-xs font-semibold text-gray-700 mb-1">
+                        Intitulé du poste *
+                      </label>
+                      <input
+                        id={roleInputId}
+                        type="text"
+                        required
+                        value={formRole}
+                        onChange={(e) => setFormRole(e.target.value)}
+                        placeholder="ex: Lead Développeur Python..."
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Lieu / Modalités
-                  </label>
-                  <input
-                    type="text"
-                    value={formLocation}
-                    onChange={(e) => setFormLocation(e.target.value)}
-                    placeholder="ex: Lyon, Full Remote, 2j télétravail..."
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Statut actuel
+                      </label>
+                      <select
+                        value={formStatus}
+                        onChange={(e) => setFormStatus(e.target.value as ApplicationStatus)}
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      >
+                        <option value="to_apply">📝 À postuler</option>
+                        <option value="applied">📤 Postulé</option>
+                        <option value="waiting">⏳ En attente</option>
+                        <option value="interview">🎯 Entretien</option>
+                        <option value="offer">🎉 Offre reçue</option>
+                        <option value="rejected">❌ Refusé</option>
+                      </select>
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Fourchette de Salaire
-                  </label>
-                  <input
-                    type="text"
-                    value={formSalary}
-                    onChange={(e) => setFormSalary(e.target.value)}
-                    placeholder="ex: 50k - 55k€"
-                    className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Contrat
+                      </label>
+                      <select
+                        value={formContractType}
+                        onChange={(e) => setFormContractType(e.target.value as any)}
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      >
+                        <option value="CDI">CDI</option>
+                        <option value="CDD">CDD</option>
+                        <option value="Freelance">Freelance</option>
+                        <option value="Alternance">Alternance</option>
+                        <option value="Stage">Stage</option>
+                        <option value="Autre">Autre</option>
+                      </select>
+                    </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Lien direct vers l&apos;annonce (URL)
-                </label>
-                <input
-                  type="url"
-                  value={formJobUrl}
-                  onChange={(e) => setFormJobUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                />
-              </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Score ATS (%)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={formScore}
+                        onChange={(e) => setFormScore(e.target.value)}
+                        placeholder="ex: 85"
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Contact RH / Manager
-                </label>
-                <input
-                  type="text"
-                  value={formContact}
-                  onChange={(e) => setFormContact(e.target.value)}
-                  placeholder="ex: Marie Dupont (LinkedIn / email)"
-                  className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                />
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Date de candidature
+                      </label>
+                      <input
+                        type="date"
+                        value={formAppliedDate}
+                        onChange={(e) => setFormAppliedDate(e.target.value)}
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
 
-              {/* Checklist de transmission */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Checklist des pièces transmises :
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-gray-700">
+                          Date de relance prévue
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const d = new Date();
+                              setFormFollowUpDate(d.toISOString().split('T')[0]);
+                            }}
+                            className="text-[10px] text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 px-1.5 py-0.2 rounded font-medium cursor-pointer"
+                            title="Aujourd'hui"
+                          >
+                            Aujourd&apos;hui
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const d = new Date(Date.now() + 7 * 86400000);
+                              setFormFollowUpDate(d.toISOString().split('T')[0]);
+                            }}
+                            className="text-[10px] text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 px-1.5 py-0.2 rounded font-medium cursor-pointer"
+                            title="+7 jours"
+                          >
+                            +7j
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const d = new Date(Date.now() + 14 * 86400000);
+                              setFormFollowUpDate(d.toISOString().split('T')[0]);
+                            }}
+                            className="text-[10px] text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 px-1.5 py-0.2 rounded font-medium cursor-pointer"
+                            title="+14 jours"
+                          >
+                            +14j
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="date"
+                        value={formFollowUpDate}
+                        onChange={(e) => setFormFollowUpDate(e.target.value)}
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Lieu / Modalités
+                      </label>
+                      <input
+                        type="text"
+                        value={formLocation}
+                        onChange={(e) => setFormLocation(e.target.value)}
+                        placeholder="ex: Lyon, Full Remote, 2j télétravail..."
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Fourchette de Salaire
+                      </label>
+                      <input
+                        type="text"
+                        value={formSalary}
+                        onChange={(e) => setFormSalary(e.target.value)}
+                        placeholder="ex: 50k - 55k€"
+                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Lien direct vers l&apos;annonce (URL)
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={formChecklist.cvSent}
-                      onChange={(e) =>
-                        setFormChecklist((p) => ({ ...p, cvSent: e.target.checked }))
-                      }
-                      className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
+                      type="url"
+                      value={formJobUrl}
+                      onChange={(e) => setFormJobUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
                     />
-                    <span>CV envoyé</span>
-                  </label>
+                  </div>
 
-                  <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formChecklist.coverLetterSent}
-                      onChange={(e) =>
-                        setFormChecklist((p) => ({ ...p, coverLetterSent: e.target.checked }))
-                      }
-                      className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
-                    />
-                    <span>Lettre transmise</span>
-                  </label>
+                  {/* Checklist des pièces & Case à cocher Relance Fiabilisée */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      Checklist des pièces & statut de la relance :
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formChecklist.cvSent}
+                          onChange={(e) =>
+                            setFormChecklist((p) => ({ ...p, cvSent: e.target.checked }))
+                          }
+                          className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
+                        />
+                        <span>CV envoyé</span>
+                      </label>
 
-                  <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formChecklist.portfolioSent}
-                      onChange={(e) =>
-                        setFormChecklist((p) => ({ ...p, portfolioSent: e.target.checked }))
-                      }
-                      className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
-                    />
-                    <span>Portfolio / GitHub</span>
-                  </label>
+                      <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formChecklist.coverLetterSent}
+                          onChange={(e) =>
+                            setFormChecklist((p) => ({ ...p, coverLetterSent: e.target.checked }))
+                          }
+                          className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
+                        />
+                        <span>Lettre transmise</span>
+                      </label>
 
-                  <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formChecklist.followUpDone}
-                      onChange={(e) =>
-                        setFormChecklist((p) => ({ ...p, followUpDone: e.target.checked }))
-                      }
-                      className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
+                      <label className="flex items-center gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formChecklist.portfolioSent}
+                          onChange={(e) =>
+                            setFormChecklist((p) => ({ ...p, portfolioSent: e.target.checked }))
+                          }
+                          className="rounded text-[#FF4B4B] focus:ring-[#FF4B4B]"
+                        />
+                        <span>Portfolio / GitHub</span>
+                      </label>
+
+                      {/* Case à cocher Relance avec visuel immédiat vert / gris */}
+                      <label
+                        className={`flex items-center gap-1.5 p-2 rounded-lg border cursor-pointer transition-all ${
+                          formChecklist.followUpDone
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold ring-1 ring-emerald-200'
+                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formChecklist.followUpDone}
+                          onChange={(e) =>
+                            setFormChecklist((p) => ({ ...p, followUpDone: e.target.checked }))
+                          }
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Relance faite</span>
+                      </label>
+                    </div>
+
+                    {formChecklist.followUpDone && (
+                      <p className="text-[11px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>
+                          Relance validée : le compteur de relances s&apos;actualisera immédiatement à l&apos;enregistrement.
+                        </span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Section Lettre de motivation rattachée */}
+                  <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-purple-700" />
+                        <span>Lettre de motivation rattachée à cette candidature</span>
+                      </label>
+                      {formCoverLetter && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(formCoverLetter);
+                              setCoverLetterCopied(true);
+                              setTimeout(() => setCoverLetterCopied(false), 2000);
+                            }}
+                            className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            {coverLetterCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                            <span>{coverLetterCopied ? 'Copiée !' : 'Copier'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const blob = new Blob([formCoverLetter], { type: 'application/msword;charset=utf-8' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `Lettre_Motivation_${(formCompany || 'Candidature').replace(/\s+/g, '_')}.doc`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            className="text-[11px] text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 cursor-pointer"
+                            title="Télécharger en Word (.doc)"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Word (.doc)</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <textarea
+                      rows={4}
+                      value={formCoverLetter}
+                      onChange={(e) => {
+                        setFormCoverLetter(e.target.value);
+                        if (e.target.value.trim() && !formChecklist.coverLetterSent) {
+                          setFormChecklist((p) => ({ ...p, coverLetterSent: true }));
+                        }
+                      }}
+                      placeholder="Collez ou rédigez ici le contenu de la lettre de motivation transmise ou préparée pour cette offre..."
+                      className="w-full text-xs p-3 border border-purple-200 bg-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden font-sans leading-relaxed text-gray-800"
                     />
-                    <span>Relance faite</span>
-                  </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Note rapide
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      placeholder="Remarque générale sur la candidature (pour un suivi détaillé, utilisez l'onglet Journal)..."
+                      className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Section Lettre de motivation rattachée */}
-              <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-purple-700" />
-                    <span>Lettre de motivation rattachée à cette candidature</span>
-                  </label>
-                  {formCoverLetter && (
-                    <div className="flex items-center gap-2">
+              {/* ONGLET 2 : CONTACTS & COORDONNÉES */}
+              {modalActiveTab === 'contacts' && (
+                <div className="space-y-4">
+                  {/* Coordonnées globales de l'entreprise */}
+                  <div className="bg-blue-50/50 border border-blue-200 p-3.5 rounded-2xl space-y-3">
+                    <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      <span>Coordonnées générales de l&apos;entreprise</span>
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          Standard / Téléphone accueil
+                        </label>
+                        <div className="relative">
+                          <Phone className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="tel"
+                            value={formCompanyPhone}
+                            onChange={(e) => setFormCompanyPhone(e.target.value)}
+                            placeholder="ex: +33 1 45 67 89 00"
+                            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          Adresse physique / Siège social
+                        </label>
+                        <div className="relative">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={formCompanyAddress}
+                            onChange={(e) => setFormCompanyAddress(e.target.value)}
+                            placeholder="ex: 12 rue de la Paix, 75002 Paris"
+                            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Liste des contacts avec bouton d'ajout */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        <span>Interlocuteurs identifiés ({formContacts.length})</span>
+                      </h4>
+                      {!isAddingContact && (
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingContact(true)}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Ajouter un contact</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Formulaire d'ajout de contact */}
+                    {isAddingContact && (
+                      <div className="bg-white border-2 border-blue-300 p-4 rounded-2xl shadow-sm space-y-3 animate-fade-in">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <span className="text-xs font-bold text-blue-900">Nouveau contact</span>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingContact(false)}
+                            className="text-gray-400 hover:text-gray-600 text-xs"
+                          >
+                            Annuler
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Nom et Prénom *
+                            </label>
+                            <input
+                              type="text"
+                              value={newContactName}
+                              onChange={(e) => setNewContactName(e.target.value)}
+                              placeholder="ex: Sophie Martin"
+                              className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Rôle / Fonction
+                            </label>
+                            <select
+                              value={newContactRole}
+                              onChange={(e) => setNewContactRole(e.target.value)}
+                              className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            >
+                              <option value="Recruteur / RH">Recruteur / RH</option>
+                              <option value="Manager N+1">Manager N+1</option>
+                              <option value="Directeur Financier (DAF)">Directeur Financier (DAF)</option>
+                              <option value="Directeur Général (DG)">Directeur Général (DG)</option>
+                              <option value="Chasseur de têtes">Chasseur de têtes</option>
+                              <option value="Pair / Équipe">Pair / Équipe</option>
+                              <option value="Autre">Autre</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Email direct
+                            </label>
+                            <input
+                              type="email"
+                              value={newContactEmail}
+                              onChange={(e) => setNewContactEmail(e.target.value)}
+                              placeholder="ex: sophie.martin@entreprise.com"
+                              className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Téléphone direct / mobile
+                            </label>
+                            <input
+                              type="tel"
+                              value={newContactPhone}
+                              onChange={(e) => setNewContactPhone(e.target.value)}
+                              placeholder="ex: 06 12 34 56 78"
+                              className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Profil LinkedIn (URL)
+                          </label>
+                          <input
+                            type="url"
+                            value={newContactLinkedin}
+                            onChange={(e) => setNewContactLinkedin(e.target.value)}
+                            placeholder="https://www.linkedin.com/in/..."
+                            className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Notes & observations sur ce contact
+                          </label>
+                          <input
+                            type="text"
+                            value={newContactNotes}
+                            onChange={(e) => setNewContactNotes(e.target.value)}
+                            placeholder="ex: Décisionnaire final, apprécie les démarches directes..."
+                            className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingContact(false)}
+                            className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddContact}
+                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                          >
+                            Enregistrer ce contact
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Liste des cartes de contacts */}
+                    {formContacts.length === 0 && !isAddingContact ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-gray-500 text-xs">
+                        <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="font-semibold">Aucun interlocuteur enregistré</p>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Ajoutez les recruteurs, managers ou RH rencontrés pour faciliter vos relances.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingContact(true)}
+                          className="mt-3 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Ajouter le premier contact</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {formContacts.map((contact) => (
+                          <div
+                            key={contact.id}
+                            className="bg-white border border-gray-200 rounded-xl p-3 shadow-2xs hover:border-blue-300 transition-all space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-1">
+                              <div>
+                                <h5 className="font-bold text-gray-900 text-xs">{contact.name}</h5>
+                                <span className="inline-block text-[10px] bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.2 rounded-md font-semibold mt-0.5">
+                                  {contact.role || 'Contact'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteContact(contact.id)}
+                                className="text-gray-300 hover:text-rose-600 p-1 rounded hover:bg-rose-50"
+                                title="Supprimer ce contact"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="space-y-1 text-xs text-gray-600">
+                              {contact.email && (
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <Mail className="w-3 h-3 text-gray-400 shrink-0" />
+                                  <a
+                                    href={`mailto:${contact.email}`}
+                                    className="text-blue-600 hover:underline truncate"
+                                  >
+                                    {contact.email}
+                                  </a>
+                                </div>
+                              )}
+                              {contact.phone && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="w-3 h-3 text-gray-400 shrink-0" />
+                                  <a href={`tel:${contact.phone}`} className="hover:underline">
+                                    {contact.phone}
+                                  </a>
+                                </div>
+                              )}
+                              {contact.linkedinUrl && (
+                                <div className="flex items-center gap-1.5">
+                                  <Globe className="w-3 h-3 text-gray-400 shrink-0" />
+                                  <a
+                                    href={contact.linkedinUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline text-[11px] flex items-center gap-0.5"
+                                  >
+                                    <span>Profil LinkedIn</span>
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                </div>
+                              )}
+                              {contact.notes && (
+                                <p className="text-[11px] text-gray-500 italic bg-gray-50 p-1.5 rounded">
+                                  « {contact.notes} »
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ONGLET 3 : JOURNAL & ANNOTATIONS */}
+              {modalActiveTab === 'journal' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-purple-600" />
+                        <span>Journal de bord & Timeline des échanges ({formInteractions.length})</span>
+                      </h4>
+                      <p className="text-[11px] text-gray-400">
+                        Consignez les appels, retours, entretiens, relances et impressions
+                      </p>
+                    </div>
+                    {!isAddingInteraction && (
                       <button
                         type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(formCoverLetter);
-                          setCoverLetterCopied(true);
-                          setTimeout(() => setCoverLetterCopied(false), 2000);
-                        }}
-                        className="text-[11px] text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 cursor-pointer"
+                        onClick={() => setIsAddingInteraction(true)}
+                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                       >
-                        {coverLetterCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                        <span>{coverLetterCopied ? 'Copiée !' : 'Copier'}</span>
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Nouvelle annotation</span>
                       </button>
+                    )}
+                  </div>
+
+                  {/* Formulaire d'ajout d'annotation */}
+                  {isAddingInteraction && (
+                    <div className="bg-white border-2 border-purple-300 p-4 rounded-2xl shadow-sm space-y-3 animate-fade-in">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                        <span className="text-xs font-bold text-purple-900">Nouvelle annotation / interaction</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingInteraction(false)}
+                          className="text-gray-400 hover:text-gray-600 text-xs"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Type d&apos;échange
+                          </label>
+                          <select
+                            value={newInteractionType}
+                            onChange={(e) => setNewInteractionType(e.target.value as ApplicationInteractionType)}
+                            className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                          >
+                            <option value="note">📝 Note / Réflexion</option>
+                            <option value="call">📞 Appel téléphonique</option>
+                            <option value="email">✉️ Email échangé</option>
+                            <option value="interview">🎯 Entretien d&apos;embauche</option>
+                            <option value="follow_up">⏰ Relance effectuée</option>
+                            <option value="feedback">💬 Retour / Feedback</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Date de l&apos;interaction
+                          </label>
+                          <input
+                            type="date"
+                            value={newInteractionDate}
+                            onChange={(e) => setNewInteractionDate(e.target.value)}
+                            className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Titre résumé
+                          </label>
+                          <input
+                            type="text"
+                            value={newInteractionTitle}
+                            onChange={(e) => setNewInteractionTitle(e.target.value)}
+                            placeholder="ex: Échange téléphonique avec la RH"
+                            className="w-full text-xs px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                          Contenu détaillé de l&apos;annotation *
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={newInteractionContent}
+                          onChange={(e) => setNewInteractionContent(e.target.value)}
+                          placeholder="Questions posées, points d'accord, attentes du manager, ressentis, prochaines étapes..."
+                          className="w-full text-xs p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden leading-relaxed"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingInteraction(false)}
+                          className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+                        >
+                          Annuler
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddInteraction}
+                          className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          Enregistrer l&apos;annotation
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Liste chronologique des annotations */}
+                  {formInteractions.length === 0 && !isAddingInteraction ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-gray-500 text-xs">
+                      <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                      <p className="font-semibold">Aucune annotation enregistrée</p>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Consignez vos échanges et impressions pour garder une trace vivante de chaque candidature.
+                      </p>
                       <button
                         type="button"
-                        onClick={() => {
-                          const blob = new Blob([formCoverLetter], { type: 'application/msword;charset=utf-8' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `Lettre_Motivation_${(formCompany || 'Candidature').replace(/\s+/g, '_')}.doc`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        }}
-                        className="text-[11px] text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 cursor-pointer"
-                        title="Télécharger en Word (.doc)"
+                        onClick={() => setIsAddingInteraction(true)}
+                        className="mt-3 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
                       >
-                        <Download className="w-3 h-3" />
-                        <span>Word (.doc)</span>
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Ajouter la première note</span>
                       </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {formInteractions.map((item) => {
+                        const iconMap = {
+                          call: <Phone className="w-3.5 h-3.5 text-blue-600" />,
+                          email: <Mail className="w-3.5 h-3.5 text-amber-600" />,
+                          interview: <Award className="w-3.5 h-3.5 text-purple-600" />,
+                          follow_up: <Clock className="w-3.5 h-3.5 text-emerald-600" />,
+                          feedback: <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />,
+                          note: <FileText className="w-3.5 h-3.5 text-gray-600" />,
+                        };
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-2xs hover:border-purple-200 transition-all space-y-1.5 relative group"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="p-1.5 bg-gray-100 rounded-lg">
+                                  {iconMap[item.type] || <FileText className="w-3.5 h-3.5 text-gray-600" />}
+                                </span>
+                                <div>
+                                  <h5 className="font-bold text-gray-900 text-xs">{item.title}</h5>
+                                  <span className="text-[10px] text-gray-400">{item.date}</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInteraction(item.id)}
+                                className="text-gray-300 hover:text-rose-600 p-1 rounded hover:bg-rose-50"
+                                title="Supprimer cette annotation"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line pl-7">
+                              {item.content}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-                <textarea
-                  rows={5}
-                  value={formCoverLetter}
-                  onChange={(e) => {
-                    setFormCoverLetter(e.target.value);
-                    if (e.target.value.trim() && !formChecklist.coverLetterSent) {
-                      setFormChecklist((p) => ({ ...p, coverLetterSent: true }));
-                    }
-                  }}
-                  placeholder="Collez ou rédigez ici le contenu de la lettre de motivation transmise ou préparée pour cette offre..."
-                  className="w-full text-xs p-3 border border-purple-200 bg-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-hidden font-sans leading-relaxed text-gray-800"
-                />
-              </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Notes & Pistes d&apos;entretien
-                </label>
-                <textarea
-                  rows={3}
-                  value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)}
-                  placeholder="Questions probables, points forts à valoriser, retours du recruteur..."
-                  className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF4B4B] focus:outline-hidden"
-                />
-              </div>
+              {/* ONGLET 4 : FICHE ENTREPRISE & STRATÉGIE */}
+              {modalActiveTab === 'company' && (
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-5 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/30">
+                        Fiche Stratégique Entreprise
+                      </span>
+                      {editingApp && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            handleOpenCompanyDossier(editingApp);
+                          }}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Plein écran ↗</span>
+                        </button>
+                      )}
+                    </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#FF4B4B] hover:bg-[#ff3333] text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
-                >
-                  {editingApp ? 'Enregistrer les modifications' : 'Créer la candidature'}
-                </button>
+                    <h4 className="text-lg font-black text-white">{formCompany || 'Entreprise'}</h4>
+                    <p className="text-xs text-blue-200">
+                      Préparez vos échanges avec chaque interlocuteur de l&apos;entreprise (RH, Manager, DAF, DG) grâce au plan d&apos;intégration 30-60-90 jours et aux données légales vérifiables.
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-white/10 text-xs">
+                      <div className="bg-white/10 p-2 rounded-lg">
+                        <span className="text-[10px] text-gray-400 block">Poste ciblé</span>
+                        <span className="font-bold text-white truncate block">{formRole || 'N/A'}</span>
+                      </div>
+                      <div className="bg-white/10 p-2 rounded-lg">
+                        <span className="text-[10px] text-gray-400 block">Lieu / Siège</span>
+                        <span className="font-bold text-white truncate block">{formLocation || 'France'}</span>
+                      </div>
+                      <div className="bg-white/10 p-2 rounded-lg">
+                        <span className="text-[10px] text-gray-400 block">Contrat</span>
+                        <span className="font-bold text-white truncate block">{formContractType}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-950 space-y-2">
+                    <h5 className="font-bold flex items-center gap-1.5 text-amber-900">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>Plan Stratégique Candidat (30-60-90 jours)</span>
+                    </h5>
+                    <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                      La fiche complète entreprise génère automatiquement un plan d&apos;intégration en 3 phases pour convaincre vos recruteurs :
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 text-[11px] text-amber-900">
+                      <li><strong>Phase 1 (J0 à J30) :</strong> Immersion, cartographie des flux et compréhension des enjeux opérationnels.</li>
+                      <li><strong>Phase 2 (J31 à J60) :</strong> Quick wins, structuration des processus et premières optimisations visibles.</li>
+                      <li><strong>Phase 3 (J61 à J90) :</strong> Leadership, projets structurants et contribution à la rentabilité globale.</li>
+                    </ul>
+
+                    {editingApp && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            handleOpenCompanyDossier(editingApp);
+                          }}
+                          className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Building2 className="w-3.5 h-3.5" />
+                          <span>Consulter la Fiche Technique Complète & Stratégie Détaillée</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Boutons d'action du bas de modal */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 shrink-0">
+                <span className="text-[11px] text-gray-400">
+                  {modalActiveTab === 'general' ? 'Informations générales' : modalActiveTab === 'contacts' ? `${formContacts.length} contact(s)` : modalActiveTab === 'journal' ? `${formInteractions.length} interaction(s)` : 'Fiche entreprise'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#FF4B4B] hover:bg-[#ff3333] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  >
+                    {editingApp ? 'Enregistrer les modifications' : 'Créer la candidature'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1835,6 +2942,21 @@ export default function ApplicationTracker({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Fiche Entreprise, Plan Stratégique & Suivi Candidat */}
+      {viewingCompanyDossier && (
+        <CompanyDossierModal
+          isOpen={true}
+          onClose={() => setViewingCompanyDossier(null)}
+          dossier={viewingCompanyDossier.dossier}
+          roleTitle={viewingCompanyDossier.roleTitle}
+          onApplicationUpdated={(updatedApp) => {
+            setApplications((prev) =>
+              prev.map((item) => (item.id === updatedApp.id ? updatedApp : item))
+            );
+          }}
+        />
       )}
     </div>
   );

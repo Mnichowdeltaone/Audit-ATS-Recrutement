@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { ApplicationItem, AnalysisHistoryItem, UserProfile, SavedCv } from '../types';
 import { DEMO_FICTITIOUS_PROFILE } from '../utils/demoData';
+import ActionCalendarView from './ActionCalendarView';
 
 interface JobSearchDashboardViewProps {
   applications: ApplicationItem[];
@@ -436,7 +437,16 @@ export const JobSearchDashboardView: React.FC<JobSearchDashboardViewProps> = ({
       </div>
 
       {/* =========================================================================
-          4. ACTIONS DU JOUR & CANDIDATURES RÉCENTES
+          4. CALENDRIER DES ACTIONS PASSÉES ET À VENIR (ÉCHÉANCIER & SUIVI)
+         ========================================================================= */}
+      <ActionCalendarView
+        applications={effectiveApps}
+        setApplications={setApplications}
+        onNavigateToTab={onNavigateToTab}
+      />
+
+      {/* =========================================================================
+          5. ACTIONS DU JOUR & CANDIDATURES RÉCENTES
          ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Colonne Gauche : Actions & Relances Prioritaires (5 cols) */}

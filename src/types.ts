@@ -6,6 +6,33 @@ export type ApplicationStatus =
   | 'offer'
   | 'rejected';
 
+export interface ApplicationContact {
+  id: string;
+  name: string;
+  role?: string; // ex: "DRH / Recruteur", "Directeur Financier (DAF)", "Manager N+1", "Chasseur de têtes", "Associé", "Autre"
+  email?: string;
+  phone?: string;
+  linkedinUrl?: string;
+  notes?: string;
+}
+
+export type ApplicationInteractionType =
+  | 'note'
+  | 'call'
+  | 'email'
+  | 'interview'
+  | 'follow_up'
+  | 'feedback';
+
+export interface ApplicationInteraction {
+  id: string;
+  date: string; // YYYY-MM-DD
+  type: ApplicationInteractionType;
+  title: string;
+  content: string;
+  contactName?: string;
+}
+
 export interface ApplicationItem {
   id: string;
   company: string;
@@ -17,8 +44,12 @@ export interface ApplicationItem {
   contractType: 'CDI' | 'CDD' | 'Freelance' | 'Alternance' | 'Stage' | 'Autre';
   salary?: string;
   jobUrl?: string;
-  contact?: string;
-  notes?: string;
+  contact?: string; // Champ simple historique
+  contacts?: ApplicationContact[]; // Contacts structurés multiples (RH, DAF, N+1...)
+  notes?: string; // Champ note simple historique
+  interactions?: ApplicationInteraction[]; // Journal des annotations et interactions horodatées
+  companyPhone?: string; // Standard téléphonique ou contact entreprise
+  companyAddress?: string; // Adresse physique / siège
   score?: number | null;
   analysisId?: string | null;
   coverLetter?: string; // Contenu complet de la lettre de motivation rattachée
@@ -29,6 +60,7 @@ export interface ApplicationItem {
     portfolioSent: boolean;
     followUpDone: boolean;
   };
+  followUpDoneAt?: string; // Horodatage de la relance effectuée
   createdAt: string;
   updatedAt: string;
 }
@@ -138,6 +170,8 @@ export interface CompanyFinancialTechnicalDossier {
   legalInfo?: LegalAndCorporateInfo; // Informations légales et corporatives officielles
   candidateStrategicPlan?: CandidateStrategicPlan; // Plan stratégique d'intégration et feuille de route 30-60-90 jours
   stakeholdersCommunication?: CompanyStakeholderCommunication[]; // Cartographie et stratégie de communication par interlocuteur
+  customContacts?: ApplicationContact[]; // Contacts ajoutés / suivis pour cette entreprise
+  candidateNotes?: ApplicationInteraction[]; // Annotations, comptes-rendus et jalons du candidat
   financialProfile: {
     estimatedRevenue?: string; // Ordre de grandeur CA ou croissance
     growthStage?: string; // Forte croissance, Maturité, Restructuration...

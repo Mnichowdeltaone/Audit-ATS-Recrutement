@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Building2 } from 'lucide-react';
 import CompanyDossierView from './CompanyDossierView';
-import type { CompanyFinancialTechnicalDossier } from '../types';
+import type { CompanyFinancialTechnicalDossier, ApplicationItem } from '../types';
 
 interface CompanyDossierModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface CompanyDossierModalProps {
   dossier: CompanyFinancialTechnicalDossier | null | undefined;
   roleTitle?: string;
   analysisTitle?: string;
+  onApplicationUpdated?: (updatedApp: ApplicationItem) => void;
 }
 
 export default function CompanyDossierModal({
@@ -17,6 +18,7 @@ export default function CompanyDossierModal({
   dossier,
   roleTitle,
   analysisTitle,
+  onApplicationUpdated,
 }: CompanyDossierModalProps) {
   if (!isOpen || !dossier) return null;
 
@@ -54,6 +56,7 @@ export default function CompanyDossierModal({
           <CompanyDossierView
             dossier={dossier}
             roleTitle={roleTitle}
+            onApplicationUpdated={onApplicationUpdated}
           />
         </div>
       </div>
