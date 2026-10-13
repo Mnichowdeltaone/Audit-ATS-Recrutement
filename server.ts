@@ -1431,6 +1431,34 @@ app.delete('/api/db/cover-letters/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Événements & Rendez-vous du Calendrier (France Travail, Salons, Entretiens...)
+app.get('/api/db/calendar-events', async (_req: Request, res: Response) => {
+  try {
+    const events = await localDb.getCalendarEvents();
+    res.json(events);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.post('/api/db/calendar-events', async (req: Request, res: Response) => {
+  try {
+    const saved = await localDb.saveCalendarEvent(req.body);
+    res.json({ success: true, event: saved });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.delete('/api/db/calendar-events/:id', async (req: Request, res: Response) => {
+  try {
+    const deleted = await localDb.deleteCalendarEvent(req.params.id);
+    res.json({ success: deleted });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
 // Paramètres
 app.get('/api/db/settings', async (_req: Request, res: Response) => {
   try {

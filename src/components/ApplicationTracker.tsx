@@ -52,6 +52,7 @@ import {
 import { localDbClient } from '../services/localDbClient';
 import CompanyDossierModal from './CompanyDossierModal';
 import { extractCompanyDossier } from '../utils/companyDossierExtractor';
+import ActionCalendarView from './ActionCalendarView';
 
 interface ApplicationTrackerProps {
   applications: ApplicationItem[];
@@ -128,7 +129,7 @@ export default function ApplicationTracker({
   isDemoMode = false,
   onToggleDemoMode,
 }: ApplicationTrackerProps) {
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'table' | 'calendar'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -260,6 +261,7 @@ export default function ApplicationTracker({
 
   // Fiche Entreprise Modal
   const [viewingCompanyDossier, setViewingCompanyDossier] = useState<{
+    appId?: string;
     dossier: CompanyFinancialTechnicalDossier;
     roleTitle?: string;
   } | null>(null);
@@ -362,6 +364,7 @@ export default function ApplicationTracker({
         (a.company && a.company.toLowerCase().trim() === app.company.toLowerCase().trim())
     );
     const baseDossier =
+      app.companyDossier ||
       matchingAnalysis?.companyDossier ||
       extractCompanyDossier(
         matchingAnalysis?.analysisResult || '',
@@ -377,6 +380,7 @@ export default function ApplicationTracker({
     };
 
     setViewingCompanyDossier({
+      appId: app.id,
       dossier: mergedDossier,
       roleTitle: app.role,
     });
@@ -868,6 +872,19 @@ export default function ApplicationTracker({
             >
               <ListFilter className="w-4 h-4" />
               <span className="hidden sm:inline">Liste</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('calendar')}
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === 'calendar'
+                  ? 'bg-white text-gray-900 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+              title="Vue Calendrier des actions et relances (passées et à venir)"
+            >
+              <Calendar className="w-4 h-4 text-indigo-600" />
+              <span className="hidden sm:inline">Calendrier</span>
             </button>
             {onNavigateToReports && (
               <button
@@ -1869,6 +1886,16 @@ export default function ApplicationTracker({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* VUE CALENDRIER DES ACTIONS PASSÉES ET À VENIR */}
+      {viewMode === 'calendar' && (
+        <div className="animate-fade-in">
+          <ActionCalendarView
+            applications={applications}
+            setApplications={setApplications}
+          />
         </div>
       )}
 
@@ -2955,6 +2982,25 @@ export default function ApplicationTracker({
             setApplications((prev) =>
               prev.map((item) => (item.id === updatedApp.id ? updatedApp : item))
             );
+          }}
+          onDossierUpdated={(updatedDossier) => {
+            setViewingCompanyDossier((prev) =>
+              prev ? { ...prev, dossier: updatedDossier } : prev
+            );
+            if (viewingCompanyDossier?.appId) {
+              setApplications((prev) =>
+                prev.map((item) =>
+                  item.id === viewingCompanyDossier.appId
+                    ? {
+                        ...item,
+                        company: updatedDossier.companyName,
+                        location: updatedDossier.location || item.location,
+                        companyDossier: updatedDossier,
+                      }
+                    : item
+                )
+              );
+            }
           }}
         />
       )}

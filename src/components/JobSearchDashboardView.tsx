@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import type { ApplicationItem, AnalysisHistoryItem, UserProfile, SavedCv } from '../types';
 import { DEMO_FICTITIOUS_PROFILE } from '../utils/demoData';
-import ActionCalendarView from './ActionCalendarView';
 
 interface JobSearchDashboardViewProps {
   applications: ApplicationItem[];
@@ -32,7 +31,7 @@ interface JobSearchDashboardViewProps {
   userProfile: UserProfile | null;
   isDemoMode?: boolean;
   onToggleDemoMode?: (enable: boolean) => void;
-  onNavigateToTab: (tab: 'dashboard' | 'app' | 'tracker' | 'cv-assistant' | 'reports' | 'history' | 'database' | 'settings') => void;
+  onNavigateToTab: (tab: 'dashboard' | 'calendar' | 'app' | 'tracker' | 'cv-assistant' | 'reports' | 'history' | 'database' | 'settings') => void;
   onOpenAnalysis?: (analysisId: string) => void;
   onSelectCvForAnalyzer?: (text: string) => void;
 }
@@ -437,13 +436,39 @@ export const JobSearchDashboardView: React.FC<JobSearchDashboardViewProps> = ({
       </div>
 
       {/* =========================================================================
-          4. CALENDRIER DES ACTIONS PASSÉES ET À VENIR (ÉCHÉANCIER & SUIVI)
+          4. APERÇU AGENDA & ÉCHÉANCIER (VUE COMPACTE DU DASHBOARD)
          ========================================================================= */}
-      <ActionCalendarView
-        applications={effectiveApps}
-        setApplications={setApplications}
-        onNavigateToTab={onNavigateToTab}
-      />
+      <div className="bg-gradient-to-r from-indigo-50/90 via-sky-50/60 to-purple-50/70 rounded-3xl border border-indigo-200/80 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-xs shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-extrabold text-[#0A2540]">
+                Agenda & Calendrier des Démarches
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                Accessible via le menu latéral 📅
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 truncate">
+              Rendez-vous France Travail, Salons de recrutement, entretiens, relances et démarches pro
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => onNavigateToTab('calendar')}
+            className="px-4 py-2 bg-[#0A2540] hover:bg-[#133557] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+          >
+            <span>Ouvrir l&apos;Agenda complet</span>
+            <ArrowRight className="w-3.5 h-3.5 text-[#00D287]" />
+          </button>
+        </div>
+      </div>
 
       {/* =========================================================================
           5. ACTIONS DU JOUR & CANDIDATURES RÉCENTES

@@ -38,6 +38,13 @@ import {
   CheckSquare,
   Square,
   BookmarkPlus,
+  RefreshCw,
+  X,
+  Hash,
+  AlertCircle,
+  FileCheck,
+  CheckCircle,
+  SearchCheck,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type {
@@ -45,12 +52,19 @@ import type {
   CompanyStakeholderCommunication,
   CandidateStrategicPlan,
   LegalAndCorporateInfo,
+  CompanyExecutiveInfo,
   ApplicationItem,
   ApplicationContact,
   ApplicationInteraction,
   ApplicationInteractionType,
 } from '../types';
 import { extractCompanyDossier } from '../utils/companyDossierExtractor';
+import {
+  AD_HOC_PLATFORMS,
+  parseAdHocCompanyText,
+  mergeAdHocDataIntoDossier,
+  ParsedAdHocResult,
+} from '../utils/adHocCompanyParser';
 import { localDbClient } from '../services/localDbClient';
 
 interface CompanyDossierViewProps {
@@ -60,6 +74,7 @@ interface CompanyDossierViewProps {
   isRefreshing?: boolean;
   className?: string;
   onApplicationUpdated?: (app: ApplicationItem) => void;
+  onDossierUpdated?: (updatedDossier: CompanyFinancialTechnicalDossier) => void;
 }
 
 type TabType = 'strategy' | 'stakeholders' | 'legal' | 'tracking' | 'interview' | 'technical';
@@ -71,13 +86,14 @@ export default function CompanyDossierView({
   isRefreshing = false,
   className = '',
   onApplicationUpdated,
+  onDossierUpdated,
 }: CompanyDossierViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>('strategy');
   const [selectedStakeholderIndex, setSelectedStakeholderIndex] = useState<number>(0);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Auto-enrichissement au cas où des champs manquent (garantit zéro blanc)
-  const enrichedDossier = useMemo<CompanyFinancialTechnicalDossier>(() => {
+  // Auto-enrichissement initial
+  const initialEnriched = useMemo<CompanyFinancialTechnicalDossier>(() => {
     if (dossier.candidateStrategicPlan && dossier.stakeholdersCommunication && dossier.legalInfo) {
       return dossier;
     }
@@ -96,15 +112,70 @@ export default function CompanyDossierView({
     };
   }, [dossier, roleTitle]);
 
-  const plan: CandidateStrategicPlan | undefined = enrichedDossier.candidateStrategicPlan;
-  const stakeholders: CompanyStakeholderCommunication[] = enrichedDossier.stakeholdersCommunication || [];
-  const legal: LegalAndCorporateInfo | undefined = enrichedDossier.legalInfo;
+  // État dynamique du dossier (permet les modifications directes et enrichissements ad hoc)
+  const [activeDossier, setActiveDossier] = useState<CompanyFinancialTechnicalDossier>(initialEnriched);
+
+  useEffect(() => {
+    setActiveDossier(initialEnriched);
+  }, [initialEnriched]);
+
+  const plan: CandidateStrategicPlan | undefined = activeDossier.candidateStrategicPlan;
+  const stakeholders: CompanyStakeholderCommunication[] = activeDossier.stakeholdersCommunication || [];
+  const legal: LegalAndCorporateInfo | undefined = activeDossier.legalInfo;
   const currentStakeholder = stakeholders[selectedStakeholderIndex] || stakeholders[0];
 
   // Gestion du suivi de candidature liée dans l'entreprise (Onglet 4 : Suivi, Contacts & Annotations)
   const [linkedApp, setLinkedApp] = useState<ApplicationItem | null>(null);
   const [isLoadingApp, setIsLoadingApp] = useState(false);
   const [isCreatingApp, setIsCreatingApp] = useState(false);
+
+  // 1. RECHERCHE SUR SITES AD HOC
+  const [adHocSearchQuery, setAdHocSearchQuery] = useState<string>(
+    activeDossier.legalInfo?.siren || activeDossier.legalInfo?.legalName || activeDossier.companyName
+  );
+  const [selectedPlatformCat, setSelectedPlatformCat] = useState<'all' | 'legal' | 'social' | 'reputation' | 'news'>('all');
+
+  useEffect(() => {
+    setAdHocSearchQuery(
+      activeDossier.legalInfo?.siren || activeDossier.legalInfo?.legalName || activeDossier.companyName
+    );
+  }, [activeDossier.companyName, activeDossier.legalInfo?.legalName, activeDossier.legalInfo?.siren]);
+
+  // 2. MODAL COLLER DONNÉES SITES AD HOC
+  const [showPasteAdHocModal, setShowPasteAdHocModal] = useState(false);
+  const [pastedAdHocText, setPastedAdHocText] = useState('');
+
+  const parsedAdHocPreview = useMemo<ParsedAdHocResult | null>(() => {
+    if (!pastedAdHocText.trim()) return null;
+    return parseAdHocCompanyText(pastedAdHocText, activeDossier.companyName);
+  }, [pastedAdHocText, activeDossier.companyName]);
+
+  // 3. MODAL ÉDITION MANUELLE DE LA FICHE
+  const [showEditDossierModal, setShowEditDossierModal] = useState(false);
+  const [editLegalName, setEditLegalName] = useState('');
+  const [editCommercialBrand, setEditCommercialBrand] = useState('');
+  const [editSiren, setEditSiren] = useState('');
+  const [editRcsCity, setEditRcsCity] = useState('');
+  const [editLegalForm, setEditLegalForm] = useState('');
+  const [editCreationYear, setEditCreationYear] = useState('');
+  const [editHeadquarters, setEditHeadquarters] = useState('');
+  const [editWebsiteUrl, setEditWebsiteUrl] = useState('');
+  const [editRevenue, setEditRevenue] = useState('');
+  const [editEstimatedSize, setEditEstimatedSize] = useState('');
+  const [editOwnership, setEditOwnership] = useState('');
+  const [editSector, setEditSector] = useState('');
+  const [editBusinessModel, setEditBusinessModel] = useState('');
+  const [editAdHocNotes, setEditAdHocNotes] = useState('');
+  const [editExecutives, setEditExecutives] = useState<CompanyExecutiveInfo[]>([]);
+  const [editActivitiesPillars, setEditActivitiesPillars] = useState<string[]>([]);
+
+  // 4. MODAL RECTIFIER L'ENTREPRISE RECRUTEUSE (ex: remplacer cabinet Michael Page par l'entreprise cible)
+  const [showRenameCompanyModal, setShowRenameCompanyModal] = useState(false);
+  const [renameInput, setRenameInput] = useState('');
+
+  // 5. APPROFONDIR AVEC L'IA
+  const [isDeepeningAi, setIsDeepeningAi] = useState(false);
+  const [aiDeepenSuccessMsg, setAiDeepenSuccessMsg] = useState<string | null>(null);
 
   // Formulaire d'ajout de contact
   const [showAddContactForm, setShowAddContactForm] = useState(false);
@@ -129,7 +200,7 @@ export default function CompanyDossierView({
       setIsLoadingApp(true);
       try {
         const apps = await localDbClient.getApplications();
-        const targetName = enrichedDossier.companyName.toLowerCase().trim();
+        const targetName = activeDossier.companyName.toLowerCase().trim();
         const match = apps.find(
           (a) =>
             a.company.toLowerCase().trim() === targetName ||
@@ -149,28 +220,204 @@ export default function CompanyDossierView({
     return () => {
       isMounted = false;
     };
-  }, [enrichedDossier.companyName]);
+  }, [activeDossier.companyName]);
+
+  // Mise à jour et persistance centrale du dossier d'entreprise
+  const handleSaveUpdatedDossier = async (updated: CompanyFinancialTechnicalDossier) => {
+    setActiveDossier(updated);
+    onDossierUpdated?.(updated);
+    if (linkedApp) {
+      const updatedApp: ApplicationItem = {
+        ...linkedApp,
+        company: updated.companyName,
+        location: updated.location || linkedApp.location,
+        companyDossier: updated,
+        updatedAt: new Date().toISOString(),
+      };
+      setLinkedApp(updatedApp);
+      await localDbClient.saveApplication(updatedApp);
+      onApplicationUpdated?.(updatedApp);
+    }
+  };
+
+  // Appliquer les données collées depuis les sites ad hoc
+  const handleApplyPastedAdHocData = async () => {
+    if (!parsedAdHocPreview) return;
+    const merged = mergeAdHocDataIntoDossier(activeDossier, parsedAdHocPreview);
+    await handleSaveUpdatedDossier(merged);
+    setShowPasteAdHocModal(false);
+    setPastedAdHocText('');
+    confetti({ particleCount: 35, spread: 60 });
+  };
+
+  // Ouvrir le modal d'édition manuelle en pré-remplissant les champs
+  const handleOpenEditModal = () => {
+    const curLegal = activeDossier.legalInfo || {};
+    setEditLegalName(curLegal.legalName || activeDossier.companyName);
+    setEditCommercialBrand(curLegal.commercialBrand || activeDossier.companyName);
+    setEditSiren(curLegal.siren || '');
+    setEditRcsCity(curLegal.rcsCity || '');
+    setEditLegalForm(curLegal.legalForm || '');
+    setEditCreationYear(curLegal.creationYear || '');
+    setEditHeadquarters(curLegal.headquarters || activeDossier.location || '');
+    setEditWebsiteUrl(curLegal.websiteUrl || activeDossier.websiteUrl || '');
+    setEditRevenue(curLegal.aumOrKeyMetrics || activeDossier.financialProfile.estimatedRevenue || '');
+    setEditEstimatedSize(activeDossier.estimatedSize || '');
+    setEditOwnership(curLegal.shareholdersAndBackers || activeDossier.ownershipStructure || '');
+    setEditSector(activeDossier.sector || '');
+    setEditBusinessModel(activeDossier.businessModel || '');
+    setEditAdHocNotes(curLegal.adHocSourceNotes || '');
+    setEditExecutives(curLegal.keyExecutives ? [...curLegal.keyExecutives] : []);
+    setEditActivitiesPillars(curLegal.activitiesPillars ? [...curLegal.activitiesPillars] : []);
+    setShowEditDossierModal(true);
+  };
+
+  // Sauvegarder les modifications manuelles de la fiche
+  const handleSaveManualEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const updatedLegal: LegalAndCorporateInfo = {
+      ...activeDossier.legalInfo,
+      legalName: editLegalName.trim() || activeDossier.companyName,
+      commercialBrand: editCommercialBrand.trim() || activeDossier.companyName,
+      siren: editSiren.trim() || undefined,
+      rcsCity: editRcsCity.trim() || undefined,
+      legalForm: editLegalForm.trim() || undefined,
+      creationYear: editCreationYear.trim() || undefined,
+      headquarters: editHeadquarters.trim() || undefined,
+      websiteUrl: editWebsiteUrl.trim() || undefined,
+      aumOrKeyMetrics: editRevenue.trim() || undefined,
+      shareholdersAndBackers: editOwnership.trim() || undefined,
+      keyExecutives: editExecutives,
+      activitiesPillars: editActivitiesPillars,
+      adHocSourceNotes: editAdHocNotes.trim() || undefined,
+      verifiedOnAdHocSites: true,
+      adHocVerifiedAt: new Date().toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    const updatedDossier: CompanyFinancialTechnicalDossier = {
+      ...activeDossier,
+      companyName: editLegalName.trim() || activeDossier.companyName,
+      sector: editSector.trim() || activeDossier.sector,
+      businessModel: editBusinessModel.trim() || activeDossier.businessModel,
+      estimatedSize: editEstimatedSize.trim() || activeDossier.estimatedSize,
+      location: editHeadquarters.trim() || activeDossier.location,
+      ownershipStructure: editOwnership.trim() || activeDossier.ownershipStructure,
+      websiteUrl: editWebsiteUrl.trim() || activeDossier.websiteUrl,
+      legalInfo: updatedLegal,
+      financialProfile: {
+        ...activeDossier.financialProfile,
+        estimatedRevenue: editRevenue.trim() || activeDossier.financialProfile.estimatedRevenue,
+      },
+      isAdHocVerified: true,
+      adHocVerifiedAt: updatedLegal.adHocVerifiedAt,
+    };
+
+    await handleSaveUpdatedDossier(updatedDossier);
+    setShowEditDossierModal(false);
+    confetti({ particleCount: 30, spread: 55 });
+  };
+
+  // Rectifier le nom de l'entreprise recruteuse (quand l'annonce était publiée par un cabinet)
+  const handleOpenRenameModal = () => {
+    setRenameInput(activeDossier.companyName);
+    setShowRenameCompanyModal(true);
+  };
+
+  const handleSaveRenameCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newName = renameInput.trim();
+    if (!newName || newName === activeDossier.companyName) {
+      setShowRenameCompanyModal(false);
+      return;
+    }
+    const updatedDossier: CompanyFinancialTechnicalDossier = {
+      ...activeDossier,
+      companyName: newName,
+      legalInfo: {
+        ...activeDossier.legalInfo,
+        legalName: newName,
+        commercialBrand: newName,
+      },
+    };
+    await handleSaveUpdatedDossier(updatedDossier);
+    setShowRenameCompanyModal(false);
+    confetti({ particleCount: 30, spread: 50 });
+  };
+
+  // Approfondir avec l'IA
+  const handleDeepenCompanyAi = async () => {
+    if (onRefreshWithAi) {
+      onRefreshWithAi();
+      return;
+    }
+    setIsDeepeningAi(true);
+    setAiDeepenSuccessMsg(null);
+    try {
+      const res = await fetch('/api/generate-company-dossier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: activeDossier.companyName,
+          targetRole: roleTitle,
+          jobText: activeDossier.rawBriefText,
+        }),
+      });
+      const data = await res.json();
+      if (data.result) {
+        const refreshed = extractCompanyDossier(
+          data.result,
+          activeDossier.rawBriefText || '',
+          activeDossier.companyName,
+          roleTitle
+        );
+        const mergedWithVerified = {
+          ...refreshed,
+          legalInfo: {
+            ...refreshed.legalInfo,
+            ...activeDossier.legalInfo,
+          },
+          isAdHocVerified: activeDossier.isAdHocVerified ?? true,
+          adHocVerifiedAt: activeDossier.adHocVerifiedAt,
+        };
+        await handleSaveUpdatedDossier(mergedWithVerified);
+        setAiDeepenSuccessMsg('Fiche entreprise approfondie avec succès !');
+        confetti({ particleCount: 30, spread: 50 });
+        setTimeout(() => setAiDeepenSuccessMsg(null), 4000);
+      }
+    } catch (err) {
+      console.warn('Erreur deepening AI :', err);
+    } finally {
+      setIsDeepeningAi(false);
+    }
+  };
 
   // Création d'une candidature rattachée
   const handleCreateLinkedApp = async () => {
     setIsCreatingApp(true);
     const newApp: ApplicationItem = {
       id: `app-${Date.now()}`,
-      company: enrichedDossier.companyName,
+      company: activeDossier.companyName,
       role: roleTitle || 'Poste ciblé',
       status: 'applied',
       appliedDate: new Date().toISOString().split('T')[0],
       followUpDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      location: enrichedDossier.location || 'France',
+      location: activeDossier.location || 'France',
       contractType: 'CDI',
-      contacts: enrichedDossier.customContacts || [],
+      companyDossier: activeDossier,
+      contacts: activeDossier.customContacts || [],
       interactions: [
         {
           id: `inter-${Date.now()}`,
           date: new Date().toISOString().split('T')[0],
           type: 'note',
           title: 'Création du suivi de candidature',
-          content: `Dossier de candidature initialisé depuis la fiche technique de l'entreprise ${enrichedDossier.companyName}.`,
+          content: `Dossier de candidature initialisé depuis la fiche technique de l'entreprise ${activeDossier.companyName}.`,
         },
       ],
       checklist: {
@@ -350,16 +597,19 @@ export default function CompanyDossierView({
     URL.revokeObjectURL(url);
   };
 
+  // enrichedDossier pointe vers activeDossier pour une synchronisation totale
+  const enrichedDossier = activeDossier;
+
   // URL de recherche externe vérifiable
-  const companyCleanName = enrichedDossier.companyName.trim();
-  const officialWebsite = legal?.websiteUrl || enrichedDossier.websiteUrl;
-  const pappersUrl = `https://www.pappers.fr/recherche?q=${encodeURIComponent(legal?.legalName || companyCleanName)}`;
+  const companyCleanName = activeDossier.companyName.trim();
+  const officialWebsite = legal?.websiteUrl || activeDossier.websiteUrl;
+  const pappersUrl = `https://www.pappers.fr/recherche?q=${encodeURIComponent(legal?.siren || legal?.legalName || companyCleanName)}`;
   const linkedinSearchUrl = `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(
     companyCleanName
   )}`;
 
-  const contactsList = linkedApp?.contacts || enrichedDossier.customContacts || [];
-  const notesList = linkedApp?.interactions || enrichedDossier.candidateNotes || [];
+  const contactsList = linkedApp?.contacts || activeDossier.customContacts || [];
+  const notesList = linkedApp?.interactions || activeDossier.candidateNotes || [];
 
   return (
     <div className={`bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden ${className}`}>
@@ -373,27 +623,52 @@ export default function CompanyDossierView({
                 <Building2 className="w-3 h-3 text-blue-400" />
                 Fiche Entreprise & Suivi Candidat
               </span>
-              {enrichedDossier.sector && (
-                <span className="text-[11px] bg-white/10 text-gray-200 px-2.5 py-0.5 rounded-full border border-white/10 font-medium">
-                  {enrichedDossier.sector}
+
+              {/* Badge d'attestation de confrontation aux registres ad hoc */}
+              {(activeDossier.isAdHocVerified || legal?.verifiedOnAdHocSites) ? (
+                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+                  <CheckCircle className="w-3 h-3 text-emerald-400" />
+                  <span>Vérifié sur sites ad hoc (Pappers / Société.com)</span>
+                </span>
+              ) : (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 text-amber-400" />
+                  <span>À vérifier sur sites ad hoc</span>
                 </span>
               )}
-              {enrichedDossier.estimatedSize && (
+
+              {activeDossier.sector && (
                 <span className="text-[11px] bg-white/10 text-gray-200 px-2.5 py-0.5 rounded-full border border-white/10 font-medium">
-                  {enrichedDossier.estimatedSize}
+                  {activeDossier.sector}
+                </span>
+              )}
+              {activeDossier.estimatedSize && (
+                <span className="text-[11px] bg-white/10 text-gray-200 px-2.5 py-0.5 rounded-full border border-white/10 font-medium">
+                  {activeDossier.estimatedSize}
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
               <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2.5">
-                <span>{enrichedDossier.companyName}</span>
+                <span>{activeDossier.companyName}</span>
                 {roleTitle && (
                   <span className="text-sm font-semibold text-blue-200/90 hidden sm:inline">
                     • {roleTitle}
                   </span>
                 )}
               </h3>
+
+              {/* Bouton pour rectifier le nom de l'entreprise si offre via cabinet */}
+              <button
+                type="button"
+                onClick={handleOpenRenameModal}
+                className="inline-flex items-center gap-1 text-[11px] text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-lg transition-colors border border-white/15 cursor-pointer"
+                title="Corriger le nom de l'entreprise si l'annonce provient d'un cabinet de recrutement"
+              >
+                <Edit3 className="w-2.5 h-2.5" />
+                <span>Rectifier entreprise</span>
+              </button>
 
               {officialWebsite && (
                 <a
@@ -411,20 +686,53 @@ export default function CompanyDossierView({
             </div>
 
             <p className="text-xs text-blue-100/80 max-w-2xl leading-relaxed">
-              Données légales & financières vérifiées, plan stratégique 30-60-90j, carnet de contacts et suivi annoté de votre candidature pour cette entreprise.
+              Données légales & financières vérifiées sur registres ad hoc (Pappers, Société.com), plan stratégique 30-60-90j, carnet de contacts et suivi annoté de votre candidature.
             </p>
           </div>
 
-          {/* Actions rapides d'export */}
+          {/* Actions rapides d'export et d'investigation ad hoc */}
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Bouton Recherche Ad Hoc */}
             <button
               type="button"
-              onClick={() => handleCopy(enrichedDossier.rawBriefText || '', 'all')}
+              onClick={() => setActiveTab('legal')}
+              className="px-3 py-2 bg-blue-600/60 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-blue-400/40 shadow-xs"
+              title="Consulter et lancer la recherche sur les sites ad hoc (Pappers, Société.com...)"
+            >
+              <Search className="w-3.5 h-3.5 text-blue-200" />
+              <span>Recherche Ad Hoc</span>
+            </button>
+
+            {/* Bouton Coller Données Ad Hoc */}
+            <button
+              type="button"
+              onClick={() => setShowPasteAdHocModal(true)}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-emerald-400/40 shadow-xs"
+              title="Coller les informations extraites de Pappers, Société.com, etc."
+            >
+              <FileCheck className="w-3.5 h-3.5 text-emerald-200" />
+              <span>Coller Données Ad Hoc</span>
+            </button>
+
+            {/* Bouton Modifier la Fiche */}
+            <button
+              type="button"
+              onClick={handleOpenEditModal}
+              className="px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/20"
+              title="Modifier manuellement les données de la fiche entreprise"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-blue-200" />
+              <span>Modifier la Fiche</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCopy(activeDossier.rawBriefText || '', 'all')}
               className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/20"
               title="Copier la fiche complète au format Markdown"
             >
               {copiedKey === 'all' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedKey === 'all' ? 'Copié !' : 'Copier Markdown'}</span>
+              <span>{copiedKey === 'all' ? 'Copié !' : 'Copier (.md)'}</span>
             </button>
 
             <button
@@ -434,44 +742,50 @@ export default function CompanyDossierView({
               title="Télécharger la fiche pour réviser hors-ligne"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Exporter (.md)</span>
+              <span>Exporter</span>
             </button>
 
-            {onRefreshWithAi && (
-              <button
-                type="button"
-                onClick={onRefreshWithAi}
-                disabled={isRefreshing}
-                className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-                title="Approfondir et ré-analyser l'entreprise avec Gemini"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>{isRefreshing ? 'Actualisation...' : 'Approfondir'}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleDeepenCompanyAi}
+              disabled={isDeepeningAi || isRefreshing}
+              className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+              title="Approfondir et actualiser l'entreprise avec l'IA"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>{isDeepeningAi || isRefreshing ? 'Actualisation...' : 'Approfondir (IA)'}</span>
+            </button>
           </div>
         </div>
+
+        {/* Message de confirmation de ré-analyse IA */}
+        {aiDeepenSuccessMsg && (
+          <div className="mt-3 p-2.5 bg-emerald-500/20 border border-emerald-400/40 rounded-xl text-xs text-emerald-200 font-bold flex items-center gap-2 animate-fade-in">
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <span>{aiDeepenSuccessMsg}</span>
+          </div>
+        )}
 
         {/* Métriques / Badges Clés en bandeau */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5 pt-4 border-t border-white/10 text-xs">
           <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10 space-y-0.5">
             <span className="text-[10px] text-blue-200/70 uppercase font-bold block">Business Model</span>
-            <span className="text-white font-bold truncate block">{enrichedDossier.businessModel || 'B2B & Solutions'}</span>
+            <span className="text-white font-bold truncate block">{activeDossier.businessModel || 'B2B & Solutions'}</span>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10 space-y-0.5">
             <span className="text-[10px] text-blue-200/70 uppercase font-bold block">Actionnariat / Capital</span>
-            <span className="text-white font-bold truncate block">{enrichedDossier.ownershipStructure || 'Privé / Indépendant'}</span>
+            <span className="text-white font-bold truncate block">{activeDossier.ownershipStructure || 'Privé / Indépendant'}</span>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10 space-y-0.5">
             <span className="text-[10px] text-blue-200/70 uppercase font-bold block">Métrique / CA</span>
-            <span className="text-white font-bold truncate block">{enrichedDossier.financialProfile.estimatedRevenue || 'Consolidé Groupe'}</span>
+            <span className="text-white font-bold truncate block">{activeDossier.financialProfile.estimatedRevenue || 'Consolidé Groupe'}</span>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xs p-2.5 rounded-xl border border-white/10 space-y-0.5">
             <span className="text-[10px] text-blue-200/70 uppercase font-bold block">Implantation</span>
-            <span className="text-white font-bold truncate block">{enrichedDossier.location || 'France'}</span>
+            <span className="text-white font-bold truncate block">{activeDossier.location || 'France'}</span>
           </div>
         </div>
       </div>
@@ -506,7 +820,7 @@ export default function CompanyDossierView({
           <span>2. Interlocuteurs Cibles ({stakeholders.length})</span>
         </button>
 
-        {/* Onglet 3 : Données Légales & Financières Vérifiées */}
+        {/* Onglet 3 : Données Légales, Registres & Sites Ad Hoc */}
         <button
           type="button"
           onClick={() => setActiveTab('legal')}
@@ -517,7 +831,10 @@ export default function CompanyDossierView({
           }`}
         >
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>3. Données Légales & Site Officiel</span>
+          <span>3. Données Légales & Sites Ad Hoc</span>
+          {(activeDossier.isAdHocVerified || legal?.verifiedOnAdHocSites) && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Données vérifiées sur sites ad hoc" />
+          )}
         </button>
 
         {/* Onglet 4 : Suivi Candidature, Contacts & Annotations (NOUVEAU & DÉCISIF) */}
@@ -901,68 +1218,180 @@ export default function CompanyDossierView({
         {/* ========================================================================= */}
         {activeTab === 'legal' && (
           <div className="space-y-6 animate-fade-in">
-            {/* Barre de Liens Directs Vérifiés */}
-            <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="p-2 bg-emerald-600 text-white rounded-xl shadow-2xs">
-                  <ShieldCheck className="w-4 h-4" />
-                </span>
-                <div>
-                  <h4 className="font-extrabold text-xs sm:text-sm text-emerald-950">
-                    Informations Juridiques & Institutionnelles Vérifiables
-                  </h4>
-                  <p className="text-[11px] text-emerald-900/80">
-                    Consultez directement le site de l&apos;entreprise ou les registres officiels pour vérifier les chiffres réels.
-                  </p>
+            {/* 1. CENTRE DE RECHERCHE & CONFRONTATION SITES AD HOC */}
+            <div className="p-5 bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 border border-blue-900/60 rounded-3xl text-white space-y-4 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 bg-blue-600 rounded-xl text-white shadow-2xs">
+                    <Search className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-sm sm:text-base text-white">
+                        Centre de Recherche & Confrontation sur Sites Ad Hoc
+                      </h4>
+                      {(activeDossier.isAdHocVerified || legal?.verifiedOnAdHocSites) ? (
+                        <span className="text-[10px] bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-emerald-400" />
+                          <span>Dossier Vérifié</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-amber-400" />
+                          <span>En attente de vérification</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-blue-200/80 mt-0.5">
+                      Interrogez directement les registres officiels, bilans, organigrammes et avis salariés pour valider les chiffres réels.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Boutons d'action rapide dans le hub */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasteAdHocModal(true)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <FileCheck className="w-3.5 h-3.5" />
+                    <span>Coller Données Ad Hoc</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenEditModal}
+                    className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/20"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Modifier la Fiche</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenRenameModal}
+                    className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/20"
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Rectifier Entreprise</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                {officialWebsite && (
-                  <a
-                    href={officialWebsite}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>Site Officiel</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
+              {/* Barre de recherche personnalisée pour interroger les sites ad hoc */}
+              <div className="bg-white/10 backdrop-blur-md p-3.5 rounded-2xl border border-white/15 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-blue-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={adHocSearchQuery}
+                      onChange={(e) => setAdHocSearchQuery(e.target.value)}
+                      placeholder="Nom de l'entreprise, marque, groupe ou numéro SIREN..."
+                      className="w-full bg-slate-950/70 border border-white/20 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 font-medium"
+                    />
+                  </div>
 
-                <a
-                  href={pappersUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  <span>Registre Pappers</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAdHocSearchQuery(
+                          activeDossier.legalInfo?.siren || activeDossier.legalInfo?.legalName || activeDossier.companyName
+                        )
+                      }
+                      className="px-2.5 py-2 bg-white/10 hover:bg-white/20 text-blue-200 text-xs font-semibold rounded-xl border border-white/15 cursor-pointer transition-colors"
+                      title="Réinitialiser avec le nom ou SIREN de l'entreprise"
+                    >
+                      Réinitialiser
+                    </button>
+                  </div>
+                </div>
 
-                <a
-                  href={linkedinSearchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs"
-                >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>LinkedIn Entreprise</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                {/* Filtres de catégorie de plateformes */}
+                <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold">
+                  {[
+                    { id: 'all', label: 'Toutes les Plateformes (8)' },
+                    { id: 'legal', label: 'Registres & Bilans (4)' },
+                    { id: 'social', label: 'Décideurs & Équipe (1)' },
+                    { id: 'reputation', label: 'Avis & Culture (2)' },
+                    { id: 'news', label: 'Presse & Économie (1)' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedPlatformCat(cat.id as any)}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                        selectedPlatformCat === cat.id
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white/5 hover:bg-white/10 text-gray-300'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grille des plateformes ad hoc avec ouverture 1-clic */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                  {AD_HOC_PLATFORMS.filter(
+                    (p) => selectedPlatformCat === 'all' || p.category === selectedPlatformCat
+                  ).map((platform) => {
+                    const targetUrl = platform.getUrl(adHocSearchQuery, activeDossier.legalInfo?.siren);
+                    return (
+                      <a
+                        key={platform.id}
+                        href={targetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-3 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-blue-400/50 rounded-xl transition-all flex flex-col justify-between gap-2 group cursor-pointer"
+                        title={`Rechercher « ${adHocSearchQuery} » sur ${platform.name}`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-xs text-white group-hover:text-blue-300 transition-colors">
+                              {platform.name}
+                            </span>
+                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${platform.badgeColor}`}>
+                              {platform.badgeText}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-300/80 leading-snug line-clamp-2">
+                            {platform.shortDesc}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[10px] text-blue-300 font-bold group-hover:text-white">
+                          <span>Rechercher</span>
+                          <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Cartouche d'identité Juridique & Métier */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {/* Cartouche d'identité Juridique & Métier Vérifié */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Raison Sociale Officielle</span>
-                <h5 className="font-extrabold text-sm text-gray-900">
-                  {legal?.legalName || enrichedDossier.companyName}
+                <h5 className="font-extrabold text-sm text-gray-900 truncate">
+                  {legal?.legalName || activeDossier.companyName}
                 </h5>
                 <p className="text-[11px] text-gray-500">Nom au registre du commerce</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase font-bold text-gray-400 block">Numéro SIREN / RCS</span>
+                <h5 className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{legal?.siren || 'Non renseigné'}</span>
+                </h5>
+                <p className="text-[11px] text-gray-500">
+                  {legal?.rcsCity ? `RCS ${legal.rcsCity}` : 'Identifiant légal unique'}
+                </p>
               </div>
 
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
@@ -977,36 +1406,81 @@ export default function CompanyDossierView({
 
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Siège Social & Implantation</span>
-                <h5 className="font-extrabold text-sm text-gray-900">
-                  {legal?.headquarters || enrichedDossier.location || 'France'}
+                <h5 className="font-extrabold text-sm text-gray-900 truncate">
+                  {legal?.headquarters || activeDossier.location || 'France'}
                 </h5>
                 <p className="text-[11px] text-gray-500">Périmètre géographique principal</p>
               </div>
 
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Secteur Réel & Vérifié</span>
-                <h5 className="font-extrabold text-sm text-gray-900">
-                  {enrichedDossier.sector || 'Secteur d’activité'}
+                <h5 className="font-extrabold text-sm text-gray-900 truncate">
+                  {activeDossier.sector || 'Secteur d’activité'}
                 </h5>
-                <p className="text-[11px] text-gray-500">Classification économique officielle</p>
+                <p className="text-[11px] text-gray-500">Classification économique</p>
               </div>
 
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Chiffre d&apos;Affaires / Taille</span>
                 <h5 className="font-extrabold text-sm text-gray-900">
-                  {legal?.aumOrKeyMetrics || enrichedDossier.financialProfile.estimatedRevenue || 'Consolidé'}
+                  {legal?.aumOrKeyMetrics || activeDossier.financialProfile.estimatedRevenue || 'Consolidé'}
                 </h5>
-                <p className="text-[11px] text-gray-500">{enrichedDossier.estimatedSize || 'PME / ETI'}</p>
+                <p className="text-[11px] text-gray-500">{activeDossier.estimatedSize || 'PME / ETI'}</p>
               </div>
 
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase font-bold text-gray-400 block">Actionnariat & Capital</span>
-                <h5 className="font-extrabold text-sm text-gray-900">
-                  {legal?.shareholdersAndBackers || enrichedDossier.ownershipStructure || 'Actionnariat indépendant'}
+                <h5 className="font-extrabold text-sm text-gray-900 truncate">
+                  {legal?.shareholdersAndBackers || activeDossier.ownershipStructure || 'Actionnariat indépendant'}
                 </h5>
-                <p className="text-[11px] text-gray-500">Structure de gouvernance financière</p>
+                <p className="text-[11px] text-gray-500">Structure de gouvernance</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase font-bold text-gray-400 block">Site Web Officiel</span>
+                {officialWebsite ? (
+                  <a
+                    href={officialWebsite}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-extrabold text-sm text-blue-600 hover:underline flex items-center gap-1 truncate"
+                  >
+                    <Globe className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{officialWebsite.replace(/^https?:\/\//, '')}</span>
+                  </a>
+                ) : (
+                  <span className="text-sm font-bold text-gray-400">Non renseigné</span>
+                )}
+                <p className="text-[11px] text-gray-500">Présence numérique</p>
               </div>
             </div>
+
+            {/* Notes d'Investigation & Enquête Ad Hoc */}
+            {(legal?.adHocSourceNotes || activeDossier.isAdHocVerified) && (
+              <div className="p-5 bg-gradient-to-r from-emerald-50/80 via-teal-50/50 to-blue-50/30 border border-emerald-200 rounded-2xl space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-emerald-600 text-white rounded-lg">
+                      <FileCheck className="w-4 h-4" />
+                    </span>
+                    <h4 className="font-extrabold text-sm text-emerald-950">
+                      Enquête & Notes d&apos;Investigation Ad Hoc
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenEditModal}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-700 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Modifier</span>
+                  </button>
+                </div>
+                <div className="text-xs text-gray-800 bg-white/80 p-3.5 rounded-xl border border-emerald-200/80 whitespace-pre-wrap leading-relaxed font-sans">
+                  {legal?.adHocSourceNotes || 'Données et statuts vérifiés auprès des registres officiels (Pappers & Société.com).'}
+                </div>
+              </div>
+            )}
 
             {/* Piliers d'Activité Réels (issus du site web officiel) */}
             <div className="p-5 bg-white border border-gray-200 rounded-2xl space-y-3 shadow-2xs">
@@ -1769,6 +2243,523 @@ export default function CompanyDossierView({
           <span>{copiedKey === 'all-footer' ? 'Copié !' : 'Copier tout le dossier'}</span>
         </button>
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL 1 : COLLER LES DONNÉES RECUEILLIES SUR LES SITES AD HOC            */}
+      {/* ========================================================================= */}
+      {showPasteAdHocModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]">
+            {/* Entête */}
+            <div className="px-6 py-4 bg-gradient-to-r from-emerald-900 to-teal-900 text-white flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-emerald-600 rounded-xl">
+                  <FileCheck className="w-5 h-5 text-white" />
+                </span>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">
+                    Coller les Données Recueillies sur les Sites Ad Hoc
+                  </h3>
+                  <p className="text-xs text-emerald-200/80">
+                    Pappers, Société.com, Annuaire des Entreprises gouv, Infogreffe, LinkedIn...
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPasteAdHocModal(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Corps */}
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-1">
+                <span className="font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  Extraction Automatique & Instantanée
+                </span>
+                <p className="text-emerald-900/80 leading-relaxed">
+                  Copiez le texte visible sur la page Pappers ou Société.com (SIREN, RCS, dirigeants, chiffre d&apos;affaires, forme juridique, siège social...) et collez-le ci-dessous. Notre moteur va analyser les données et mettre à jour la fiche.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 block">
+                  Texte brut copié depuis le site ad hoc :
+                </label>
+                <textarea
+                  rows={6}
+                  value={pastedAdHocText}
+                  onChange={(e) => setPastedAdHocText(e.target.value)}
+                  placeholder="Exemple :&#10;VALORIA CAPITAL SAS au capital de 500 000 €&#10;SIREN : 809 123 456 RCS Paris&#10;Siège social : 12 rue de la Paix, 75008 Paris&#10;Président : Romain Lefèvre&#10;Chiffre d'affaires : 42 000 000 €&#10;Effectif : 120 salariés..."
+                  className="w-full bg-gray-50 border border-gray-300 rounded-2xl p-3.5 text-xs text-gray-900 font-mono placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
+                />
+              </div>
+
+              {/* Aperçu dynamique des champs reconnus */}
+              {parsedAdHocPreview && (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl space-y-2.5 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase text-gray-500 tracking-wider">
+                      Données détectées en temps réel :
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      Prêt à intégrer
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="p-2 bg-white rounded-xl border border-gray-200">
+                      <span className="text-[10px] text-gray-400 block font-bold">Raison Sociale</span>
+                      <strong className="text-gray-900 truncate block">
+                        {parsedAdHocPreview.legalName || 'Non détectée'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2 bg-white rounded-xl border border-gray-200">
+                      <span className="text-[10px] text-gray-400 block font-bold">SIREN</span>
+                      <strong className="text-blue-700 truncate block">
+                        {parsedAdHocPreview.siren || 'Non détecté'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2 bg-white rounded-xl border border-gray-200">
+                      <span className="text-[10px] text-gray-400 block font-bold">Forme Juridique</span>
+                      <strong className="text-gray-900 truncate block">
+                        {parsedAdHocPreview.legalForm || 'Non détectée'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2 bg-white rounded-xl border border-gray-200">
+                      <span className="text-[10px] text-gray-400 block font-bold">Chiffre d&apos;Affaires</span>
+                      <strong className="text-emerald-700 truncate block">
+                        {parsedAdHocPreview.estimatedRevenue || 'Non détecté'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2 bg-white rounded-xl border border-gray-200">
+                      <span className="text-[10px] text-gray-400 block font-bold">Effectif / Taille</span>
+                      <strong className="text-gray-900 truncate block">
+                        {parsedAdHocPreview.estimatedSize || 'Non détecté'}
+                      </strong>
+                    </div>
+
+                    <div className="p-2 bg-white rounded-xl border border-gray-200">
+                      <span className="text-[10px] text-gray-400 block font-bold">Dirigeants</span>
+                      <strong className="text-indigo-700 truncate block">
+                        {parsedAdHocPreview.keyExecutives.length > 0
+                          ? `${parsedAdHocPreview.keyExecutives.length} identifié(s)`
+                          : 'Non détectés'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {parsedAdHocPreview.keyExecutives.length > 0 && (
+                    <div className="p-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs space-y-1">
+                      <span className="text-[10px] font-bold text-indigo-900 uppercase block">Dirigeants identifiés :</span>
+                      {parsedAdHocPreview.keyExecutives.map((ex, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 text-[11px] text-indigo-950">
+                          <Check className="w-3 h-3 text-indigo-600" />
+                          <span><strong>{ex.name}</strong> ({ex.title})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Actions du modal */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowPasteAdHocModal(false)}
+                className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-300 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyPastedAdHocData}
+                disabled={!pastedAdHocText.trim()}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Appliquer & Enrichir la Fiche</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2 : MODIFIER MANUELLEMENT LA FICHE ENTREPRISE                      */}
+      {/* ========================================================================= */}
+      {showEditDossierModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 w-full max-w-3xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
+            {/* Entête */}
+            <div className="px-6 py-4 bg-gray-900 text-white flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-blue-600 rounded-xl">
+                  <Edit3 className="w-5 h-5 text-white" />
+                </span>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">
+                    Modifier la Fiche Entreprise & Informations Légales
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Ajustez et complétez les données vérifiées sur les registres officiels.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditDossierModal(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Formulaire complet */}
+            <form onSubmit={handleSaveManualEdit} className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+              {/* Section 1 : Identité & RCS */}
+              <div className="space-y-3">
+                <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>1. Identité Juridique, RCS & Enregistrement</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Raison Sociale Officielle *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editLegalName}
+                      onChange={(e) => setEditLegalName(e.target.value)}
+                      placeholder="Ex: VALORIA CAPITAL SAS"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Marque / Nom Commercial</label>
+                    <input
+                      type="text"
+                      value={editCommercialBrand}
+                      onChange={(e) => setEditCommercialBrand(e.target.value)}
+                      placeholder="Ex: Groupe Valoria Capital"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Numéro SIREN (9 chiffres) ou SIRET</label>
+                    <input
+                      type="text"
+                      value={editSiren}
+                      onChange={(e) => setEditSiren(e.target.value)}
+                      placeholder="Ex: 809 123 456"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 font-mono focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Ville d&apos;Immatriculation RCS</label>
+                    <input
+                      type="text"
+                      value={editRcsCity}
+                      onChange={(e) => setEditRcsCity(e.target.value)}
+                      placeholder="Ex: Paris, Nanterre, Lyon..."
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Forme Juridique</label>
+                    <input
+                      type="text"
+                      value={editLegalForm}
+                      onChange={(e) => setEditLegalForm(e.target.value)}
+                      placeholder="Ex: SAS, SA, SARL..."
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Année de Création</label>
+                    <input
+                      type="text"
+                      value={editCreationYear}
+                      onChange={(e) => setEditCreationYear(e.target.value)}
+                      placeholder="Ex: 2012"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Siège Social / Adresse</label>
+                    <input
+                      type="text"
+                      value={editHeadquarters}
+                      onChange={(e) => setEditHeadquarters(e.target.value)}
+                      placeholder="Ex: 12 rue de la Paix, 75008 Paris"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Site Web Officiel</label>
+                    <input
+                      type="text"
+                      value={editWebsiteUrl}
+                      onChange={(e) => setEditWebsiteUrl(e.target.value)}
+                      placeholder="Ex: https://valoriacap.com"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2 : Données Économiques & Financières */}
+              <div className="space-y-3 pt-2">
+                <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                  <span>2. Chiffre d&apos;Affaires, Modèle & Actionnariat</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Chiffre d&apos;Affaires / Métrique Clé</label>
+                    <input
+                      type="text"
+                      value={editRevenue}
+                      onChange={(e) => setEditRevenue(e.target.value)}
+                      placeholder="Ex: 42 M€ / 4 Mds€ d'AUM"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Taille / Effectif Estimé</label>
+                    <input
+                      type="text"
+                      value={editEstimatedSize}
+                      onChange={(e) => setEditEstimatedSize(e.target.value)}
+                      placeholder="Ex: 120 salariés / ETI"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Actionnariat / Capital / Partenaires</label>
+                    <input
+                      type="text"
+                      value={editOwnership}
+                      onChange={(e) => setEditOwnership(e.target.value)}
+                      placeholder="Ex: Fondateur + Fonds TA Associates"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-gray-700 block">Secteur d&apos;Activité Réel</label>
+                    <input
+                      type="text"
+                      value={editSector}
+                      onChange={(e) => setEditSector(e.target.value)}
+                      placeholder="Ex: Gestion de patrimoine & Asset Management"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3 : Dirigeants Clés */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-1.5">
+                  <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    <span>3. Dirigeants & Dirigeantes Clés</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditExecutives([
+                        ...editExecutives,
+                        { name: '', title: 'Directeur Général', roleDescription: '' },
+                      ])
+                    }
+                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                  >
+                    + Ajouter un dirigeant
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {editExecutives.map((exec, idx) => (
+                    <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-2 relative">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={exec.name}
+                          onChange={(e) => {
+                            const updated = [...editExecutives];
+                            updated[idx].name = e.target.value;
+                            setEditExecutives(updated);
+                          }}
+                          placeholder="Nom complet (ex: Romain Lefèvre)"
+                          className="bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-900"
+                        />
+                        <input
+                          type="text"
+                          value={exec.title}
+                          onChange={(e) => {
+                            const updated = [...editExecutives];
+                            updated[idx].title = e.target.value;
+                            setEditExecutives(updated);
+                          }}
+                          placeholder="Titre / Fonction (ex: Président Fondateur)"
+                          className="bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-900"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={exec.roleDescription || ''}
+                          onChange={(e) => {
+                            const updated = [...editExecutives];
+                            updated[idx].roleDescription = e.target.value;
+                            setEditExecutives(updated);
+                          }}
+                          placeholder="Précisions sur son périmètre ou parcours..."
+                          className="flex-1 bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs text-gray-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setEditExecutives(editExecutives.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-red-500 hover:text-red-700 cursor-pointer"
+                          title="Supprimer ce dirigeant"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 4 : Notes d'Investigation Ad Hoc */}
+              <div className="space-y-2 pt-2">
+                <h4 className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                  <span>4. Notes d&apos;Investigation & Enquête Ad Hoc</span>
+                </h4>
+                <p className="text-[11px] text-gray-500">
+                  Consignez ici les informations complémentaires découvertes (articles de presse, conventions collectives, concurrents, interview du dirigeant, etc.) :
+                </p>
+                <textarea
+                  rows={4}
+                  value={editAdHocNotes}
+                  onChange={(e) => setEditAdHocNotes(e.target.value)}
+                  placeholder="Notes personnelles d'investigation..."
+                  className="w-full bg-gray-50 border border-gray-300 rounded-xl p-3 text-xs text-gray-900 focus:bg-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Boutons d'enregistrement */}
+              <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEditDossierModal(false)}
+                  className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-300 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Enregistrer la Fiche Vérifiée</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3 : RECTIFIER L'ENTREPRISE RECRUTEUSE CIBLE                        */}
+      {/* ========================================================================= */}
+      {showRenameCompanyModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 w-full max-w-md overflow-hidden my-auto flex flex-col">
+            <div className="px-6 py-4 bg-gray-900 text-white flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-indigo-600 rounded-xl">
+                  <Building2 className="w-5 h-5 text-white" />
+                </span>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-white">
+                    Rectifier l&apos;Entreprise Recruteuse
+                  </h3>
+                  <p className="text-[11px] text-gray-400">
+                    Remplacer le cabinet par l&apos;entreprise finale
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRenameCompanyModal(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRenameCompany} className="p-5 space-y-4">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Si l&apos;annonce a été publiée par un cabinet (ex: <em>Michael Page</em>, <em>Hays</em>, <em>Expectra</em>) et que votre recherche ad hoc a identifié l&apos;employeur réel, saisissez son nom ci-dessous :
+              </p>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 block">
+                  Nom de l&apos;entreprise recruteuse finale :
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={renameInput}
+                  onChange={(e) => setRenameInput(e.target.value)}
+                  placeholder="Ex: Valoria Capital"
+                  className="w-full bg-gray-50 border border-gray-300 rounded-xl p-3 text-xs text-gray-900 font-bold focus:bg-white focus:outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRenameCompanyModal(false)}
+                  className="px-3.5 py-2 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-300 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Mettre à jour l&apos;entreprise</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

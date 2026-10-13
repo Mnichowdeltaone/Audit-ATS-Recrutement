@@ -46,6 +46,7 @@ import {
   EvolutionStep,
   AnalysisHistoryItem,
   ApplicationItem,
+  CompanyFinancialTechnicalDossier,
 } from '../types';
 import { localDbClient } from '../services/localDbClient';
 import { parseAnalysisResult, extractScore } from '../utils/analysisParser';
@@ -221,6 +222,7 @@ export default function OptimizationFunnel({
   const [newCvTitle, setNewCvTitle] = useState('CV Optimisé Final');
   const [step2ViewMode, setStep2ViewMode] = useState<'audit' | 'company'>('audit');
   const [activeDossierTab, setActiveDossierTab] = useState<'cv' | 'letter' | 'company'>('cv');
+  const [overriddenDossier, setOverriddenDossier] = useState<CompanyFinancialTechnicalDossier | null>(null);
   const [finalCoverLetter, setFinalCoverLetter] = useState<string>('');
   const [coverLetterTitle, setCoverLetterTitle] = useState<string>('Lettre de Motivation Sur-Mesure');
   const [attachedLetterId, setAttachedLetterId] = useState<string | null>(null);
@@ -1630,11 +1632,12 @@ export default function OptimizationFunnel({
           )}
 
           {/* VUE 2 : FICHE TECHNIQUE & FINANCIÈRE DE L'ENTREPRISE */}
-          {step2ViewMode === 'company' && parsedAnalysis?.companyDossier && (
+          {step2ViewMode === 'company' && (overriddenDossier || parsedAnalysis?.companyDossier) && (
             <div className="space-y-4 animate-fade-in">
               <CompanyDossierView
-                dossier={parsedAnalysis.companyDossier}
-                roleTitle={parsedAnalysis.targetRole}
+                dossier={overriddenDossier || parsedAnalysis!.companyDossier!}
+                roleTitle={parsedAnalysis?.targetRole}
+                onDossierUpdated={(newDossier) => setOverriddenDossier(newDossier)}
               />
             </div>
           )}
@@ -2840,11 +2843,12 @@ export default function OptimizationFunnel({
           {/* =========================================================================
               PIÈCE 3 : FICHE TECHNIQUE & FINANCIÈRE DE L'ENTREPRISE RECRUTEUSE
              ========================================================================= */}
-          {activeDossierTab === 'company' && parsedAnalysis?.companyDossier && (
+          {activeDossierTab === 'company' && (overriddenDossier || parsedAnalysis?.companyDossier) && (
             <div className="space-y-4 animate-fade-in">
               <CompanyDossierView
-                dossier={parsedAnalysis.companyDossier}
-                roleTitle={parsedAnalysis.targetRole}
+                dossier={overriddenDossier || parsedAnalysis!.companyDossier!}
+                roleTitle={parsedAnalysis?.targetRole}
+                onDossierUpdated={(newDossier) => setOverriddenDossier(newDossier)}
               />
             </div>
           )}

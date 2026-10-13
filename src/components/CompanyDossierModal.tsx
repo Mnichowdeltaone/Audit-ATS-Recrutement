@@ -10,6 +10,7 @@ interface CompanyDossierModalProps {
   roleTitle?: string;
   analysisTitle?: string;
   onApplicationUpdated?: (updatedApp: ApplicationItem) => void;
+  onDossierUpdated?: (updatedDossier: CompanyFinancialTechnicalDossier) => void;
 }
 
 export default function CompanyDossierModal({
@@ -19,6 +20,7 @@ export default function CompanyDossierModal({
   roleTitle,
   analysisTitle,
   onApplicationUpdated,
+  onDossierUpdated,
 }: CompanyDossierModalProps) {
   if (!isOpen || !dossier) return null;
 
@@ -57,6 +59,7 @@ export default function CompanyDossierModal({
             dossier={dossier}
             roleTitle={roleTitle}
             onApplicationUpdated={onApplicationUpdated}
+            onDossierUpdated={onDossierUpdated}
           />
         </div>
       </div>

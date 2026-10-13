@@ -6,6 +6,7 @@ import type {
   AnalysisHistoryItem,
   SavedSuggestion,
   SavedCoverLetter,
+  CustomCalendarEvent,
   UserSettings,
   DatabaseStats,
 } from '../types';
@@ -1233,6 +1234,85 @@ export const localDbClient = {
     } catch (err) {
       console.warn('Erreur deleteCoverLetter serveur :', err);
     }
+
+    return true;
+  },
+
+  // ==========================================
+  // ÉVÉNEMENTS & RENDEZ-VOUS DU CALENDRIER (FRANCE TRAVAIL, SALONS, ETC.)
+  // ==========================================
+  getLocalCalendarEvents(): CustomCalendarEvent[] {
+    return getStorage<CustomCalendarEvent[]>('cv_move_calendar_events', []);
+  },
+
+  async getCalendarEvents(): Promise<CustomCalendarEvent[]> {
+    const local = this.getLocalCalendarEvents();
+    try {
+      const res = await fetch('/api/db/calendar-events');
+      if (res.ok) {
+        const serverList = (await res.json()) as CustomCalendarEvent[];
+        const map = new Map<string, CustomCalendarEvent>();
+        for (const e of serverList) map.set(e.id, e);
+        for (const e of local) {
+          if (!map.has(e.id)) {
+            map.set(e.id, e);
+            fetch('/api/db/calendar-events', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(e),
+            }).catch(() => {});
+          }
+        }
+        const merged = Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+        setStorage('cv_move_calendar_events', merged);
+        await setIdbCache('calendar_events', merged);
+        return merged;
+      }
+    } catch (err) {
+      console.warn('Erreur getCalendarEvents serveur :', err);
+    }
+    return local;
+  },
+
+  async saveCalendarEvent(event: CustomCalendarEvent): Promise<CustomCalendarEvent> {
+    const current = this.getLocalCalendarEvents();
+    const filtered = current.filter((e) => e.id !== event.id);
+    const updated = [event, ...filtered];
+    setStorage('cv_move_calendar_events', updated);
+    await setIdbCache('calendar_events', updated);
+
+    try {
+      await fetch('/api/db/calendar-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      });
+    } catch (err) {
+      console.warn('Erreur saveCalendarEvent serveur :', err);
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_calendar_updated', { detail: { event } }));
+    } catch {}
+
+    return event;
+  },
+
+  async deleteCalendarEvent(id: string): Promise<boolean> {
+    const current = this.getLocalCalendarEvents();
+    const updated = current.filter((e) => e.id !== id);
+    setStorage('cv_move_calendar_events', updated);
+    await setIdbCache('calendar_events', updated);
+
+    try {
+      await fetch(`/api/db/calendar-events/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Erreur deleteCalendarEvent serveur :', err);
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_calendar_updated', { detail: { deletedId: id } }));
+    } catch {}
 
     return true;
   },

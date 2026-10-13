@@ -54,6 +54,7 @@ export interface ApplicationItem {
   analysisId?: string | null;
   coverLetter?: string; // Contenu complet de la lettre de motivation rattachée
   coverLetterTitle?: string; // Titre ou sujet de la lettre
+  companyDossier?: CompanyFinancialTechnicalDossier; // Fiche technique, financière et légale d'entreprise rattachée
   checklist: {
     cvSent: boolean;
     coverLetterSent: boolean;
@@ -122,15 +123,20 @@ export interface CompanyExecutiveInfo {
 export interface LegalAndCorporateInfo {
   legalName?: string; // Raison sociale officielle (ex: VALORIA CAPITAL / GROUPE VALORIA)
   commercialBrand?: string; // Marque ou groupe
+  siren?: string; // Numéro SIREN (9 chiffres) ou SIRET (14 chiffres)
+  rcsCity?: string; // Ville d'immatriculation au RCS (ex: Paris, Nanterre, Lyon...)
   websiteUrl?: string; // Site web officiel
   headquarters?: string; // Siège social / adresse
   creationYear?: string; // Année de fondation
-  legalForm?: string; // Forme juridique (SAS, SA, etc.)
+  legalForm?: string; // Forme juridique (SAS, SA, SARL, SASU, etc.)
   keyExecutives?: CompanyExecutiveInfo[]; // Dirigeants clés & Fondateurs
   activitiesPillars?: string[]; // Piliers d'activité réels (ex: Gestion privée, Asset Management, M&A)
   aumOrKeyMetrics?: string; // Actifs sous gestion (AUM), encours, CA
   shareholdersAndBackers?: string; // Actionnariat & fonds partenaires (ex: TA Associates, Fondateur)
   recentDealsOrNews?: string[]; // Actualités M&A récentes, acquisitions
+  adHocSourceNotes?: string; // Notes et informations recueillies sur les sites ad hoc (Pappers, Société.com...)
+  verifiedOnAdHocSites?: boolean; // Indicateur que les informations ont été confrontées aux registres ad hoc
+  adHocVerifiedAt?: string; // Date de confrontation aux registres ad hoc
 }
 
 export interface StrategicPlanPhase {
@@ -172,6 +178,9 @@ export interface CompanyFinancialTechnicalDossier {
   stakeholdersCommunication?: CompanyStakeholderCommunication[]; // Cartographie et stratégie de communication par interlocuteur
   customContacts?: ApplicationContact[]; // Contacts ajoutés / suivis pour cette entreprise
   candidateNotes?: ApplicationInteraction[]; // Annotations, comptes-rendus et jalons du candidat
+  adHocSearchQuery?: string; // Requête ou mot-clé personnalisé utilisé pour la recherche sur les sites ad hoc
+  isAdHocVerified?: boolean; // Fiche confirmée et enrichie via les registres ad hoc (Pappers, Société.com...)
+  adHocVerifiedAt?: string; // Date de dernière synchronisation / vérification sur sites ad hoc
   financialProfile: {
     estimatedRevenue?: string; // Ordre de grandeur CA ou croissance
     growthStage?: string; // Forte croissance, Maturité, Restructuration...
@@ -263,6 +272,48 @@ export interface SavedCoverLetter {
   updatedAt: string;
 }
 
+export type CalendarEventType =
+  | 'interview'
+  | 'follow_up'
+  | 'france_travail'
+  | 'salon_forum'
+  | 'webinar'
+  | 'network'
+  | 'test_exam'
+  | 'call'
+  | 'email'
+  | 'feedback'
+  | 'note'
+  | 'other';
+
+export type CalendarEventCategory =
+  | 'application'
+  | 'france_travail'
+  | 'salon'
+  | 'webinar'
+  | 'network'
+  | 'personal';
+
+export interface CustomCalendarEvent {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  type: CalendarEventType;
+  category: CalendarEventCategory;
+  organizerOrCompany?: string; // Ex: "France Travail Paris 12", "Salon Emploi Porte de Versailles", "Bip&Go", etc.
+  roleOrSubject?: string; // Ex: "Entretien Mensuel Conseiller", "Forum Recrutement", "Responsable Financier", etc.
+  location?: string; // Ex: "Agence France Travail", "Paris Expo", "Visio Zoom", etc.
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  description?: string; // Notes, pièces à apporter, etc.
+  applicationId?: string; // ID de la candidature rattachée si applicable
+  isCompleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UserSettings {
   customApiKey?: string;
   selectedModel: string;
@@ -281,6 +332,7 @@ export interface DatabaseSchema {
   analyses: AnalysisHistoryItem[];
   suggestions: SavedSuggestion[];
   coverLetters?: SavedCoverLetter[]; // Lettres de motivation enregistrées
+  calendarEvents?: CustomCalendarEvent[]; // Rendez-vous et événements du calendrier (France Travail, Salons...)
   settings: UserSettings;
 }
 
@@ -290,6 +342,7 @@ export interface DatabaseStats {
   analysesCount: number;
   suggestionsCount: number;
   coverLettersCount: number;
+  calendarEventsCount?: number;
   dbSizeBytes: number;
   lastUpdated: string;
 }

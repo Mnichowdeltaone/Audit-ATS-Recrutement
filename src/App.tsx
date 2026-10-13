@@ -69,6 +69,7 @@ import { extractOfferMetadata } from './utils/offerMetadataExtractor';
 import ApplicationTracker from './components/ApplicationTracker';
 import JobSearchAnalyticsReport from './components/JobSearchAnalyticsReport';
 import JobSearchDashboardView from './components/JobSearchDashboardView';
+import ActionCalendarView from './components/ActionCalendarView';
 import CvImprovementBanner from './components/CvImprovementBanner';
 import CvAssistant from './components/CvAssistant';
 import DatabaseManager from './components/DatabaseManager';
@@ -1854,6 +1855,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate">
                   {activeTab === 'dashboard' && '📊 Accueil : Tableau de Bord de Recherche d\'Emploi'}
+                  {activeTab === 'calendar' && '📅 Calendrier & Agenda des Démarches'}
                   {activeTab === 'app' && '🎯 Analyseur d\'Adéquation ATS (CV vs Offre)'}
                   {activeTab === 'cv-assistant' && '✍️ Aide à la Création de CV (Page Blanche & CV Brut)'}
                   {activeTab === 'tracker' && '💼 Suivi des Candidatures'}
@@ -1869,6 +1871,7 @@ export default function App() {
               </div>
               <p className="text-[11px] text-gray-500 hidden sm:block truncate">
                 {activeTab === 'dashboard' && 'Vue d\'ensemble de votre recherche d\'emploi, indicateurs clés explicatifs (KPIs) et suivi de vos démarches'}
+                {activeTab === 'calendar' && 'Planifiez vos entretiens, relances, rendez-vous France Travail, salons de recrutement et démarches pro'}
                 {activeTab === 'app' && 'Comparez votre CV à l\'offre, identifiez les écarts ATS et boostez vos chances d\'entretien'}
                 {activeTab === 'cv-assistant' && 'Assistance simple pour créer un CV brut depuis une page blanche, à enrichir et améliorer par la suite'}
                 {activeTab === 'tracker' && 'Gérez vos candidatures, relances et entretiens en mode Kanban interactif'}
@@ -2014,6 +2017,21 @@ export default function App() {
                 setActiveTab('app');
               }}
             />
+          )}
+
+          {/* =========================================================================
+              ONGLET : CALENDRIER & AGENDA DES DÉMARCHES (FRANCE TRAVAIL, SALONS, ENTRETIENS)
+             ========================================================================= */}
+          {activeTab === 'calendar' && (
+            <div className="space-y-6 animate-fade-in">
+              <ActionCalendarView
+                applications={effectiveApplications}
+                setApplications={setApplications}
+                onNavigateToTab={(tab) => {
+                  setActiveTab(tab as any);
+                }}
+              />
+            </div>
           )}
 
           {/* =========================================================================
@@ -2862,6 +2880,16 @@ export default function App() {
         dossier={viewingCompanyDossier?.dossier}
         roleTitle={viewingCompanyDossier?.roleTitle}
         analysisTitle={viewingCompanyDossier?.analysisTitle}
+        onApplicationUpdated={(updatedApp) => {
+          setApplications((prev) =>
+            prev.map((item) => (item.id === updatedApp.id ? updatedApp : item))
+          );
+        }}
+        onDossierUpdated={(updatedDossier) => {
+          setViewingCompanyDossier((prev) =>
+            prev ? { ...prev, dossier: updatedDossier } : prev
+          );
+        }}
       />
     </div>
   );

@@ -20,11 +20,12 @@ import {
   X,
   BookOpen,
   TrendingUp,
+  Calendar,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
 import CvImprovementLogo from './CvImprovementLogo';
 
-export type SidebarTabType = 'dashboard' | 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
+export type SidebarTabType = 'dashboard' | 'calendar' | 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
 
 export interface NavItem {
   id: SidebarTabType;
@@ -153,6 +154,15 @@ export default function Sidebar({
           color: 'text-blue-600',
           activeBg: 'bg-blue-50 text-blue-700 border-blue-200',
           badge: applicationsCount > 0 ? String(applicationsCount) : null,
+        },
+        {
+          id: 'calendar' as const,
+          label: 'Calendrier des Démarches',
+          icon: Calendar,
+          color: 'text-indigo-600',
+          activeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+          badge: 'Agenda',
+          badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
         },
         {
           id: 'reports' as const,

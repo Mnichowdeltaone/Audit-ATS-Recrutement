@@ -9,6 +9,7 @@ import type {
   AnalysisHistoryItem,
   SavedSuggestion,
   SavedCoverLetter,
+  CustomCalendarEvent,
   UserSettings,
   DatabaseStats,
 } from '../src/types';
@@ -49,6 +50,7 @@ const DEFAULT_DATABASE: DatabaseSchema = {
   analyses: [],
   suggestions: [],
   coverLetters: [],
+  calendarEvents: [],
   settings: {
     selectedModel: 'gemini-3.8-flash',
     autoSaveToDb: true,
@@ -133,6 +135,7 @@ export function getDatabase(): DatabaseSchema {
       analyses: Array.isArray(parsed.analyses) ? parsed.analyses : DEFAULT_DATABASE.analyses,
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : DEFAULT_DATABASE.suggestions,
       coverLetters: Array.isArray(parsed.coverLetters) ? parsed.coverLetters : (DEFAULT_DATABASE.coverLetters || []),
+      calendarEvents: Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [],
       settings: { ...DEFAULT_DATABASE.settings, ...(parsed.settings || {}) },
     };
   } catch (err) {
@@ -547,6 +550,48 @@ export async function deleteCoverLetter(id: string): Promise<boolean> {
 }
 
 // =============================================================================
+// GESTION DES ÉVÉNEMENTS DU CALENDRIER (RENDEZ-VOUS FRANCE TRAVAIL, SALONS...)
+// =============================================================================
+export async function getCalendarEvents(): Promise<CustomCalendarEvent[]> {
+  const db = getDatabase();
+  return db.calendarEvents || [];
+}
+
+export async function saveCalendarEvent(event: CustomCalendarEvent): Promise<CustomCalendarEvent> {
+  const db = getDatabase();
+  if (!db.calendarEvents) db.calendarEvents = [];
+  const now = new Date().toISOString();
+  const existingIndex = db.calendarEvents.findIndex((e) => e.id === event.id);
+
+  const eventToSave: CustomCalendarEvent = {
+    ...event,
+    updatedAt: now,
+    createdAt: event.createdAt || now,
+  };
+
+  if (existingIndex >= 0) {
+    db.calendarEvents[existingIndex] = eventToSave;
+  } else {
+    db.calendarEvents.unshift(eventToSave);
+  }
+
+  await saveDatabase(db);
+  return eventToSave;
+}
+
+export async function deleteCalendarEvent(id: string): Promise<boolean> {
+  const db = getDatabase();
+  if (!db.calendarEvents) return false;
+  const initialLen = db.calendarEvents.length;
+  db.calendarEvents = db.calendarEvents.filter((e) => e.id !== id);
+  if (db.calendarEvents.length < initialLen) {
+    await saveDatabase(db);
+    return true;
+  }
+  return false;
+}
+
+// =============================================================================
 // GESTION DES PARAMÈTRES (SETTINGS)
 // =============================================================================
 export async function getSettings(): Promise<UserSettings> {
@@ -584,6 +629,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     analysesCount: db.analyses.length,
     suggestionsCount: db.suggestions.length,
     coverLettersCount: (db.coverLetters || []).length,
+    calendarEventsCount: (db.calendarEvents || []).length,
     dbSizeBytes: fileSize,
     lastUpdated: db.lastUpdated,
   };
