@@ -71,10 +71,18 @@ jobs:
         shell: bash
         run: npm install
 
+      # Les trois commandes de "npm run build-exe", avec en plus --publish never :
+      # sans cela, electron-builder essaie de publier lui-meme l'exe sur GitHub
+      # (parce qu'il detecte une etiquette de version) et s'arrete en erreur.
+      # C'est l'etape suivante de ce fichier qui depose l'exe dans la release.
       - name: Fabriquer l'installateur
+        shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run build-exe
+        run: |
+          npm run build
+          npm run build:server
+          npx electron-builder --publish never
 
       - name: Deposer l'exe dans la release
         shell: bash
