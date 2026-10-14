@@ -1,11 +1,16 @@
 name: Fabriquer l'exe Windows
 
-# Ce fichier fabrique automatiquement l'installateur Windows (.exe)
-# et le dépose dans la release GitHub correspondante.
+# Fabrique automatiquement l'installateur Windows (.exe) et le depose
+# dans la release GitHub correspondante.
 #
-# Il se déclenche de deux façons :
-#   1. quand vous publiez une release sur GitHub (cas normal) ;
-#   2. à la main, depuis l'onglet Actions (cas de rattrapage).
+# Ce que ce fichier fait tout seul (pour vous eviter des oublis) :
+#   - il prend le numero de version dans le nom de la release (v1.0.4 -> 1.0.4),
+#     donc plus besoin de modifier package.json a la main ;
+#   - si le dossier build/ (icone, image et script de l'installateur) manque
+#     dans le depot, il le recupere dans la version v1.0.3 ;
+#   - il n'a pas besoin du fichier package-lock.json.
+#
+# Declenchement : quand vous publiez une release, ou a la main depuis l'onglet Actions.
 
 on:
   release:
@@ -13,55 +18,65 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Version à fabriquer (exemple : v1.0.4)"
+        description: "Version a fabriquer (exemple : v1.0.4)"
         required: true
 
-# Autorise ce travail à ajouter un fichier à la release
 permissions:
   contents: write
 
 jobs:
   build-exe:
-    # Un ordinateur Windows prêté par GitHub
     runs-on: windows-latest
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
     steps:
-      - name: Récupérer le code de cette version
+      - name: Recuperer le code de cette version (avec l'historique)
         uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
+          fetch-depth: 0
 
       - name: Installer Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - name: Vérifier que le numéro de version est cohérent
+      - name: Regler le numero de version a partir de la release
         shell: bash
         run: |
-          VERSION_PACKAGE=$(node -p "JSON.parse(fs.readFileSync('package.json','utf8')).version")
-          VERSION_TAG="${TAG#v}"
-          echo "Version dans package.json : $VERSION_PACKAGE"
-          echo "Version de la release     : $VERSION_TAG"
-          if [ "$VERSION_PACKAGE" != "$VERSION_TAG" ]; then
-            echo "ERREUR : le numero dans package.json ne correspond pas a la release."
-            echo "Corrigez la ligne version dans package.json, puis recreez la release."
-            exit 1
-          fi
+          VERSION="${TAG#v}"
+          echo "Version de la release : $VERSION"
+          npm pkg set version="$VERSION"
+          node -p "'Version utilisee pour le build : ' + JSON.parse(fs.readFileSync('package.json','utf8')).version"
 
-      - name: Installer les dépendances
+      - name: Retablir les fichiers de l'installateur s'ils manquent
         shell: bash
-        run: npm ci || npm install
+        run: |
+          for f in build/cv-improvement.ico build/deltaone-installer.nsh build/installer-sidebar.bmp; do
+            if [ ! -f "$f" ]; then
+              echo "Manquant dans le depot : $f -> recupere dans la version v1.0.3"
+              git checkout v1.0.3 -- "$f"
+            fi
+          done
+          for f in main.cjs build/cv-improvement.ico build/deltaone-installer.nsh build/installer-sidebar.bmp; do
+            if [ ! -f "$f" ]; then
+              echo "ERREUR : fichier toujours introuvable : $f"
+              exit 1
+            fi
+          done
+          echo "Tous les fichiers de l'installateur sont presents."
+
+      - name: Installer les dependances
+        shell: bash
+        run: npm install
 
       - name: Fabriquer l'installateur
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build-exe
 
-      - name: Déposer l'exe dans la release
+      - name: Deposer l'exe dans la release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
