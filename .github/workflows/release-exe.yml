@@ -84,14 +84,28 @@ jobs:
           npm run build:server
           npx electron-builder --publish never
 
+      # Filet de securite : garde aussi une copie de l'exe dans cette execution
+      # (onglet Actions, en bas de la page de l'execution, rubrique "Artifacts").
+      - name: Garder une copie de l'exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: CV-Improvement-Setup
+          path: dist/CV Improvement Setup *.exe
+          retention-days: 14
+
       - name: Deposer l'exe dans la release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          EXE=$(find dist release -name "CV Improvement Setup*.exe" 2>/dev/null | head -n 1)
+          # On cherche l'exe avec le bash lui-meme (pas avec la commande find,
+          # qui plante si un dossier cherche n'existe pas).
+          shopt -s nullglob
+          FICHIERS=(dist/CV\ Improvement\ Setup*.exe)
+          EXE="${FICHIERS[0]}"
           if [ -z "$EXE" ]; then
-            echo "ERREUR : installateur introuvable apres la fabrication."
+            echo "ERREUR : installateur introuvable apres la fabrication. Contenu de dist :"
+            ls -la dist
             exit 1
           fi
           echo "Fichier trouve : $EXE"
