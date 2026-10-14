@@ -61,6 +61,7 @@ interface SettingsAndProfileProps {
   onProfilesUpdated?: (profiles: UserProfile[]) => void;
   onSelectProfile?: (profileId: string) => void;
   initialSubTab?: 'profile' | 'api' | 'backup' | 'tech';
+  onOpenApiKeyTutorial?: () => void;
 }
 
 export default function SettingsAndProfile({
@@ -81,6 +82,7 @@ export default function SettingsAndProfile({
   onProfilesUpdated,
   onSelectProfile,
   initialSubTab = 'profile',
+  onOpenApiKeyTutorial,
 }: SettingsAndProfileProps) {
   const [activeSubTab, setActiveSubTab] = useState<'profile' | 'api' | 'backup' | 'tech'>(initialSubTab);
   const [techView, setTechView] = useState<'code' | 'guide'>('code');
@@ -1247,6 +1249,38 @@ export default function SettingsAndProfile({
               </p>
             </div>
 
+            {/* Bannière de lancement du Tutoriel Clé API Guidé */}
+            {onOpenApiKeyTutorial && (
+              <div className="p-4 sm:p-5 bg-linear-to-r from-indigo-950 via-purple-900 to-slate-900 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg border border-indigo-500/30">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-white/10 rounded-xl text-amber-300 shrink-0">
+                    <Sparkles className="w-5 h-5 animate-spin-slow" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold bg-amber-400 text-gray-950 px-2.5 py-0.5 rounded-full shadow-2xs">
+                        Tutoriel Guidé
+                      </span>
+                      <h3 className="text-xs sm:text-sm font-black text-white">
+                        Comment obtenir et configurer sa Clé API gratuite en 2 minutes ?
+                      </h3>
+                    </div>
+                    <p className="text-[11px] text-purple-200 mt-1 leading-snug">
+                      Suivez notre guide interactif étape par étape : création sur Google AI Studio sans carte bancaire, collage sécurisé et test de connexion en direct.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenApiKeyTutorial}
+                  className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-gray-950 rounded-xl text-xs font-black shrink-0 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
+                >
+                  <Key className="w-4 h-4 text-purple-950" />
+                  <span>Lancer le Tutoriel Clé API ✨</span>
+                </button>
+              </div>
+            )}
+
             {/* Statut de clé serveur / personnalisée */}
             {apiKey.trim() ? (
               <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-start gap-3">
@@ -1288,19 +1322,32 @@ export default function SettingsAndProfile({
 
             {/* Champ de saisie de la clé */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <label className="block text-xs font-bold text-gray-700">
                   Clé API Google Gemini Personnalisée
                 </label>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 underline"
-                >
-                  <span>Obtenir une clé gratuite sur Google AI Studio</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                <div className="flex items-center gap-3">
+                  {onOpenApiKeyTutorial && (
+                    <button
+                      type="button"
+                      onClick={onOpenApiKeyTutorial}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors"
+                      title="Ouvrir le tutoriel interactif d'obtention de la clé"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Tutoriel guidé</span>
+                    </button>
+                  )}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 underline"
+                  >
+                    <span>Google AI Studio</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
 
               <div className="relative">

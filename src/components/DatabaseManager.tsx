@@ -155,6 +155,20 @@ export const DatabaseManager: React.FC<DatabaseManagerProps> = ({
 
   useEffect(() => {
     loadData();
+
+    const handleUpdate = () => {
+      loadData();
+    };
+
+    window.addEventListener('cv_move_cvs_updated', handleUpdate);
+    window.addEventListener('cv_database_updated', handleUpdate);
+    window.addEventListener('cv_move_profile_updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('cv_move_cvs_updated', handleUpdate);
+      window.removeEventListener('cv_database_updated', handleUpdate);
+      window.removeEventListener('cv_move_profile_updated', handleUpdate);
+    };
   }, []);
 
   const showNotification = (msg: string) => {

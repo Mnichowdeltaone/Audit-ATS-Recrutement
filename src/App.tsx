@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef, useMemo } from 'react';
 import {
   Home,
   FileText,
@@ -78,6 +78,9 @@ import SettingsAndProfile from './components/SettingsAndProfile';
 import Sidebar, { SidebarTabType } from './components/Sidebar';
 import InteractiveGuide from './components/InteractiveGuide';
 import InteractiveTourModal from './components/InteractiveTourModal';
+import ApiKeyTutorialModal from './components/ApiKeyTutorialModal';
+import OnboardingCompanion from './components/OnboardingCompanion';
+import { calculateOnboardingStatus } from './utils/onboardingState';
 import VisualAnalysisModal from './components/VisualAnalysisModal';
 import OptimizationFunnel from './components/OptimizationFunnel';
 import AttachLetterModal from './components/AttachLetterModal';
@@ -368,6 +371,9 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState<number>(0);
+  const [isCompanionDismissed, setIsCompanionDismissed] = useState<boolean>(false);
+  const [isApiKeyTutorialOpen, setIsApiKeyTutorialOpen] = useState(false);
   const [isVisualModalOpen, setIsVisualModalOpen] = useState(false);
   const [visualModalDefaultTab, setVisualModalDefaultTab] = useState<'report' | 'evolution'>('report');
 
@@ -542,11 +548,60 @@ export default function App() {
         setDbStats(stats || null);
         setUserProfile(profileData || null);
         setUserProfiles(profilesList || []);
+
+        // Démarrage initial / base vide / première utilisation
+        const hasCompletedOnboarding = localStorage.getItem('cv_move_onboarding_completed') === 'true';
+        const isProfileEmpty =
+          !profileData ||
+          (!profileData.firstName && !profileData.lastName && !profileData.email && !profileData.currentTitle);
+        const isDbEmpty =
+          (!profilesList || profilesList.length === 0 || isProfileEmpty) &&
+          (!cvList || cvList.length === 0) &&
+          (!appList || appList.length === 0) &&
+          (!analysesList || analysesList.length === 0);
+
+        if (!hasCompletedOnboarding || isDbEmpty) {
+          setIsTourModalOpen(true);
+        }
       } catch (err) {
         console.warn('Initialisation BDD locale :', err);
       }
     };
     initDb();
+  }, []);
+
+  // Écouteurs en temps réel pour actualiser la liste des CVs et Profils
+  useEffect(() => {
+    const handleCvsUpdated = async () => {
+      try {
+        const freshCvs = await localDbClient.getCvs();
+        setSavedCvs(freshCvs);
+        const freshStats = await localDbClient.fetchStats();
+        setDbStats(freshStats);
+      } catch (err) {
+        console.warn('Erreur synchro CVs event:', err);
+      }
+    };
+    const handleProfilesUpdated = async () => {
+      try {
+        const [p, list] = await Promise.all([
+          localDbClient.getProfile(),
+          localDbClient.getProfiles(),
+        ]);
+        setUserProfile(p);
+        setUserProfiles(list);
+      } catch (err) {
+        console.warn('Erreur synchro Profiles event:', err);
+      }
+    };
+    window.addEventListener('cv_move_cvs_updated', handleCvsUpdated);
+    window.addEventListener('cv_database_updated', handleCvsUpdated);
+    window.addEventListener('cv_move_profile_updated', handleProfilesUpdated);
+    return () => {
+      window.removeEventListener('cv_move_cvs_updated', handleCvsUpdated);
+      window.removeEventListener('cv_database_updated', handleCvsUpdated);
+      window.removeEventListener('cv_move_profile_updated', handleProfilesUpdated);
+    };
   }, []);
 
   // Réinitialisation complète en mémoire de l'application
@@ -589,7 +644,12 @@ export default function App() {
       localStorage.removeItem('cv_move_cover_letters');
       localStorage.removeItem('cv_move_user_profile');
       localStorage.removeItem('cv_move_user_profiles');
+      localStorage.removeItem('cv_move_onboarding_completed');
+      localStorage.removeItem('cv_move_used_assistant');
     } catch {}
+    setIsTourModalOpen(true);
+    setIsCompanionDismissed(false);
+    setTourStepIndex(0);
   };
 
   // Re-synchronisation globale après modification dans le gestionnaire de BDD
@@ -820,11 +880,35 @@ export default function App() {
     return localDbClient.getLocalAnalyses();
   });
 
-  // Données actives (strictement isolées selon que le mode démo fictif est actif ou non)
   const effectiveProfile = isDemoMode ? DEMO_FICTITIOUS_PROFILE : userProfile;
   const effectiveProfiles = isDemoMode ? [DEMO_FICTITIOUS_PROFILE] : userProfiles;
   const effectiveApplications = isDemoMode ? DEMO_FICTITIOUS_APPLICATIONS : applications.filter((a) => !isDemoApplication(a));
   const effectiveAnalyses = isDemoMode ? [DEMO_FICTITIOUS_ANALYSIS] : history.filter((h) => !isDemoId(h.id));
+
+  // État de validation séquentielle du mode d'emploi interactif
+  const onboardingStatus = useMemo(() => {
+    return calculateOnboardingStatus({
+      userProfile: effectiveProfile,
+      userProfiles: effectiveProfiles,
+      savedCvs: isDemoMode ? [] : savedCvs,
+      cvText,
+      history: effectiveAnalyses,
+      analysisResult,
+      applications: effectiveApplications,
+      coverLettersCount: dbStats?.coverLettersCount || 0,
+      calendarEventsCount: 0,
+    });
+  }, [
+    effectiveProfile,
+    effectiveProfiles,
+    isDemoMode,
+    savedCvs,
+    cvText,
+    effectiveAnalyses,
+    analysisResult,
+    effectiveApplications,
+    dbStats,
+  ]);
 
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -1233,7 +1317,8 @@ export default function App() {
 
     const missing: string[] = [];
     if (!apiKey.trim() && !hasServerKey && !useDemoFallback) {
-      missing.push('la Clé API Google (dans la barre latérale)');
+      missing.push('la Clé API Google Gemini (suivez notre tutoriel guidé)');
+      setIsApiKeyTutorialOpen(true);
     }
     if (!activeCvText) {
       missing.push('le texte du CV (ou importez un fichier)');
@@ -1804,7 +1889,10 @@ export default function App() {
         userProfile={effectiveProfile}
         userProfiles={effectiveProfiles}
         onSelectProfile={handleSelectProfile}
-        onOpenTour={() => setIsTourModalOpen(true)}
+        onOpenTour={() => {
+          setTourStepIndex(onboardingStatus.maxUnlockedStep);
+          setIsTourModalOpen(true);
+        }}
         apiKey={apiKey}
         hasServerKey={hasServerKey}
         selectedModel={selectedModel}
@@ -1817,6 +1905,7 @@ export default function App() {
         setIsMobileOpen={setIsMobileSidebarOpen}
         isDemoMode={isDemoMode}
         onToggleDemoMode={handleToggleDemoMode}
+        onOpenApiKeyTutorial={() => setIsApiKeyTutorialOpen(true)}
       />
 
       {/* Conteneur Principal de l'Application */}
@@ -1900,23 +1989,41 @@ export default function App() {
               <span>Bannière</span>
             </button>
 
+            {/* Bouton Tutoriel Guidé Clé API */}
+            <button
+              type="button"
+              onClick={() => setIsApiKeyTutorialOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs transition-all cursor-pointer hover:scale-102"
+              title="Ouvrir le tutoriel guidé pas-à-pas pour obtenir gratuitement votre clé API Gemini"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden sm:inline">Tutoriel Clé API</span>
+              <span className="sm:hidden">Tutoriel</span>
+            </button>
+
             {/* Statut Clé API & Modèle */}
             <button
               type="button"
-              onClick={() => setActiveTab('settings')}
+              onClick={() => {
+                if (!apiKey.trim()) {
+                  setIsApiKeyTutorialOpen(true);
+                } else {
+                  setActiveTab('settings');
+                }
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
                 apiKey.trim()
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                   : hasServerKey
                   ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
-                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 animate-pulse'
               }`}
-              title="Gérer la clé API dans Paramétrage"
+              title={apiKey.trim() ? "Gérer la clé API dans Paramétrage" : "Lancer le tutoriel guidé Clé API"}
             >
               {apiKey.trim() ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Clé personnalisée</span>
+                  <span>Clé active</span>
                 </>
               ) : hasServerKey ? (
                 <>
@@ -1926,7 +2033,7 @@ export default function App() {
               ) : (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Clé à configurer</span>
+                  <span>Clé à configurer (Tutoriel)</span>
                 </>
               )}
             </button>
@@ -2643,8 +2750,15 @@ export default function App() {
             onLoadSampleData={() => {
               handleToggleDemoMode(true);
             }}
-            userProfilesCount={userProfiles.length}
-            onOpenTour={() => setIsTourModalOpen(true)}
+            userProfilesCount={effectiveProfiles.length}
+            onOpenTour={(idx) => {
+              setTourStepIndex(idx ?? onboardingStatus.maxUnlockedStep);
+              setIsTourModalOpen(true);
+            }}
+            status={onboardingStatus}
+            onOpenApiKeyTutorial={() => setIsApiKeyTutorialOpen(true)}
+            apiKey={apiKey}
+            hasServerKey={hasServerKey}
           />
         )}
 
@@ -2677,10 +2791,26 @@ export default function App() {
             onProfilesUpdated={(updatedList) => setUserProfiles(updatedList)}
             onSelectProfile={handleSelectProfile}
             initialSubTab={activeTab === 'code' ? 'tech' : 'profile'}
+            onOpenApiKeyTutorial={() => setIsApiKeyTutorialOpen(true)}
           />
         )}
       </div>
     </div>
+
+      {/* Compagnon flottant en temps réel pour le mode d'emploi interactif */}
+      {!isTourModalOpen && !onboardingStatus.allDone && !isCompanionDismissed && (
+        <OnboardingCompanion
+          status={onboardingStatus}
+          currentStepIndex={tourStepIndex}
+          onOpenTour={(idx) => {
+            setTourStepIndex(idx ?? onboardingStatus.maxUnlockedStep);
+            setIsTourModalOpen(true);
+          }}
+          onNavigateToTab={(tab) => setActiveTab(tab)}
+          onDismiss={() => setIsCompanionDismissed(true)}
+          onOpenApiKeyTutorial={() => setIsApiKeyTutorialOpen(true)}
+        />
+      )}
 
       {/* Modal d'optimisation intelligente et création de nouveau CV */}
       <CvOptimizationModal
@@ -2720,7 +2850,7 @@ export default function App() {
         onAppliedOptimization={handleAppliedOptimization}
       />
 
-      {/* Modal Visite Guidée Interactive en 5 Étapes */}
+      {/* Modal Visite Guidée & Mode d'Emploi Interactif avec validation séquentielle obligatoire */}
       <InteractiveTourModal
         isOpen={isTourModalOpen}
         onClose={() => setIsTourModalOpen(false)}
@@ -2728,6 +2858,25 @@ export default function App() {
         onLoadSampleData={() => {
           handleToggleDemoMode(true);
         }}
+        status={onboardingStatus}
+        initialStepIndex={tourStepIndex}
+        onOpenApiKeyTutorial={() => setIsApiKeyTutorialOpen(true)}
+        apiKey={apiKey}
+        hasServerKey={hasServerKey}
+      />
+
+      {/* Modal Tutoriel Guidé pour la Clé API Google Gemini */}
+      <ApiKeyTutorialModal
+        isOpen={isApiKeyTutorialOpen}
+        onClose={() => setIsApiKeyTutorialOpen(false)}
+        currentApiKey={apiKey}
+        hasServerKey={hasServerKey}
+        selectedModel={selectedModel}
+        onSaveApiKey={(newKey) => {
+          setApiKey(newKey);
+          localDbClient.saveApiKey(newKey);
+        }}
+        onNavigateToTab={(tab) => setActiveTab(tab as any)}
       />
 
       {/* Fenêtre Dédiée Visuelle avec Graphiques et KPIs */}

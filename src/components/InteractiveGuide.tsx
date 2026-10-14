@@ -30,15 +30,23 @@ import {
   HelpCircle as QuestionIcon,
   Smile,
   PartyPopper,
+  Lock,
+  Database,
+  Key,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from '../utils/sampleData';
+import { OnboardingStatus } from '../utils/onboardingState';
 
 interface InteractiveGuideProps {
-  onNavigateToTab: (tab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => void;
+  onNavigateToTab: (tab: 'dashboard' | 'calendar' | 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings') => void;
   onLoadSampleData?: (sampleCv: string, sampleJob: string) => void;
   userProfilesCount?: number;
-  onOpenTour?: () => void;
+  onOpenTour?: (stepIndex?: number) => void;
+  status?: OnboardingStatus;
+  onOpenApiKeyTutorial?: () => void;
+  apiKey?: string;
+  hasServerKey?: boolean;
 }
 
 // Questions du Mini-Quiz Recruteur
@@ -77,8 +85,13 @@ export default function InteractiveGuide({
   onLoadSampleData,
   userProfilesCount = 1,
   onOpenTour,
+  status,
+  onOpenApiKeyTutorial,
+  apiKey = '',
+  hasServerKey = false,
 }: InteractiveGuideProps) {
   const [activeStep, setActiveStep] = useState<number>(0);
+  const [lockWarning, setLockWarning] = useState<string | null>(null);
 
   // Checklist interactive avec persistance locale
   const [checklist, setChecklist] = useState<{ [key: string]: boolean }>(() => {
@@ -241,49 +254,62 @@ export default function InteractiveGuide({
     },
     {
       id: 1,
-      title: '2. Déposer votre CV (PDF, DOCX ou Texte)',
-      badge: 'Import Simple 📄',
+      title: '2. Ajouter ou Créer votre CV (Sauvegarde BDD Garantie)',
+      badge: 'Import & Création 📄',
       color: 'from-rose-500 to-red-600',
       icon: FileText,
-      summary: 'Glissez votre document ou collez votre texte en un clin d’œil.',
+      summary: 'Importez votre document ou concevez un CV en 4 étapes avec l’outil Création CV.',
       content: (
         <div className="space-y-4 text-xs text-gray-700 leading-relaxed">
           <p>
-            L&apos;application accepte les fichiers <strong>PDF, DOCX (Word) et TXT</strong> jusqu&apos;à 15 Mo. Le texte est extrait proprement directement sur votre machine sans passer par des serveurs tiers indiscrets.
+            Vous avez deux façons simples et rapides de disposer d&apos;un CV optimisé dans l&apos;application :
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 bg-rose-50/80 border border-rose-200 rounded-2xl">
               <div className="font-bold text-rose-950 mb-1 flex items-center gap-1.5">
-                <span>📁 Glisser-déposer en 1 clic</span>
+                <span>📁 Option A : Déposer un fichier existant</span>
               </div>
               <p className="text-[11px] text-gray-600">
-                Glissez votre document dans le cadre d&apos;upload en haut de l&apos;analyseur : il est extrait instantanément.
+                Glissez votre document (PDF, Word DOCX ou TXT) dans l&apos;analyseur : il est extrait instantanément en local.
               </p>
             </div>
-            <div className="p-3.5 bg-rose-50/80 border border-rose-200 rounded-2xl">
-              <div className="font-bold text-rose-950 mb-1 flex items-center gap-1.5">
-                <span>✍️ Copier-coller libre</span>
+            <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-2xl">
+              <div className="font-bold text-purple-950 mb-1 flex items-center gap-1.5">
+                <span>✍️ Option B : Création CV (Page Blanche)</span>
               </div>
               <p className="text-[11px] text-gray-600">
-                Vous pouvez éditer ou affiner directement le texte dans la zone de saisie pour tester différentes variantes.
+                Posez les bases de votre parcours en 4 questions simples : votre CV brut est assemblé instantanément.
               </p>
             </div>
           </div>
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-[11px] text-emerald-950 font-medium flex items-center gap-2">
-              <span className="text-base">🚀</span>
-              <span><strong>Envie d&apos;essayer tout de suite ?</strong> Chargez le CV exemple de Trésorier !</span>
+
+          {/* Carte de vérification Base de Données */}
+          <div className="p-3.5 bg-cyan-50/90 border border-cyan-200 rounded-2xl space-y-1.5 shadow-2xs">
+            <div className="font-bold text-cyan-950 flex items-center gap-1.5 text-xs">
+              <Database className="w-4 h-4 text-cyan-700 shrink-0" />
+              <span>🛡️ Garantie & Vérification BDD : Enregistrement automatique</span>
             </div>
+            <p className="text-[11px] text-cyan-900 leading-relaxed">
+              <strong>Vérifié :</strong> Tous les CV conçus avec l&apos;outil « ✍️ Création CV (Page Blanche) » sont <strong>automatiquement persistés dans votre base de données locale</strong> (accessible dans l&apos;onglet <em>Base de Données Locale &gt; Mes CVs</em>). Vous pouvez les recharger, les modifier ou les réutiliser pour n&apos;importe quelle analyse !
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-1 flex-wrap">
             <button
               type="button"
-              onClick={() => {
-                onLoadSampleData?.(SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB);
-                confetti({ particleCount: 40, spread: 60 });
-                onNavigateToTab('app');
-              }}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-all hover:scale-102"
+              onClick={() => onNavigateToTab('cv-assistant')}
+              className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
             >
-              Tester l&apos;exemple complet
+              <FileText className="w-3.5 h-3.5" />
+              <span>Ouvrir « Création CV »</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateToTab('database')}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Database className="w-3.5 h-3.5 text-cyan-700" />
+              <span>Voir Mes CVs en BDD</span>
             </button>
           </div>
         </div>
@@ -431,7 +457,7 @@ export default function InteractiveGuide({
             {onOpenTour && (
               <button
                 type="button"
-                onClick={onOpenTour}
+                onClick={() => onOpenTour?.(activeStep)}
                 className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-gray-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
               >
                 <Compass className="w-4 h-4 text-purple-900" />
@@ -460,6 +486,112 @@ export default function InteractiveGuide({
               <span>Accéder à l&apos;Analyseur</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          GUIDE & TUTORIEL CLÉ API GOOGLE GEMINI (PHASE INITIALE)
+         ========================================================================= */}
+      <div className="bg-white rounded-3xl border border-indigo-200/80 p-6 sm:p-7 shadow-sm space-y-4 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-linear-to-br from-indigo-600 to-purple-600 text-white rounded-2xl shadow-sm shrink-0">
+              <Key className="w-6 h-6 text-amber-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-full">
+                  Phase Initiale
+                </span>
+                <span className="text-[10px] font-extrabold bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full">
+                  100% Gratuit & Sans Carte Bancaire
+                </span>
+                {apiKey.trim() ? (
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    <span>Clé active en mémoire</span>
+                  </span>
+                ) : hasServerKey ? (
+                  <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full">
+                    Clé Google Studio active
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">
+                    Clé à configurer
+                  </span>
+                )}
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-gray-900 mt-1">
+                Tutoriel Guidé : Obtenir & Configurer votre Clé API Google Gemini 🔑
+              </h2>
+              <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
+                Google offre un accès direct gratuit à ses modèles d&apos;intelligence artificielle (Gemini 3.8-Flash). Notre tutoriel interactif vous accompagne pas à pas pour configurer votre clé en 2 minutes.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {onOpenApiKeyTutorial && (
+              <button
+                type="button"
+                onClick={onOpenApiKeyTutorial}
+                className="px-4 py-2.5 bg-linear-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Lancer le Tutoriel Guidé ✨</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onNavigateToTab('settings')}
+              className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+            >
+              Paramétrage
+            </button>
+          </div>
+        </div>
+
+        {/* Les 4 étapes résumées */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
+              1
+            </span>
+            <div className="text-xs font-bold text-gray-900">Accès Google AI Studio</div>
+            <p className="text-[11px] text-gray-500 leading-snug">
+              Connectez-vous sur aistudio.google.com avec votre compte Gmail habituel.
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
+              2
+            </span>
+            <div className="text-xs font-bold text-gray-900">Créer sa Clé API</div>
+            <p className="text-[11px] text-gray-500 leading-snug">
+              Cliquez sur « Create API key » puis « Create key in new project » et copiez la clé.
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
+              3
+            </span>
+            <div className="text-xs font-bold text-gray-900">Coller & Enregistrer</div>
+            <p className="text-[11px] text-gray-500 leading-snug">
+              Collez la clé dans l&apos;application. Elle est sécurisée dans votre navigateur (IndexedDB).
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
+              4
+            </span>
+            <div className="text-xs font-bold text-gray-900">Test en direct</div>
+            <p className="text-[11px] text-gray-500 leading-snug">
+              Vérifiez la connexion avec affichage en temps réel de la latence en millisecondes.
+            </p>
           </div>
         </div>
       </div>
@@ -587,23 +719,58 @@ export default function InteractiveGuide({
           </div>
 
           <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-2xl flex-wrap">
-            {steps.map((step, idx) => (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => setActiveStep(idx)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeStep === idx
-                    ? 'bg-purple-600 text-white shadow-xs scale-102'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
-                }`}
-              >
-                <span>{idx + 1}.</span>
-                <span>{step.badge}</span>
-              </button>
-            ))}
+            {steps.map((step, idx) => {
+              const isUnlocked = !status || idx <= status.maxUnlockedStep;
+              const isDone = status
+                ? idx === 0
+                  ? status.isStep1Done
+                  : idx === 1
+                  ? status.isStep2Done
+                  : idx === 2
+                  ? status.isStep2Done
+                  : idx === 3
+                  ? status.isStep3Done
+                  : status.isStep5Done
+                : false;
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => {
+                    if (!isUnlocked) {
+                      setLockWarning(`🔒 Étape ${idx + 1} verrouillée : Vous devez d'abord valider l'étape précédente.`);
+                      return;
+                    }
+                    setLockWarning(null);
+                    setActiveStep(idx);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeStep === idx
+                      ? 'bg-purple-600 text-white shadow-xs scale-102'
+                      : isUnlocked
+                      ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+                      : 'text-gray-400 bg-gray-200/40 cursor-not-allowed opacity-60'
+                  }`}
+                  title={isUnlocked ? `Étape ${idx + 1}` : `Étape ${idx + 1} verrouillée`}
+                >
+                  {!isUnlocked && <Lock className="w-3 h-3 text-gray-400" />}
+                  {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                  <span>{idx + 1}.</span>
+                  <span>{step.badge}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        {/* Alerte de verrouillage */}
+        {lockWarning && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+            <Lock className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{lockWarning}</span>
+          </div>
+        )}
 
         {/* Contenu de l'étape active + Checklist */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -626,11 +793,14 @@ export default function InteractiveGuide({
               {steps[activeStep].content}
             </div>
 
-            {/* Navigation précédent / suivant */}
+            {/* Navigation précédent / suivant avec verrouillage conditionnel */}
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
-                onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
+                onClick={() => {
+                  setLockWarning(null);
+                  setActiveStep((prev) => Math.max(0, prev - 1));
+                }}
                 disabled={activeStep === 0}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 text-gray-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
@@ -639,12 +809,32 @@ export default function InteractiveGuide({
 
               <button
                 type="button"
-                onClick={() => setActiveStep((prev) => Math.min(steps.length - 1, prev + 1))}
-                disabled={activeStep === steps.length - 1}
-                className="px-5 py-2 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-30 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                onClick={() => {
+                  const canNext = !status || activeStep < status.maxUnlockedStep;
+                  if (!canNext) {
+                    setLockWarning(`🔒 Action requise : Vous devez obligatoirement valider l'étape actuelle avant de passer à l'étape suivante.`);
+                    return;
+                  }
+                  setLockWarning(null);
+                  setActiveStep((prev) => Math.min(steps.length - 1, prev + 1));
+                }}
+                disabled={activeStep === steps.length - 1 || (Boolean(status) && activeStep >= (status?.maxUnlockedStep ?? 0))}
+                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 ${
+                  !status || activeStep < status.maxUnlockedStep
+                    ? 'bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
+                }`}
+                title={
+                  !status || activeStep < status.maxUnlockedStep
+                    ? "Passer à l'étape suivante"
+                    : "Étape verrouillée : Complétez d'abord cette étape"
+                }
               >
+                {Boolean(status) && activeStep >= (status?.maxUnlockedStep ?? 0) && (
+                  <Lock className="w-3.5 h-3.5 text-gray-400" />
+                )}
                 <span>Suivant</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                {(!status || activeStep < status.maxUnlockedStep) && <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
@@ -659,7 +849,7 @@ export default function InteractiveGuide({
                 </h4>
               </div>
               <span className="text-xs font-black text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
-                {progressPercent}%
+                {status ? Math.round((status.maxUnlockedStep / 5) * 100) : progressPercent}%
               </span>
             </div>
 
@@ -667,37 +857,47 @@ export default function InteractiveGuide({
             <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
               <div
                 className="bg-linear-to-r from-purple-600 via-indigo-600 to-emerald-500 h-2.5 rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
+                style={{ width: `${status ? Math.round((status.maxUnlockedStep / 5) * 100) : progressPercent}%` }}
               ></div>
             </div>
 
             <div className="space-y-2 pt-1 text-xs">
               {[
-                { key: 'step1', label: '1. Renseigner ou remplir mon profil depuis un CV' },
-                { key: 'step2', label: '2. Déposer un CV (PDF/DOCX ou texte)' },
-                { key: 'step3', label: '3. Charger ou coller une offre d\'emploi' },
-                { key: 'step4', label: '4. Lancer une analyse d\'adéquation ATS' },
-                { key: 'step5', label: '5. Ajouter une candidature au tableau de suivi' },
-              ].map((item) => (
-                <label
-                  key={item.key}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl cursor-pointer transition-all ${
-                    checklist[item.key]
-                      ? 'bg-emerald-50/90 text-emerald-950 font-semibold border border-emerald-200/70 shadow-2xs'
-                      : 'hover:bg-white/80 text-gray-700 bg-white/40'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checklist[item.key] || false}
-                    onChange={() => toggleChecklistItem(item.key)}
-                    className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer w-4 h-4"
-                  />
-                  <span className={checklist[item.key] ? 'line-through opacity-75' : ''}>
-                    {item.label}
-                  </span>
-                </label>
-              ))}
+                { key: 'step1', label: '1. Renseigner ou remplir mon profil depuis un CV', dbDone: status?.isStep1Done },
+                { key: 'step2', label: '2. Déposer ou créer un CV (en BDD locale)', dbDone: status?.isStep2Done },
+                { key: 'step3', label: '3. Charger ou coller une offre d\'emploi', dbDone: status?.isStep2Done },
+                { key: 'step4', label: '4. Lancer une analyse d\'adéquation ATS', dbDone: status?.isStep3Done },
+                { key: 'step5', label: '5. Ajouter une candidature au tableau de suivi', dbDone: status?.isStep5Done },
+              ].map((item) => {
+                const isChecked = item.dbDone ?? checklist[item.key] ?? false;
+                return (
+                  <div
+                    key={item.key}
+                    className={`flex items-start justify-between gap-2 p-2.5 rounded-xl transition-all ${
+                      isChecked
+                        ? 'bg-emerald-50/90 text-emerald-950 font-semibold border border-emerald-200/70 shadow-2xs'
+                        : 'hover:bg-white/80 text-gray-700 bg-white/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleChecklistItem(item.key)}
+                        className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer w-4 h-4"
+                      />
+                      <span className={isChecked ? 'line-through opacity-75' : ''}>
+                        {item.label}
+                      </span>
+                    </div>
+                    {item.dbDone && (
+                      <span className="shrink-0 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">
+                        Vérifié BDD
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {completedCount === 5 ? (

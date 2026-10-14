@@ -419,6 +419,11 @@ export const localDbClient = {
       console.warn('Erreur saveProfile serveur :', err);
     }
 
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_profile_updated', { detail: updated }));
+      window.dispatchEvent(new CustomEvent('cv_database_updated', { detail: updated }));
+    } catch {}
+
     return updated;
   },
 
@@ -568,6 +573,11 @@ export const localDbClient = {
       console.warn('Erreur saveCv serveur :', err);
     }
 
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_cvs_updated', { detail: cv }));
+      window.dispatchEvent(new CustomEvent('cv_database_updated', { detail: cv }));
+    } catch {}
+
     return cv;
   },
 
@@ -584,6 +594,11 @@ export const localDbClient = {
     } catch (err) {
       console.warn('Erreur deleteCv serveur :', err);
     }
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_cvs_updated', { detail: { id, deleted: true } }));
+      window.dispatchEvent(new CustomEvent('cv_database_updated', { detail: { id, deleted: true } }));
+    } catch {}
 
     return true;
   },

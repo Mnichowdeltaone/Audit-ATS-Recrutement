@@ -21,6 +21,7 @@ import {
   BookOpen,
   TrendingUp,
   Calendar,
+  Key,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
 import CvImprovementLogo from './CvImprovementLogo';
@@ -63,6 +64,7 @@ interface SidebarProps {
   setIsMobileOpen: (open: boolean) => void;
   isDemoMode?: boolean;
   onToggleDemoMode?: (enable: boolean) => void;
+  onOpenApiKeyTutorial?: () => void;
 }
 
 export default function Sidebar({
@@ -86,6 +88,7 @@ export default function Sidebar({
   setIsMobileOpen,
   isDemoMode = false,
   onToggleDemoMode,
+  onOpenApiKeyTutorial,
 }: SidebarProps) {
   // Navigation cliquable avec gestion du menu mobile
   const handleNavClick = (tab: SidebarTabType) => {
@@ -443,9 +446,21 @@ export default function Sidebar({
                 </div>
               </div>
             </div>
+
+            {onOpenApiKeyTutorial && (
+              <button
+                type="button"
+                onClick={onOpenApiKeyTutorial}
+                className="w-full py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200/80 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:scale-102"
+                title="Ouvrir le tutoriel guidé pas-à-pas pour la clé API"
+              >
+                <Sparkles className="w-3 h-3 text-indigo-600" />
+                <span>Tutoriel Clé API ✨</span>
+              </button>
+            )}
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-1">
             <button
               type="button"
               onClick={() => handleNavClick('settings')}
@@ -466,6 +481,16 @@ export default function Sidebar({
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
               )}
             </button>
+            {onOpenApiKeyTutorial && (
+              <button
+                type="button"
+                onClick={onOpenApiKeyTutorial}
+                className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 cursor-pointer"
+                title="Tutoriel Clé API gratuit"
+              >
+                <Key className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
       </div>

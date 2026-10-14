@@ -174,10 +174,32 @@ FORMATION & DIPLÔMES
 
     setRawCvText(assembled);
     setIsAssembling(false);
+
+    // Sauvegarde AUTOMATIQUE immédiate dans la base de données locale (Mes CVs)
+    const roleTitle = targetRole.trim() || 'Nouveau Profil';
+    const newCvItem: SavedCv = {
+      id: `cv-${Date.now()}`,
+      title: `CV Brut - ${roleTitle} (${new Date().toLocaleDateString('fr-FR')})`,
+      targetRole: roleTitle,
+      fileName: 'cv_page_blanche.txt',
+      fileType: 'manual',
+      rawText: assembled,
+      isDefault: true,
+      fileSize: new Blob([assembled]).size,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    localDbClient.saveCv(newCvItem).then((saved) => {
+      try {
+        window.dispatchEvent(new CustomEvent('cv_database_updated', { detail: saved }));
+      } catch {}
+    }).catch((err) => console.warn('Erreur auto-save CV:', err));
+
     confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
     setNotice({
       type: 'success',
-      message: '🎉 Votre CV brut est généré ! Vous pouvez le relire et passer à l’enrichissement ci-dessous.',
+      message: '🎉 Votre CV brut est généré et sauvegardé dans la Base de Données Locale (Mes CVs) !',
     });
     setTimeout(() => setNotice(null), 4000);
   };
@@ -199,17 +221,44 @@ FORMATION & DIPLÔMES
     setTimeout(() => setNotice(null), 2500);
   };
 
-  // Passer à l'enrichissement dans l'Analyseur ATS (exactement ce que demande l'utilisateur)
-  const handleSendToAnalyzer = () => {
+  // Passer à l'enrichissement dans l'Analyseur ATS (sauvegarde garantie en BDD)
+  const handleSendToAnalyzer = async () => {
     if (!rawCvText.trim()) return;
+
+    try {
+      const roleTitle = targetRole.trim() || 'Page Blanche';
+      const newCvItem: SavedCv = {
+        id: `cv-${Date.now()}`,
+        title: `CV - ${roleTitle} (${new Date().toLocaleDateString('fr-FR')})`,
+        targetRole: roleTitle,
+        fileName: 'cv_page_blanche.txt',
+        fileType: 'manual',
+        rawText: rawCvText,
+        isDefault: true,
+        fileSize: new Blob([rawCvText]).size,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const saved = await localDbClient.saveCv(newCvItem);
+      try {
+        window.dispatchEvent(new CustomEvent('cv_database_updated', { detail: saved }));
+      } catch {}
+    } catch (err) {
+      console.warn('Erreur sauvegarde avant redirection analyseur:', err);
+    }
+
+    try {
+      localStorage.setItem('cv_move_used_assistant', 'true');
+    } catch {}
+
     onApplyToCv(rawCvText);
     setNotice({
       type: 'success',
-      message: 'CV brut injecté dans l’Analyseur d’Adéquation ! Redirection...',
+      message: '💾 CV brut sauvegardé en BDD et injecté dans l’Analyseur d’Adéquation ! Redirection...',
     });
     setTimeout(() => {
       onNavigateToAnalyzer();
-    }, 1000);
+    }, 800);
   };
 
   // Enrichissement IA facultatif direct
@@ -285,20 +334,23 @@ FORMATION & DIPLÔMES
     if (!rawCvText.trim()) return;
     try {
       const title = `CV Brut - ${targetRole || 'Nouveau Profil'} (${new Date().toLocaleDateString('fr-FR')})`;
-      await localDbClient.saveCv({
+      const saved = await localDbClient.saveCv({
         id: `cv-${Date.now()}`,
         title,
         targetRole: targetRole || 'Général',
         fileName: 'cv_brut.txt',
         fileType: 'manual',
         rawText: rawCvText,
-        isDefault: false,
+        isDefault: true,
         fileSize: new Blob([rawCvText]).size,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
+      try {
+        window.dispatchEvent(new CustomEvent('cv_database_updated', { detail: saved }));
+      } catch {}
       setIsSaved(true);
-      setNotice({ type: 'success', message: '⭐ CV brut sauvegardé dans votre base locale !' });
+      setNotice({ type: 'success', message: '⭐ CV brut sauvegardé avec succès dans votre base locale (Mes CVs) !' });
       setTimeout(() => {
         setIsSaved(false);
         setNotice(null);
