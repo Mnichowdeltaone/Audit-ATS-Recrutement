@@ -19,6 +19,7 @@ import {
   Send,
   Building2,
   RotateCcw,
+  Bot,
 } from 'lucide-react';
 import type { ApplicationItem, AnalysisHistoryItem, UserProfile, SavedCv } from '../types';
 import { DEMO_FICTITIOUS_PROFILE } from '../utils/demoData';
@@ -31,7 +32,7 @@ interface JobSearchDashboardViewProps {
   userProfile: UserProfile | null;
   isDemoMode?: boolean;
   onToggleDemoMode?: (enable: boolean) => void;
-  onNavigateToTab: (tab: 'dashboard' | 'calendar' | 'app' | 'tracker' | 'cv-assistant' | 'reports' | 'history' | 'database' | 'settings') => void;
+  onNavigateToTab: (tab: 'dashboard' | 'job-robot' | 'calendar' | 'app' | 'tracker' | 'cv-assistant' | 'reports' | 'history' | 'database' | 'settings') => void;
   onOpenAnalysis?: (analysisId: string) => void;
   onSelectCvForAnalyzer?: (text: string) => void;
 }
@@ -156,11 +157,11 @@ export const JobSearchDashboardView: React.FC<JobSearchDashboardViewProps> = ({
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <button
               type="button"
-              onClick={() => onNavigateToTab('cv-assistant')}
-              className="px-4 py-2.5 bg-[#00D287] hover:bg-[#00c07a] text-[#0A2540] rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+              onClick={() => onNavigateToTab('job-robot')}
+              className="px-4 py-2.5 bg-gradient-to-r from-cyan-400 to-blue-400 hover:from-cyan-300 hover:to-blue-300 text-slate-950 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95"
             >
-              <FileText className="w-4 h-4" />
-              <span>Créer un CV brut (Page blanche)</span>
+              <Bot className="w-4 h-4 text-slate-950" />
+              <span>Robot Chasseur d'Offres</span>
             </button>
 
             <button

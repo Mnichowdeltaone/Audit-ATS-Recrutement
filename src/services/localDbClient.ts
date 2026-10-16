@@ -7,6 +7,8 @@ import type {
   SavedSuggestion,
   SavedCoverLetter,
   CustomCalendarEvent,
+  ScrapedJobOffer,
+  JobScoutConfig,
   UserSettings,
   DatabaseStats,
 } from '../types';
@@ -88,7 +90,11 @@ function getStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
     if (item !== null && item.trim() !== '' && item !== 'undefined' && item !== 'null') {
-      return JSON.parse(item) as T;
+      try {
+        return JSON.parse(item) as T;
+      } catch {
+        localStorage.removeItem(key);
+      }
     }
   } catch (err) {
     console.warn(`Erreur lecture ${key} :`, err);
@@ -209,6 +215,8 @@ export const localDbClient = {
     const analyses = this.getLocalAnalyses();
     const suggestions = getStorage<SavedSuggestion[]>('cv_move_suggestions', []);
     const coverLetters = this.getLocalCoverLetters();
+    const scoutedOffers = this.getLocalScoutedOffers();
+    const calendarEvents = this.getLocalCalendarEvents();
 
     return {
       cvsCount: cvs.length,
@@ -216,7 +224,9 @@ export const localDbClient = {
       analysesCount: analyses.length,
       suggestionsCount: suggestions.length,
       coverLettersCount: coverLetters.length,
-      dbSizeBytes: JSON.stringify({ cvs, applications, analyses, suggestions, coverLetters }).length,
+      calendarEventsCount: calendarEvents.length,
+      scoutedOffersCount: scoutedOffers.length,
+      dbSizeBytes: JSON.stringify({ cvs, applications, analyses, suggestions, coverLetters, scoutedOffers }).length,
       lastUpdated: new Date().toISOString(),
     };
   },
@@ -229,6 +239,8 @@ export const localDbClient = {
     const analyses = await this.getAnalyses();
     const suggestions = await this.getSuggestions();
     const coverLetters = await this.getCoverLetters();
+    const scoutedOffers = await this.getScoutedOffers();
+    const jobScoutConfig = await this.getJobScoutConfig();
     const settings = await this.getSettings();
 
     return {
@@ -255,6 +267,8 @@ export const localDbClient = {
       analyses,
       suggestions,
       coverLetters,
+      scoutedOffers,
+      jobScoutConfig,
       settings,
     };
   },
@@ -794,6 +808,26 @@ export const localDbClient = {
       console.warn('Erreur saveAnalysis serveur :', err);
     }
 
+    try {
+      window.dispatchEvent(
+        new CustomEvent('cv_move_analysis_updated', {
+          detail: {
+            analysisId: item.id,
+            letter: item.coverLetterContent
+              ? {
+                  id: item.coverLetterId || `letter-${item.id}`,
+                  title: item.coverLetterTitle || `Lettre - ${item.company || item.title}`,
+                  company: item.company,
+                  role: item.role,
+                  content: item.coverLetterContent,
+                  analysisId: item.id,
+                }
+              : null,
+          },
+        })
+      );
+    } catch {}
+
     return item;
   },
 
@@ -1008,7 +1042,7 @@ export const localDbClient = {
     return letter;
   },
 
-  // Trouver la lettre rattachée à un audit (par son ID d'audit ou par correspondance d'entreprise)
+  // Trouver la lettre rattachée à un audit (par son ID d'audit ou par correspondance stricte d'entreprise)
   getCoverLetterForAnalysis(analysisId?: string | null, companyName?: string | null): SavedCoverLetter | null {
     // 1. Recherche directe dans l'analyse elle-même si elle stocke déjà la lettre
     if (analysisId) {
@@ -1030,49 +1064,68 @@ export const localDbClient = {
 
     const list = this.getLocalCoverLetters();
 
-    // 2. Recherche par ID direct de l'audit dans les lettres
+    // 2. Recherche par ID direct de l'audit dans les lettres enregistrées
     if (analysisId && list && list.length > 0) {
       const directMatch = list.find((l) => l.analysisId === analysisId);
       if (directMatch) return directMatch;
     }
 
-    // 3. Recherche par correspondance d'entreprise / intitulé si pas de lien direct explicite
+    // 3. Recherche par correspondance d'entreprise STRICTE UNIQUEMENT si la lettre n'est pas déjà rattachée à un AUTRE audit
     if (companyName && companyName.trim() && list && list.length > 0) {
+      const genericWords = ['entreprise', 'cabinet', 'confidentiel', 'client', 'societe', 'recrutement', 'groupe', 'france'];
       const normalizedTarget = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (normalizedTarget.length > 2) {
+
+      if (normalizedTarget.length >= 3 && !genericWords.includes(normalizedTarget)) {
         const companyMatch = list.find((l) => {
+          // INTERDICTION FORMELLE : Ne JAMAIS retourner une lettre qui appartient explicitement à un AUTRE audit différent !
+          if (l.analysisId && analysisId && l.analysisId !== analysisId) {
+            return false;
+          }
+
           const lCompany = (l.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          const lTitle = (l.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!lCompany || genericWords.includes(lCompany)) return false;
+
+          // Correspondance exacte ou préfixe long identique (min 6 caractères)
           return (
-            (lCompany.length > 2 && (lCompany.includes(normalizedTarget) || normalizedTarget.includes(lCompany))) ||
-            (lTitle.length > 2 && lTitle.includes(normalizedTarget))
+            lCompany === normalizedTarget ||
+            (lCompany.length >= 6 && normalizedTarget.length >= 6 && (lCompany.startsWith(normalizedTarget) || normalizedTarget.startsWith(lCompany)))
           );
         });
+
         if (companyMatch) return companyMatch;
       }
     }
 
-    // 4. Recherche dans les candidatures Kanban si une lettre existe pour cette entreprise
+    // 4. Recherche dans les candidatures Kanban uniquement avec correspondance exacte d'entreprise
     if (companyName && companyName.trim()) {
       const apps = this.getLocalApplications();
+      const genericWords = ['entreprise', 'cabinet', 'confidentiel', 'client', 'societe', 'recrutement', 'groupe', 'france'];
       const normalizedTarget = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchedApp = apps.find((app) => {
-        if (!app.coverLetter || !app.coverLetter.trim()) return false;
-        const appCompany = (app.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        return appCompany.length > 2 && (appCompany.includes(normalizedTarget) || normalizedTarget.includes(appCompany));
-      });
-      if (matchedApp && matchedApp.coverLetter) {
-        return {
-          id: `letter-app-${matchedApp.id}`,
-          title: matchedApp.coverLetterTitle || `Lettre - ${matchedApp.company}`,
-          company: matchedApp.company,
-          role: matchedApp.role,
-          content: matchedApp.coverLetter,
-          applicationId: matchedApp.id,
-          analysisId: analysisId || undefined,
-          createdAt: matchedApp.appliedDate || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+
+      if (normalizedTarget.length >= 3 && !genericWords.includes(normalizedTarget)) {
+        const matchedApp = apps.find((app) => {
+          if (!app.coverLetter || !app.coverLetter.trim()) return false;
+          const appCompany = (app.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!appCompany || genericWords.includes(appCompany)) return false;
+          return (
+            appCompany === normalizedTarget ||
+            (appCompany.length >= 6 && normalizedTarget.length >= 6 && (appCompany.startsWith(normalizedTarget) || normalizedTarget.startsWith(appCompany)))
+          );
+        });
+
+        if (matchedApp && matchedApp.coverLetter) {
+          return {
+            id: `letter-app-${matchedApp.id}`,
+            title: matchedApp.coverLetterTitle || `Lettre - ${matchedApp.company}`,
+            company: matchedApp.company,
+            role: matchedApp.role,
+            content: matchedApp.coverLetter,
+            applicationId: matchedApp.id,
+            analysisId: analysisId || undefined,
+            createdAt: matchedApp.appliedDate || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
       }
     }
 
@@ -1333,6 +1386,174 @@ export const localDbClient = {
   },
 
   // ==========================================
+  // ROBOT CHASSEUR D'OFFRES (JOB SCOUT)
+  // ==========================================
+  getLocalScoutedOffers(): ScrapedJobOffer[] {
+    return getStorage<ScrapedJobOffer[]>('cv_move_scouted_offers', []);
+  },
+
+  async getScoutedOffers(): Promise<ScrapedJobOffer[]> {
+    const local = this.getLocalScoutedOffers();
+    try {
+      const res = await fetch('/api/db/scouted-offers');
+      if (res.ok) {
+        const serverList = (await res.json()) as ScrapedJobOffer[];
+        const map = new Map<string, ScrapedJobOffer>();
+        for (const o of serverList) map.set(o.id, o);
+        for (const o of local) {
+          if (!map.has(o.id)) {
+            map.set(o.id, o);
+            fetch('/api/db/scouted-offers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(o),
+            }).catch(() => {});
+          }
+        }
+        const merged = Array.from(map.values()).sort((a, b) => b.relevanceScore - a.relevanceScore);
+        setStorage('cv_move_scouted_offers', merged);
+        await setIdbCache('scouted_offers', merged);
+        return merged;
+      }
+    } catch (err) {
+      console.warn('Erreur getScoutedOffers serveur :', err);
+    }
+    return local;
+  },
+
+  async saveScoutedOffer(offer: ScrapedJobOffer): Promise<ScrapedJobOffer> {
+    const current = this.getLocalScoutedOffers();
+    const filtered = current.filter((o) => o.id !== offer.id);
+    const updated = [offer, ...filtered].sort((a, b) => b.relevanceScore - a.relevanceScore);
+    setStorage('cv_move_scouted_offers', updated);
+    await setIdbCache('scouted_offers', updated);
+
+    try {
+      await fetch('/api/db/scouted-offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(offer),
+      });
+    } catch (err) {
+      console.warn('Erreur saveScoutedOffer serveur :', err);
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_scouted_offers_updated', { detail: { offer } }));
+    } catch {}
+
+    return offer;
+  },
+
+  async saveScoutedOffers(offers: ScrapedJobOffer[]): Promise<ScrapedJobOffer[]> {
+    const current = this.getLocalScoutedOffers();
+    const map = new Map<string, ScrapedJobOffer>();
+    for (const o of current) map.set(o.id, o);
+    for (const o of offers) map.set(o.id, o);
+
+    const merged = Array.from(map.values()).sort((a, b) => b.relevanceScore - a.relevanceScore);
+    setStorage('cv_move_scouted_offers', merged);
+    await setIdbCache('scouted_offers', merged);
+
+    try {
+      for (const o of offers) {
+        fetch('/api/db/scouted-offers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(o),
+        }).catch(() => {});
+      }
+    } catch {}
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_scouted_offers_updated', { detail: { offers: merged } }));
+    } catch {}
+
+    return merged;
+  },
+
+  async updateScoutedOffer(id: string, updates: Partial<ScrapedJobOffer>): Promise<ScrapedJobOffer | null> {
+    const current = this.getLocalScoutedOffers();
+    const index = current.findIndex((o) => o.id === id);
+    if (index === -1) return null;
+
+    current[index] = { ...current[index], ...updates };
+    setStorage('cv_move_scouted_offers', current);
+    await setIdbCache('scouted_offers', current);
+
+    try {
+      await fetch(`/api/db/scouted-offers/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+    } catch {}
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_scouted_offers_updated', { detail: { updatedId: id } }));
+    } catch {}
+
+    return current[index];
+  },
+
+  async deleteScoutedOffer(id: string): Promise<boolean> {
+    const current = this.getLocalScoutedOffers();
+    const updated = current.filter((o) => o.id !== id);
+    setStorage('cv_move_scouted_offers', updated);
+    await setIdbCache('scouted_offers', updated);
+
+    try {
+      await fetch(`/api/db/scouted-offers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch {}
+
+    try {
+      window.dispatchEvent(new CustomEvent('cv_move_scouted_offers_updated', { detail: { deletedId: id } }));
+    } catch {}
+
+    return true;
+  },
+
+  async getJobScoutConfig(): Promise<JobScoutConfig> {
+    const local = getStorage<JobScoutConfig | null>('cv_move_job_scout_config', null);
+    if (local) return local;
+
+    try {
+      const res = await fetch('/api/db/scout-config');
+      if (res.ok) {
+        const conf = (await res.json()) as JobScoutConfig;
+        setStorage('cv_move_job_scout_config', conf);
+        return conf;
+      }
+    } catch {}
+
+    return {
+      autoScanEnabled: true,
+      targetProfileIds: ['all'],
+      keywords: [],
+      locations: [],
+      contractTypes: ['CDI', 'CDD', 'Freelance'],
+      minMatchScore: 65,
+      sources: ['France Travail', 'LinkedIn', 'Apec', 'Welcome to the Jungle', 'Indeed'],
+    };
+  },
+
+  async saveJobScoutConfig(config: Partial<JobScoutConfig>): Promise<JobScoutConfig> {
+    const current = await this.getJobScoutConfig();
+    const updated: JobScoutConfig = { ...current, ...config };
+    setStorage('cv_move_job_scout_config', updated);
+
+    try {
+      await fetch('/api/db/scout-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch {}
+
+    return updated;
+  },
+
+  // ==========================================
   // PARAMÈTRES
   // ==========================================
   async getSettings(): Promise<UserSettings> {
@@ -1383,6 +1604,8 @@ export const localDbClient = {
     if (data.analyses) setStorage('cv_move_history', data.analyses);
     if (data.suggestions) setStorage('cv_move_suggestions', data.suggestions);
     if (data.coverLetters) setStorage('cv_move_cover_letters', data.coverLetters);
+    if (data.scoutedOffers) setStorage('cv_move_scouted_offers', data.scoutedOffers);
+    if (data.jobScoutConfig) setStorage('cv_move_job_scout_config', data.jobScoutConfig);
 
     const res = await fetch('/api/db/import', {
       method: 'POST',
@@ -1411,6 +1634,9 @@ export const localDbClient = {
       'cv_move_history',
       'cv_move_suggestions',
       'cv_move_cover_letters',
+      'cv_move_calendar_events',
+      'cv_move_scouted_offers',
+      'cv_move_job_scout_config',
       'cv_move_current_cv_text',
       'cv_move_current_job_text',
       'cv_move_current_job_url',
@@ -1429,6 +1655,8 @@ export const localDbClient = {
     setStorage('cv_move_history', []);
     setStorage('cv_move_suggestions', []);
     setStorage('cv_move_cover_letters', []);
+    setStorage('cv_move_calendar_events', []);
+    setStorage('cv_move_scouted_offers', []);
     setStorage('cv_move_user_profiles', []);
     setStorage('cv_move_user_profile', null);
 

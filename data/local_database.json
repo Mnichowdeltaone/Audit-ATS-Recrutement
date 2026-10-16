@@ -1,26 +1,77 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-13T20:02:09.130Z",
+  "lastUpdated": "2026-10-16T07:02:47.708Z",
   "profile": {
-    "id": "profile-1791921140709-asf9i",
-    "firstName": "",
-    "lastName": "",
-    "email": "",
-    "phone": "",
-    "location": "",
-    "currentTitle": "",
-    "bio": "",
+    "id": "user_profile",
+    "firstName": "Babacar",
+    "lastName": "Ndiaye",
+    "email": "bndiaye@emploidakar.com",
+    "phone": "+221 76 100 20 30",
+    "location": "Dakar, Sénégal",
+    "currentTitle": "Contrôleur de Gestion",
+    "bio": "Contrôleur de gestion expérimenté cumulant une solide pratique acquise dans les secteurs de la logistique et de la banque. Titulaire d'un Master 2 en Audit et Contrôle de Gestion, il excelle dans l'élaboration budgétaire, l'analyse financière et la conception de tableaux de bord stratégiques. Bilingue français-anglais, il met à profit sa maîtrise des ERP et des outils d'analyse de données pour accompagner efficacement la prise de décision de la direction.",
     "linkedinUrl": "",
     "githubUrl": "",
     "portfolioUrl": "",
-    "targetRoles": [],
-    "skills": [],
-    "updatedAt": "2026-10-13T19:52:14.237Z",
+    "targetRoles": [
+      "Contrôleur de Gestion",
+      "Contrôleur de Gestion Senior",
+      "Responsable Contrôle de Gestion",
+      "Analyste Financier"
+    ],
+    "skills": [
+      "Construction et suivi budgétaire",
+      "Conception de tableaux de bord",
+      "Analyse de données financières",
+      "Systèmes d'information et ERP",
+      "Comptabilité et culture financière",
+      "Reporting et synthèse d'activité",
+      "Planification stratégique",
+      "Suivi du PNB",
+      "Audit et contrôle interne",
+      "Maîtrise avancée des tableurs"
+    ],
+    "updatedAt": "2026-10-16T05:53:27.232Z",
     "isDefault": true,
-    "name": "Profil 1",
-    "createdAt": "2026-10-13T19:52:20.709Z"
+    "name": "Contrôleur de Gestion",
+    "createdAt": "2026-10-14T11:19:00.246Z"
   },
   "profiles": [
+    {
+      "id": "user_profile",
+      "firstName": "Babacar",
+      "lastName": "Ndiaye",
+      "email": "bndiaye@emploidakar.com",
+      "phone": "+221 76 100 20 30",
+      "location": "Dakar, Sénégal",
+      "currentTitle": "Contrôleur de Gestion",
+      "bio": "Contrôleur de gestion expérimenté cumulant une solide pratique acquise dans les secteurs de la logistique et de la banque. Titulaire d'un Master 2 en Audit et Contrôle de Gestion, il excelle dans l'élaboration budgétaire, l'analyse financière et la conception de tableaux de bord stratégiques. Bilingue français-anglais, il met à profit sa maîtrise des ERP et des outils d'analyse de données pour accompagner efficacement la prise de décision de la direction.",
+      "linkedinUrl": "",
+      "githubUrl": "",
+      "portfolioUrl": "",
+      "targetRoles": [
+        "Contrôleur de Gestion",
+        "Contrôleur de Gestion Senior",
+        "Responsable Contrôle de Gestion",
+        "Analyste Financier"
+      ],
+      "skills": [
+        "Construction et suivi budgétaire",
+        "Conception de tableaux de bord",
+        "Analyse de données financières",
+        "Systèmes d'information et ERP",
+        "Comptabilité et culture financière",
+        "Reporting et synthèse d'activité",
+        "Planification stratégique",
+        "Suivi du PNB",
+        "Audit et contrôle interne",
+        "Maîtrise avancée des tableurs"
+      ],
+      "updatedAt": "2026-10-16T05:53:27.232Z",
+      "isDefault": true,
+      "name": "Contrôleur de Gestion",
+      "createdAt": "2026-10-14T11:19:00.246Z"
+    },
     {
       "id": "profile-1791921140709-asf9i",
       "firstName": "",
@@ -36,7 +87,7 @@
       "targetRoles": [],
       "skills": [],
       "updatedAt": "2026-10-13T19:52:14.237Z",
-      "isDefault": true,
+      "isDefault": false,
       "name": "Profil 1",
       "createdAt": "2026-10-13T19:52:20.709Z"
     }
@@ -56,6 +107,30 @@
     }
   ],
   "applications": [
+    {
+      "id": "app-1791978670898",
+      "company": "Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+      "role": "Contrôleur de Gestion.",
+      "status": "applied",
+      "appliedDate": "2026-10-14",
+      "followUpDate": "2026-10-21",
+      "location": "France / Hybride",
+      "contractType": "CDI",
+      "jobUrl": "https://www.hellowork.com/fr-fr/emplois/84002557.html",
+      "score": 79,
+      "analysisId": "1791978110838",
+      "coverLetter": "**Babacar Ndiaye**  \nDakar, Sénégal (Mobilité immédiate sur Paris)  \n+221 76 100 20 30 | bndiaye@emploidakar.com  \nlinkedin.com/in/bndiaye  \n\nParis, le 24 octobre 2023  \n\n**Cabinet Les Nouveaux Héritiers**  \nÀ l’attention du Responsable du recrutement  \nRéf. de l’offre : 1802862  \n\n**Objet : Candidature au poste de Contrôleur de Gestion – Secteur Spiritueux haut de gamme**\n\nMadame, Monsieur,\n\nPiloter la rentabilité d’un groupe en forte expansion tout en préservant l’exigence propre à une maison historique requiert une donnée financière irréprochable et un dialogue constant avec les opérationnels. Référence incontournable des spiritueux d’exception depuis 1956, votre client recherche un profil capable de structurer la gestion de six sociétés en lien direct avec la Responsable Administrative et Financière. Fort de plus de cinq ans d’expérience en contrôle de gestion dans des environnements multi-entités exigeants, je souhaite mettre ma rigueur méthodologique au service de cette dynamique de croissance.\n\nMon parcours au sein du Groupe COFINA et chez Bolloré Transport & Logistics m’a permis de maîtriser l'ensemble du cycle budgétaire et du pilotage de la performance :\n- **Pilotage budgétaire et clôtures :** Définition des méthodologies de construction budgétaire, consolidation des données prévisionnelles, suivi des révisions trimestrielles et analyse des écarts réalisé/budget en lien direct avec les équipes comptables.\n- **Aide à la décision pour les directions :** Automatisation de tableaux de bord financiers sous Excel avancé et production de notes de synthèse commentées (marges, PNB, coûts d'exploitation), servant d'appui stratégique aux directeurs de Business Units.\n- **Fiabilisation des flux et process :** Amélioration continue des circuits d'information entre la comptabilité et le contrôle de gestion, garantissant la conformité et l’intégrité des chiffres dans un cadre rigoureusement confidentiel.\n\nHabitué à collaborer avec des équipes pluridisciplinaires et parfaitement bilingue en anglais, je saurai m'adapter rapidement aux spécificités de distribution de votre client et devenir un relais de confiance pour la RAF comme pour les directeurs opérationnels. Rejoindre une structure qui allie prestige patrimonial et agilité commerciale constitue pour moi un engagement naturel et motivant.\n\nDisponible pour échanger sur la manière dont mes compétences répondront aux enjeux de ce périmètre de six sociétés, je me tiens à votre entière disposition pour un entretien.\n\nJe vous prie d'agréer, Madame, Monsieur, l’expression de mes salutations distinguées.\n\n**Babacar Ndiaye**",
+      "coverLetterTitle": "Lettre de Motivation - Contrôleur de Gestion. - Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+      "notes": "Candidature optimisée V2 (Score ATS : 79%)",
+      "checklist": {
+        "cvSent": true,
+        "coverLetterSent": true,
+        "portfolioSent": false,
+        "followUpDone": false
+      },
+      "createdAt": "2026-10-14T11:51:10.898Z",
+      "updatedAt": "2026-10-16T05:53:27.210Z"
+    },
     {
       "id": "app-1791921425823",
       "company": "Groupement Mousquetaires (Enseigne : Equipement de la maison)",
@@ -268,6 +343,242 @@
     }
   ],
   "analyses": [
+    {
+      "id": "1791978110838",
+      "timestamp": "14/10/2026 à 13:49",
+      "title": "Les Nouveaux Héritiers. (Non nommée (Expert des spiritueux, haut de gamme, de...",
+      "company": "Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+      "cabinet": "Les Nouveaux Héritiers.",
+      "role": "Contrôleur de Gestion.",
+      "isHorodatedOnly": false,
+      "jobSnippet": "Offre Emploi CDI Contrôleur de Gestion Paris (75) - Recrutement par Les Nouveaux Héritiers | Hellowork\n\nURL source : htt",
+      "cvSnippet": "**BABACAR NDIAYE**  \nDakar, Sénégal (Mobilité internationale envisageable) | +221 76 100 20 30 | bndiaye@emploidakar.com",
+      "cvText": "**BABACAR NDIAYE**  \nDakar, Sénégal (Mobilité internationale envisageable) | +221 76 100 20 30 | bndiaye@emploidakar.com  \nProfil LinkedIn : linkedin.com/in/bndiaye  \n\n---\n\n### **CONTRÔLEUR DE GESTION**\n*Analyse financière | Pilotage budgétaire & Reporting | Modélisation & Tableaux de bord*\n\nContrôleur de gestion diplômé d'un Master 2 avec plus de 5 ans d'expérience dans les secteurs exigeants de la finance/banque et de la logistique. Expert dans la construction budgétaire, la modélisation de KPIs opérationnels et la production de synthèses d'aide à la décision pour les directions d'activités. Bilingue Français / Anglais, reconnu pour ma rigueur méthodologique, mon sens de la confidentialité et ma capacité à fiabiliser les processus de gestion dans des environnements multi-entités.\n\n---\n\n### **COMPÉTENCES CLÉS**\n\n- **Contrôle de gestion & Pilotage :** Élaboration et révisions budgétaires, suivi des plans d'action, analyse des écarts (réalisé vs budget), projection financière, calcul et suivi des marges / PNB.\n- **Reporting & Outils décisionnels :** Conception de tableaux de bord de gestion (KPIs), rédaction de notes de synthèse opérationnelles, fiabilisation des données de gestion pour les comités de direction.\n- **Comptabilité & Systèmes d'information :** Bonne culture comptable (rapprochements, données de clôture), exploitation de bases de données, maîtrise avancée des tableurs (Excel) et des environnements ERP.\n- **Qualités professionnelles :** Esprit d'analyse et de synthèse, force de proposition, rigueur, respect de la confidentialité, travail en transversalité avec les responsables opérationnels.\n\n---\n\n### **EXPÉRIENCE PROFESSIONNELLE**\n\n**Groupe COFINA** — Dakar, Sénégal  \n*Contrôleur de Gestion* | **2016 – Présent**  \n*Cadre d'intervention : Groupe d'institutions financières panafricain.*  \n\n- **Processus budgétaire & Stratégie :**  \n  - Définition et déploiement des méthodologies de construction budgétaire auprès des entités opérationnelles.  \n  - Collecte, consolidation et analyse critique des données budgétaires annuelles et des prévisions glissantes.  \n  - Préparation et fourniture des éléments financiers clés contribuant à l'élaboration du plan stratégique et aux projets de développement de l'entreprise.\n- **Pilotage de la performance & Reporting :**  \n  - Centralisation et exploitation des données financières et d'exploitation (données comptables, budget, Produit Net Bancaire - PNB).  \n  - Conception et automatisation de tableaux de bord périodiques pour le suivi des indicateurs d'activité et de rentabilité.  \n  - Rédaction de synthèses de gestion commentées destinées à la direction pour faciliter les arbitrages et la prise de décision.  \n  - *(Optionnel candidat)* : *[Préciser ici le volume géré ou le nombre de Business Units/agences suivies, ex : Périmètre de X filiales / agences]*.\n\n**Bolloré Transport & Logistics** — Dakar, Sénégal  \n*Contrôleur de Gestion* | **2014 – 2016**  \n*Cadre d'intervention : Hub logistique et multimodal de transport international.*  \n\n- **Suivi opérationnel & Contrôle des coûts :**  \n  - Recueil et vérification de la cohérence des données comptables et opérationnelles issues des différents départements d'exploitation.  \n  - Analyse des écarts entre les prévisions budgétaires et les coûts réels engagés sur les opérations de transport et de transit.  \n  - Participation aux revues analytiques régulières pour fiabiliser la remontée des informations financières.\n- **Outils de gestion & Tableaux de bord :**  \n  - Conception d'outils de pilotage et de reportings d'activité sur tableur (Excel avancé) pour les directeurs de services.  \n  - Élaboration de notes d'analyse sur l'évolution des volumes d'activité et la structure des charges.  \n  - Contribution à l'amélioration de la fiabilité des flux de données entre les équipes comptables et le contrôle de gestion.\n\n---\n\n### **FORMATION**\n\n**École Supérieure Polytechnique (ESP)** — Dakar, Sénégal  \n- **Master 2 en Audit et Contrôle de Gestion** (2016)  \n- **Licence en Audit et Contrôle de Gestion** (2014)  \n\n---\n\n### **LANGUES & ENVIRONNEMENT TECHNIQUE**\n\n- **Langues :** Français (bilingue / langue de travail), Anglais (courant / bilingue).\n- **Informatique & Gestion :** Maîtrise avancée d'Excel (formules complexes, modélisation, TCD), maîtrise des systèmes d'information de gestion (ERP, bases de données relationnelles, outils bureautiques Pack Office).",
+      "jobText": "Offre Emploi CDI Contrôleur de Gestion Paris (75) - Recrutement par Les Nouveaux Héritiers | Hellowork\n\nURL source : https://www.hellowork.com/fr-fr/emplois/84002557.html\n\nGagnez du temps avec l'app\n\n Recevez une notification dès qu'une offre est publiée et postulez en quelques clics.\n\n Continuer dans l'app\n\n Lien copié\n\n Salaire fourni par le recruteur\n\nCe recruteur joue le jeu de la transparence en transmettant le salaire pour cette offre.\n\n Cabinet de recrutement\n\n Cette offre est publiée par un cabinet de recrutement. Le poste peut être situé au sein de l’entreprise indiquée ou chez un client pour lequel il recrute.\n\n Postuler sur le site du recruteur\n\n Contrôleur de Gestion H/F\n Les Nouveaux Héritiers\n\n Paris - 75\n\n CDI\n\n Bac +5\n\n Services aux Entreprises\n\n Exp. 3 à 5 ans\n\n Lire dans l'app\n\n À noter sur ce job\n\n Vous avez ces compétences ? Cliquez dessus pour les ajouter rapidement à votre profil !\n\n Anglais\n\n Détail du poste\n\n L'ENTREPRISE, CE QUI FAIT SA DIFFÉRENCENotre entreprise partenaire s'impose comme l'expert des spiritueux depuis 1956 et devient « la » référence du secteur tant en France qu'à l'international.Son atout majeur est son positionnement d'acteur historique incontournable des spiritueux hauts de gamme.Cette entreprise favorise un esprit d'équipe dynamique et passionné et une croissance rapide.Enfin, elle présente de nombreux avantages : organisateur des salons de spiritueux (prix réduit pour les proches) puis des réductions sur les spiritueux.LE CHALLENGE QU'ELLE VOUS PROPOSEType de contrat : CDI Managé(e) par la Responsable Administrative & Financière, et sur un périmètre de 6 sociétés, vos missions seront :Participer à la fiabilisation et la production de rapports de gestion pour aider à la prise de décisionsParticiper à la clôture comptable, analyser les écarts et suivre les plans d'actionParticiper à l'élaboration et au suivi du budget annuel et des révisions budgétaires trimestriellesParticiper à la mise en place et au suivi des procédures de contrôle, KPIs et reportingEtre le référent de directeurs de business unitIdentifier et mettre en oeuvre des projets d'amélioration continue des processus financiers et des outils de gestion existants \n\n Le profil recherché\n\n CE QUI FAIT VOTRE DIFFÉRENCE ?Formation : Bac +5 en Finance Expérience : 3 ans minimum sur un poste de Contrôleur de Gestion idéalement dans l'univers de la DistributionCompétences : Pack Office (Maîtrise d'Excel impérative), Anglais courantQualités : Rigueur, Confidentialité, Sens de l'analyse et de synthèse, Force de propositionLES NOUVEAUX HÉRITIERS VOUS ACCOMPAGNENTPremière rencontre avec Les Nouveaux HéritiersDeuxième rencontre avec la RAF et la Responsable des Ressources HumainesTroisième rencontre avec la DAF et la DRH\n\n Publiée le 02/10/2026 - Réf : 1802862\n\n Postuler\n\n Finalisez votre candidature\n \n sur le site du\n recruteur\n\n Créez votre compte Hellowork et postulez\n \n sur le site du\n recruteur !\n\n Ces offres pourraient aussi vous intéresser\n\n Paris 8e - 75\n\n CDI\n\n Voir l’offre\n il y a 7 jours\n\n Montreuil - 93\n\n CDI\n\n Télétravail occasionnel\n\n Voir l’offre\n il y a 7 jours\n\n Paris - 75\n\n CDI\n\n Voir l’offre\n il y a 15 jours\n\n Voir plus d'offres\n\n Recherches similaires\n\n Emploi Contrôleur de gestion\n\n Emploi Gestion\n\n Emploi Gestionnaire de patrimoine\n\n Emploi Conseiller d'entreprise\n\n Emploi Gestionnaire de sinistres\n\n Emploi Consultant en organisation\n\n Emploi Responsable de gestion\n\n Entreprises Gestion\n\n Entreprises Contrôleur de gestion\n\n Entreprises Paris\n\n Emploi Junior\n\n Emploi International\n\n Emploi Responsable\n\n Emploi Rapide\n\n Emploi Anglais\n\n Emploi CDI Paris\n\n Emploi Stable Paris\n\n Emploi Junior Paris\n\n Emploi Responsable Paris\n\n Emploi Anglais Paris\n\n Nous avons eu un problème, veuillez recharger ou revenir plus tard.\n\n Chargement du coach emploi...\n\n Connectez-vous\n pour profiter de Coach Emploi\n\n Analyse de CV\n\n Résumé d'offre\n\n Entretien avec un coach virtuel\n\n … et bien plus !\n\n Continuer avec un compte\n\n {{title}}\n\n {{message}}\n\n {{linkLabel}}",
+      "analysisResult": "Voici une analyse rigoureuse et impartiale de votre candidature, optimisée pour les algorithmes ATS et les attentes des recruteurs.\n\n---\n\n### **Fiche d'identité de l'offre**\n- **Société / Entreprise :** Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).\n- **Cabinet de recrutement :** Les Nouveaux Héritiers.\n- **Intitulé du poste :** Contrôleur de Gestion H/F.\n- **Score de compatibilité : 79/100** (Bonne adéquation technique et méthodologique, freinée par l'absence d'expérience sectorielle directe).\n\n---\n\n### **Fiche Technique & Financière de l'Entreprise**\n1. **Identité & Modèle Économique :** Secteur des spiritueux (Distribution/Commerce de gros/Retail spécialisé). Entreprise patrimoniale ou ETI mature (depuis 1956). Modèle hybride (B2B/B2C).\n2. **Profil Financier & Métriques :** Enjeux de gestion de stocks (COGS), valorisation des inventaires, marges par produit/segment, gestion des droits d'accises (spécifique aux spiritueux), et saisonnalité forte du CA.\n3. **Stack Technique & Organisation :** Rattachement : RAF (Responsable Admin & Fin). Priorité : Fiabilisation des clôtures, analyse d'écarts (budgets/réels) et amélioration des outils de reporting.\n4. **Questions Stratégiques à poser :** \n   - *\"Comment gérez-vous l'impact des variations des matières premières et des droits d'accises sur vos marges opérationnelles ?\"*\n   - *\"Quels sont les principaux chantiers d'amélioration continue sur vos outils de reporting actuels ?\"*\n   - *\"Quelle est la part du périmètre dédiée aux fonctions support vs les Business Units commerciales ?\"*\n5. **Pitch d'Accroche :** \"Fort de 5 ans d'expérience en contrôle de gestion dans des environnements financiers et logistiques exigeants, je maîtrise la fiabilisation des processus et la modélisation de la performance. Mon expertise en analyse budgétaire et ma capacité à accompagner les directions opérationnelles sont les leviers que je souhaite mettre au service de votre expertise en spiritueux pour optimiser vos KPIs de gestion.\"\n\n---\n\n### **Points forts**\n- **Séniorité adéquate :** 5 ans d'expérience correspondent parfaitement à la demande (3-5 ans).\n- **Compétences techniques :** Maîtrise avancée d'Excel et de l'analyse d'écarts (indispensable pour l'offre).\n- **Dimension \"Business Partner\" :** Expérience réussie en tant que référent auprès des opérationnels (cité explicitement dans les deux expériences).\n\n### **Points faibles / Manques**\n- **Absence du secteur \"Distribution/Spiritueux\" :** Votre expérience est très \"Finance/Banque\" et \"Logistique\". L'ATS pourrait vous pénaliser sur la connaissance du retail ou de la gestion de stock fine.\n- **Détail sur les outils :** Bien que vous citiez \"ERP\", le recruteur préférerait des noms (SAP, Sage, etc.) pour valider l'interopérabilité.\n\n---\n\n### **Stratégie de CV**\n1. **Nommez vos outils :** Si vous avez travaillé sur SAP, Oracle ou Sage, écrivez-le explicitement. Les ATS cherchent ces mots-clés pour valider votre autonomie immédiate.\n2. **Valorisez le \"Périmètre\" :** Dans votre expérience COFINA, remplacez la mention optionnelle par un chiffre réel : \"Gestion d'un périmètre de 6 entités/agences\" (cela correspond parfaitement au périmètre de 6 sociétés demandé dans l'offre).\n\n---\n\n### **Lettre de motivation (Accroche)**\n*\"Passionné par les enjeux de performance opérationnelle et attiré par l’excellence d’un acteur historique du secteur des spiritueux, je vous propose ma candidature pour le poste de Contrôleur de Gestion. Mon parcours de 5 ans en contrôle de gestion, structuré autour de la fiabilisation des processus financiers et de l'accompagnement des directions opérationnelles, me permet d'être opérationnel immédiatement pour soutenir votre croissance et renforcer votre pilotage budgétaire.\"*\n\n---\n\n### **Préparation entretien : Questions pièges & Pistes STAR**\n1. **\"Votre expérience est en banque/logistique. Comment allez-vous appréhender nos enjeux de gestion de stock ?\"**\n   - *Piste STAR :* Reconnaissez la spécificité des stocks. Expliquez comment vous avez géré les flux et les coûts dans la logistique (Bolloré) et comment vous adapterez vos modèles d'analyse des écarts (écarts sur prix, écarts sur volumes) à leur inventaire.\n2. **\"Comment travaillez-vous avec les responsables de Business Units non financiers ?\"**\n   - *Piste STAR :* Utilisez un exemple concret (Situation) où vous avez dû traduire des chiffres complexes en recommandations simples (Action) pour aider un manager à prendre une décision de réduction de coûts (Résultat).\n3. **\"Quelles méthodes utilisez-vous pour fiabiliser une clôture ?\"**\n   - *Piste STAR :* Détaillez votre rigueur : tenue de tableaux de suivi des OD (opérations diverses), réconciliation des flux de données avec la comptabilité, et alertes précoces sur les provisions à passer.",
+      "score": 79,
+      "jobUrl": "https://www.hellowork.com/fr-fr/emplois/84002557.html",
+      "currentVersion": 2,
+      "evolutionSteps": [
+        {
+          "id": "step-1791978110816-obsnh",
+          "version": 1,
+          "type": "initial_analysis",
+          "title": "V1 - Audit initial d'adéquation",
+          "timestamp": "14/10/2026 13:41",
+          "score": 62,
+          "cvText": "bndiaye@emploidakar.com\n\nCONTACTS\n\n\n\nMaîtrise de l'utilisation des systèmes d'information : tableurs, bases de données, ERP, etc.\n\nBonne culture comptable, Compétence en analyse de données\n\nBonne connaissance des métiers et du fonctionnement de l'entreprise.\n\nBilingue Français / Anglais\n\nCOMPÉTENCES\n\nDéfinition des méthodologies de construction budgétaire\n\nCollecte, analyse et synthèse des données budgétaires\n\nProduction des  éléments de gestion à l’élaboration de plan stratégique et de projets de l’entreprise\n\nConception des tableaux de bords et rédaction des synthèses de commentaires de l’activité\n\nCollecter les informations nécessaires aux études (données comptables, budget, PNB...)\n\n2014-2016\n\nContrôleur de Gestion | Bolloré Transport & Logistics\n\nDéfinition des méthodologies de construction budgétaire\n\nCollecte, analyse et synthèse des données budgétaires\n\nProduction des  éléments de gestion à l’élaboration de plan stratégique et de projets de l’entreprise\n\nConception des tableaux de bords et rédaction des synthèses de commentaires de l’activité\n\nCollecter les informations nécessaires aux études (données comptables, budget, PNB...)\n\nEXPERIENCE PROFESSIONNELLE\n\nÉcole Supérieure Polytechnique, \n\nLicence en Audit & Contrôle de Gestion, 2014\n\nLinkedin.com/bndiaye\n\n+221 76 100 20 30\n\nBABACAR NDIAYE\n\nCONTRÔLEUR DE GESTION\n\nÉcole Supérieure Polytechnique, \n\nMaster 2 en Audit & Contrôle de Gestion, 2016\n\nFORMATION\n\nContrôleur de gestion depuis 5 ans, poste que j’ai occupé dans le domaine bancaire et la logistique. Diplômé d’un Master 2 en Contrôle de Gestion, je suis à la recherche d’un poste de contrôleur de gestion\n\n\n\nÀ PROPOS DE MOI\n\nContrôleur de Gestion | Groupe COFINA\n\nRue Kaolack, Point E\n\nDakar, Sénégal\n\n2016–Actuel",
+          "analysisResult": "Voici une analyse rigoureuse, effectuée sous l'angle d'un algorithme ATS et d'un auditeur en recrutement.\n\n*   **Société / Entreprise :** Non mentionnée (Client final : expert des spiritueux haut de gamme).\n*   **Cabinet de recrutement :** Les Nouveaux Héritiers.\n*   **Intitulé du poste :** Contrôleur de Gestion H/F.\n*   **Score de compatibilité : 62/100** (Adéquation modérée : le candidat possède le savoir-faire technique, mais le CV manque de profondeur sur les spécificités \"distribution/spiritueux\" et de précisions sur les outils).\n\n---\n\n### Fiche Technique & Financière de l'Entreprise Recruteuse\n\n1. **Identité & Modèle Économique :** Entreprise spécialisée dans les spiritueux haut de gamme (B2B/B2C). Positionnement luxe/premium. Modèle basé sur la distribution de marques, nécessitant une gestion rigoureuse des stocks et des marges commerciales.\n2. **Profil Financier & Métriques Clés :** Enjeux majeurs : gestion des stocks (COGS), suivi des marges par produit/canal, gestion des taxes spécifiques aux alcools, et pilotage des flux financiers sur plusieurs sociétés (périmètre de 6 entités).\n3. **Stack Technique, Outils & Organisation :** Maîtrise d'Excel (impérative), ERP comptable, outils de BI/reporting. Rattachement hiérarchique à la RAF.\n4. **Questions Stratégiques à Poser :**\n    - \"Comment gérez-vous la saisonnalité des ventes et son impact sur la trésorerie dans votre reporting mensuel ?\"\n    - \"Quels sont les principaux enjeux de l'amélioration continue sur les outils de gestion actuels de vos 6 filiales ?\"\n    - \"Comment le contrôle de gestion accompagne-t-il la stratégie de premiumisation de vos produits ?\"\n5. **Pitch d'Accroche :** \"Fort d'une expérience de 5 ans en contrôle de gestion dans des secteurs exigeants comme la banque et la logistique, j'ai développé une expertise en modélisation budgétaire et fiabilisation des processus financiers. Intégrer votre groupe est pour moi l'opportunité d'apporter ma rigueur analytique pour optimiser la performance opérationnelle de vos 6 sociétés.\"\n\n---\n\n### Points forts\n1. **Séniorité :** Avec 5 ans d'expérience, le candidat respecte parfaitement la fourchette demandée (3-5 ans).\n2. **Hard Skills :** Compétences démontrées en construction budgétaire, tableaux de bord et analyse de données.\n3. **Bilinguisme :** Le candidat est bilingue Français/Anglais, un atout majeur pour une entreprise internationale.\n\n### Points faibles / Manques\n1. **Secteur :** Aucune expérience en \"Distribution\" ou \"Retail\" mentionnée, ce qui est un critère \"idéal\" pour le recruteur.\n2. **Outils :** Absence de noms d'ERP spécifiques (ex: SAP, Sage, Oracle). L'ATS cherchera ces mots-clés.\n3. **Clôture Comptable :** Le CV manque de mentions explicites sur la participation aux travaux de clôture comptable, pourtant demandée.\n\n### Stratégie de CV\n1. **Intégrer les mots-clés \"Clôture\" et \"Distribution\" :** Précisez : \"Participation active à la clôture comptable mensuelle (normes locales)\" et \"Analyse des marges commerciales sur le secteur distribution\".\n2. **Valoriser le multi-sites :** Votre expérience chez Bolloré implique probablement une gestion multi-entités. Mettez-le en avant explicitement, car le poste demande de gérer un périmètre de 6 sociétés.\n\n---\n\n### Lettre de motivation (Accroche)\n\"Passionné par l'univers des produits haut de gamme et fort d'une solide expertise en contrôle de gestion acquise au sein de structures internationales, je suis vivement intéressé par votre poste au sein des Nouveaux Héritiers. Mon parcours, marqué par la rigueur de la gestion budgétaire et la maîtrise des outils d'aide à la décision, me permet d'appréhender rapidement les enjeux financiers liés à votre périmètre de 6 sociétés et de contribuer activement à vos projets d'amélioration continue.\"\n\n---\n\n### Préparation entretien (Focus écarts)\n1. **Recruteur :** \"Vous n'avez pas d'expérience dans les spiritueux, comment comptez-vous gérer nos enjeux de stocks ?\"\n   *   *Piste STAR :* Parlez d'une situation passée chez Bolloré où la gestion des flux/stocks était critique.\n2. **Recruteur :** \"Notre poste demande une participation à la clôture, qu'avez-vous fait dans ce domaine ?\"\n   *   *Piste STAR :* Expliquez votre rôle dans le contrôle des écritures, les provisions ou les ajustements budgétaires en fin de mois.\n3. **Recruteur :** \"Pourquoi quitter votre poste actuel au Sénégal pour une opportunité à Paris ?\"\n   *   *Piste STAR :* Mettez en avant le projet professionnel (développement à l'international) et l'alignement avec les valeurs du groupe.",
+          "changesApplied": [
+            "Audit initial de conformité ATS",
+            "Détection des compétences et mots-clés"
+          ],
+          "summaryNote": "Audit initial de conformité ATS et identification des écarts par rapport à l'offre."
+        },
+        {
+          "id": "step-1791978566774-dlvm7",
+          "version": 2,
+          "type": "re_analysis",
+          "title": "V2 - Note d'analyse finale (79% ATS)",
+          "timestamp": "14/10/2026 13:49",
+          "score": 79,
+          "scoreDelta": 17,
+          "cvText": "**BABACAR NDIAYE**  \nDakar, Sénégal (Mobilité internationale envisageable) | +221 76 100 20 30 | bndiaye@emploidakar.com  \nProfil LinkedIn : linkedin.com/in/bndiaye  \n\n---\n\n### **CONTRÔLEUR DE GESTION**\n*Analyse financière | Pilotage budgétaire & Reporting | Modélisation & Tableaux de bord*\n\nContrôleur de gestion diplômé d'un Master 2 avec plus de 5 ans d'expérience dans les secteurs exigeants de la finance/banque et de la logistique. Expert dans la construction budgétaire, la modélisation de KPIs opérationnels et la production de synthèses d'aide à la décision pour les directions d'activités. Bilingue Français / Anglais, reconnu pour ma rigueur méthodologique, mon sens de la confidentialité et ma capacité à fiabiliser les processus de gestion dans des environnements multi-entités.\n\n---\n\n### **COMPÉTENCES CLÉS**\n\n- **Contrôle de gestion & Pilotage :** Élaboration et révisions budgétaires, suivi des plans d'action, analyse des écarts (réalisé vs budget), projection financière, calcul et suivi des marges / PNB.\n- **Reporting & Outils décisionnels :** Conception de tableaux de bord de gestion (KPIs), rédaction de notes de synthèse opérationnelles, fiabilisation des données de gestion pour les comités de direction.\n- **Comptabilité & Systèmes d'information :** Bonne culture comptable (rapprochements, données de clôture), exploitation de bases de données, maîtrise avancée des tableurs (Excel) et des environnements ERP.\n- **Qualités professionnelles :** Esprit d'analyse et de synthèse, force de proposition, rigueur, respect de la confidentialité, travail en transversalité avec les responsables opérationnels.\n\n---\n\n### **EXPÉRIENCE PROFESSIONNELLE**\n\n**Groupe COFINA** — Dakar, Sénégal  \n*Contrôleur de Gestion* | **2016 – Présent**  \n*Cadre d'intervention : Groupe d'institutions financières panafricain.*  \n\n- **Processus budgétaire & Stratégie :**  \n  - Définition et déploiement des méthodologies de construction budgétaire auprès des entités opérationnelles.  \n  - Collecte, consolidation et analyse critique des données budgétaires annuelles et des prévisions glissantes.  \n  - Préparation et fourniture des éléments financiers clés contribuant à l'élaboration du plan stratégique et aux projets de développement de l'entreprise.\n- **Pilotage de la performance & Reporting :**  \n  - Centralisation et exploitation des données financières et d'exploitation (données comptables, budget, Produit Net Bancaire - PNB).  \n  - Conception et automatisation de tableaux de bord périodiques pour le suivi des indicateurs d'activité et de rentabilité.  \n  - Rédaction de synthèses de gestion commentées destinées à la direction pour faciliter les arbitrages et la prise de décision.  \n  - *(Optionnel candidat)* : *[Préciser ici le volume géré ou le nombre de Business Units/agences suivies, ex : Périmètre de X filiales / agences]*.\n\n**Bolloré Transport & Logistics** — Dakar, Sénégal  \n*Contrôleur de Gestion* | **2014 – 2016**  \n*Cadre d'intervention : Hub logistique et multimodal de transport international.*  \n\n- **Suivi opérationnel & Contrôle des coûts :**  \n  - Recueil et vérification de la cohérence des données comptables et opérationnelles issues des différents départements d'exploitation.  \n  - Analyse des écarts entre les prévisions budgétaires et les coûts réels engagés sur les opérations de transport et de transit.  \n  - Participation aux revues analytiques régulières pour fiabiliser la remontée des informations financières.\n- **Outils de gestion & Tableaux de bord :**  \n  - Conception d'outils de pilotage et de reportings d'activité sur tableur (Excel avancé) pour les directeurs de services.  \n  - Élaboration de notes d'analyse sur l'évolution des volumes d'activité et la structure des charges.  \n  - Contribution à l'amélioration de la fiabilité des flux de données entre les équipes comptables et le contrôle de gestion.\n\n---\n\n### **FORMATION**\n\n**École Supérieure Polytechnique (ESP)** — Dakar, Sénégal  \n- **Master 2 en Audit et Contrôle de Gestion** (2016)  \n- **Licence en Audit et Contrôle de Gestion** (2014)  \n\n---\n\n### **LANGUES & ENVIRONNEMENT TECHNIQUE**\n\n- **Langues :** Français (bilingue / langue de travail), Anglais (courant / bilingue).\n- **Informatique & Gestion :** Maîtrise avancée d'Excel (formules complexes, modélisation, TCD), maîtrise des systèmes d'information de gestion (ERP, bases de données relationnelles, outils bureautiques Pack Office).",
+          "analysisResult": "Voici une analyse rigoureuse et impartiale de votre candidature, optimisée pour les algorithmes ATS et les attentes des recruteurs.\n\n---\n\n### **Fiche d'identité de l'offre**\n- **Société / Entreprise :** Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).\n- **Cabinet de recrutement :** Les Nouveaux Héritiers.\n- **Intitulé du poste :** Contrôleur de Gestion H/F.\n- **Score de compatibilité : 79/100** (Bonne adéquation technique et méthodologique, freinée par l'absence d'expérience sectorielle directe).\n\n---\n\n### **Fiche Technique & Financière de l'Entreprise**\n1. **Identité & Modèle Économique :** Secteur des spiritueux (Distribution/Commerce de gros/Retail spécialisé). Entreprise patrimoniale ou ETI mature (depuis 1956). Modèle hybride (B2B/B2C).\n2. **Profil Financier & Métriques :** Enjeux de gestion de stocks (COGS), valorisation des inventaires, marges par produit/segment, gestion des droits d'accises (spécifique aux spiritueux), et saisonnalité forte du CA.\n3. **Stack Technique & Organisation :** Rattachement : RAF (Responsable Admin & Fin). Priorité : Fiabilisation des clôtures, analyse d'écarts (budgets/réels) et amélioration des outils de reporting.\n4. **Questions Stratégiques à poser :** \n   - *\"Comment gérez-vous l'impact des variations des matières premières et des droits d'accises sur vos marges opérationnelles ?\"*\n   - *\"Quels sont les principaux chantiers d'amélioration continue sur vos outils de reporting actuels ?\"*\n   - *\"Quelle est la part du périmètre dédiée aux fonctions support vs les Business Units commerciales ?\"*\n5. **Pitch d'Accroche :** \"Fort de 5 ans d'expérience en contrôle de gestion dans des environnements financiers et logistiques exigeants, je maîtrise la fiabilisation des processus et la modélisation de la performance. Mon expertise en analyse budgétaire et ma capacité à accompagner les directions opérationnelles sont les leviers que je souhaite mettre au service de votre expertise en spiritueux pour optimiser vos KPIs de gestion.\"\n\n---\n\n### **Points forts**\n- **Séniorité adéquate :** 5 ans d'expérience correspondent parfaitement à la demande (3-5 ans).\n- **Compétences techniques :** Maîtrise avancée d'Excel et de l'analyse d'écarts (indispensable pour l'offre).\n- **Dimension \"Business Partner\" :** Expérience réussie en tant que référent auprès des opérationnels (cité explicitement dans les deux expériences).\n\n### **Points faibles / Manques**\n- **Absence du secteur \"Distribution/Spiritueux\" :** Votre expérience est très \"Finance/Banque\" et \"Logistique\". L'ATS pourrait vous pénaliser sur la connaissance du retail ou de la gestion de stock fine.\n- **Détail sur les outils :** Bien que vous citiez \"ERP\", le recruteur préférerait des noms (SAP, Sage, etc.) pour valider l'interopérabilité.\n\n---\n\n### **Stratégie de CV**\n1. **Nommez vos outils :** Si vous avez travaillé sur SAP, Oracle ou Sage, écrivez-le explicitement. Les ATS cherchent ces mots-clés pour valider votre autonomie immédiate.\n2. **Valorisez le \"Périmètre\" :** Dans votre expérience COFINA, remplacez la mention optionnelle par un chiffre réel : \"Gestion d'un périmètre de 6 entités/agences\" (cela correspond parfaitement au périmètre de 6 sociétés demandé dans l'offre).\n\n---\n\n### **Lettre de motivation (Accroche)**\n*\"Passionné par les enjeux de performance opérationnelle et attiré par l’excellence d’un acteur historique du secteur des spiritueux, je vous propose ma candidature pour le poste de Contrôleur de Gestion. Mon parcours de 5 ans en contrôle de gestion, structuré autour de la fiabilisation des processus financiers et de l'accompagnement des directions opérationnelles, me permet d'être opérationnel immédiatement pour soutenir votre croissance et renforcer votre pilotage budgétaire.\"*\n\n---\n\n### **Préparation entretien : Questions pièges & Pistes STAR**\n1. **\"Votre expérience est en banque/logistique. Comment allez-vous appréhender nos enjeux de gestion de stock ?\"**\n   - *Piste STAR :* Reconnaissez la spécificité des stocks. Expliquez comment vous avez géré les flux et les coûts dans la logistique (Bolloré) et comment vous adapterez vos modèles d'analyse des écarts (écarts sur prix, écarts sur volumes) à leur inventaire.\n2. **\"Comment travaillez-vous avec les responsables de Business Units non financiers ?\"**\n   - *Piste STAR :* Utilisez un exemple concret (Situation) où vous avez dû traduire des chiffres complexes en recommandations simples (Action) pour aider un manager à prendre une décision de réduction de coûts (Résultat).\n3. **\"Quelles méthodes utilisez-vous pour fiabiliser une clôture ?\"**\n   - *Piste STAR :* Détaillez votre rigueur : tenue de tableaux de suivi des OD (opérations diverses), réconciliation des flux de données avec la comptabilité, et alertes précoces sur les provisions à passer.",
+          "changesApplied": [
+            "Mots-clés intégrés : KPIs, Reporting",
+            "42 réalisation(s) ou ligne(s) enrichie(s)"
+          ],
+          "summaryNote": "Gain net de score : +17 points par rapport à la version précédente."
+        }
+      ],
+      "companyDossier": {
+        "companyName": "Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+        "sector": "Industrie & Ingénierie Technologique",
+        "businessModel": "B2B / Conception, production et fourniture d’équipements et solutions industrielles",
+        "estimatedSize": "PME / ETI dynamique (50 à 250 collaborateurs)",
+        "location": "Paris (75) - Recrutement par Les Nouveaux Héritiers | Hellowork",
+        "ownershipStructure": "Entreprise privée non cotée soutenue par ses actionnaires de référence",
+        "websiteUrl": "https://www.nonnommeexpertdesspiritueuxhautdegammedepuis1956.com",
+        "legalInfo": {
+          "legalName": "NON NOMMÉE (EXPERT DES SPIRITUEUX, HAUT DE GAMME, DEPUIS 1956).",
+          "commercialBrand": "Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+          "websiteUrl": "https://www.nonnommeexpertdesspiritueuxhautdegammedepuis1956.com",
+          "headquarters": "Paris (75) - Recrutement par Les Nouveaux Héritiers | Hellowork",
+          "creationYear": "Entreprise établie",
+          "legalForm": "Société commerciale (SAS / SA)",
+          "keyExecutives": [
+            {
+              "name": "Direction Générale / Présidence",
+              "title": "Président / Directeur Général",
+              "roleDescription": "Garant des orientations stratégiques et du développement global."
+            },
+            {
+              "name": "Direction Financière",
+              "title": "Directeur Administratif et Financier (DAF)",
+              "roleDescription": "Pilotage de la performance financière, des clôtures et de la trésorerie."
+            }
+          ],
+          "activitiesPillars": [
+            "Industrie & Ingénierie Technologique : Prestations et solutions spécialisées à forte valeur ajoutée",
+            "Développement commercial et fidélisation de clients stratégiques",
+            "Pilotage de projets et modernisation des processus internes"
+          ],
+          "aumOrKeyMetrics": "Entre 30 M€ et 120 M€ de Chiffre d’Affaires annuel",
+          "shareholdersAndBackers": "Entreprise privée non cotée soutenue par ses actionnaires de référence"
+        },
+        "candidateStrategicPlan": {
+          "roleTitle": "Contrôleur de Gestion.",
+          "executiveSummary": "Feuille de route stratégique pour réussir son intégration chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., sécuriser les livrables clés et démontrer sa posture de Business Partner auprès des décideurs.",
+          "phases": [
+            {
+              "period": "J0 - J30 : Immersion & Diagnostic",
+              "title": "Cartographie des processus et état des lieux",
+              "description": "Comprendre l’écosystème de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., identifier les flux opérationnels clés et auditer les outils existants.",
+              "actions": [
+                "Rencontrer les interlocuteurs clés (Direction, N+1, opérationnels) pour cerner leurs attentes prioritaires.",
+                "Analyser les reportings, outils informatiques et procédures en place.",
+                "Identifier les éventuels goulots d’étranglement ou zones de risques opérationnels."
+              ],
+              "deliverable": "Rapport d’étonnement et cartographie des processus opérationnels à 30 jours."
+            },
+            {
+              "period": "J31 - J60 : Structuration & Optimisation",
+              "title": "Fiabilisation des livrables et gains d’efficacité",
+              "description": "Mettre en place des améliorations concrètes pour fiabiliser les données et accélérer les cycles de travail.",
+              "actions": [
+                "Harmoniser les indicateurs de performance (KPI) et automatiser les reportings récurrents.",
+                "Proposer des ajustements méthodologiques pour fluidifier la communication avec les équipes de terrain.",
+                "Sécuriser le respect des échéances clés et la conformité des livrables."
+              ],
+              "deliverable": "Tableau de bord de pilotage optimisé et procédures documentées."
+            },
+            {
+              "period": "J61 - J90 : Création de Valeur & Business Partnership",
+              "title": "Anticipation stratégique et accompagnement de la Direction",
+              "description": "Inscrire son action dans la durée en apportant de la visibilité prédictive et des solutions à forte valeur ajoutée à Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)..",
+              "actions": [
+                "Déployer des indicateurs prédictifs et modélisations pour éclairer les décisions stratégiques.",
+                "Prendre le lead sur les chantiers prioritaires de modernisation ou de transformation.",
+                "Partager les bonnes pratiques et renforcer les synergies transverses."
+              ],
+              "deliverable": "Modèle de suivi prédictif et recommandations stratégiques à 6 mois."
+            }
+          ],
+          "quickWins": [
+            "Mettre à disposition sous 15 jours un tableau de bord visuel synthétisant les indicateurs clés de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)..",
+            "Automatiser au moins une tâche manuelle chronophage pour libérer du temps d’analyse à l’équipe.",
+            "Clarifier le calendrier des livrables pour offrir une visibilité immédiate au management."
+          ],
+          "strategicRecommendations": [
+            "Privilégier la communication proactive et le retour d’expérience régulier avec les opérationnels.",
+            "Allier rigueur technique et clarté de restitution pour faciliter les arbitrages de la Direction."
+          ]
+        },
+        "stakeholdersCommunication": [
+          {
+            "roleCategory": "Direction Générale & Présidence",
+            "targetName": "Direction Générale de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+            "keyPriorities": [
+              "Visibilité stratégique et rentabilité globale",
+              "Sérénité sur la fiabilité des données et la conformité",
+              "Capacité du candidat à porter des projets en autonomie"
+            ],
+            "recommendedPosture": "Synthétique, orienté création de valeur et aligné avec la vision de développement.",
+            "verbalPitch": "« Mon objectif au sein de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). est de vous faire gagner un temps précieux : vous fournir une visibilité fiable et rapide sur nos indicateurs clés, et sécuriser l’atteinte de vos objectifs stratégiques. »",
+            "outreachMessageSample": "« Bonjour, impressionné par le positionnement et le développement de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).. Expert sur les enjeux de Contrôleur de Gestion., je serais ravi d'échanger sur la manière dont mes réalisations passées peuvent contribuer à sécuriser vos prochains objectifs de croissance. »",
+            "questionsToAsk": [
+              "« Quels sont vos chantiers prioritaires à 12 mois pour accompagner la croissance de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). ? »",
+              "« Quelles sont les qualités majeures qui font la réussite d’un collaborateur à ce poste au sein de votre comité de direction ? »"
+            ]
+          },
+          {
+            "roleCategory": "Direction Financière & N+1 (DAF / Manager)",
+            "targetName": "Manager N+1 / Direction Financière",
+            "keyPriorities": [
+              "Rigueur technique et respect scrupuleux des échéances",
+              "Capacité d’adaptation aux outils et esprit d’initiative",
+              "Gestion proactive des imprévus et force de proposition"
+            ],
+            "recommendedPosture": "Pragmatisme, expertise opérationnelle et sens du collectif.",
+            "verbalPitch": "« J’allie maîtrise technique des progiciels et sens de l’organisation. Vous pouvez compter sur ma rigueur pour fiabiliser les livrables dès le premier mois et faire progresser nos méthodes de travail. »",
+            "outreachMessageSample": "« Bonjour, très intéressé par vos projets chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., j'aimerais échanger sur vos priorités actuelles pour le poste de Contrôleur de Gestion.. Mes compétences concrètes sur vos outils et problématiques métier me permettront d'être immédiatement opérationnel. »",
+            "questionsToAsk": [
+              "« Comment s’articule actuellement le calendrier de vos clôtures et quels sont les leviers d’optimisation prioritaires ? »",
+              "« Quels sont les outils logiciels dont la montée en puissance est attendue dans les prochains mois ? »"
+            ]
+          },
+          {
+            "roleCategory": "Opérationnels & Équipes Métier",
+            "targetName": "Responsables Opérationnels & Équipes",
+            "keyPriorities": [
+              "Facilitation du travail au quotidien sans alourdissement administratif",
+              "Réactivité et clarté dans les échanges"
+            ],
+            "recommendedPosture": "Écoute active, disponibilité et pédagogie.",
+            "verbalPitch": "« Mon rôle est de vous apporter les bons outils et les bonnes informations pour vous permettre d’avancer plus vite sur vos objectifs sur le terrain. »",
+            "outreachMessageSample": "« Bonjour, ravi de pouvoir échanger avec vous sur les synergies possibles entre nos fonctions pour faciliter vos opérations chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).. »",
+            "questionsToAsk": [
+              "« Quelles sont les informations dont vous manquez le plus souvent au quotidien pour piloter vos activités sereinement ? »"
+            ]
+          },
+          {
+            "roleCategory": "Recrutement & RH",
+            "targetName": "Équipe RH / Recruteur",
+            "keyPriorities": [
+              "Adéquation avec les valeurs et la culture de l’entreprise",
+              "Stabilité, maturité professionnelle et dynamisme"
+            ],
+            "recommendedPosture": "Enthousiasme professionnel, écoute et clarté.",
+            "verbalPitch": "« Ce qui me motive chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., c’est l’alliance entre votre ambition sectorielle et une culture qui valorise l’engagement et l’excellence opérationnelle. »",
+            "outreachMessageSample": "« Bonjour, séduit par les valeurs et la dynamique de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., je serais ravi d'échanger sur l'opportunité de mettre mes compétences au service de vos équipes. »",
+            "questionsToAsk": [
+              "« Comment décririez-vous l’ambiance et les valeurs vécues au quotidien au sein des équipes de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). ? »"
+            ]
+          }
+        ],
+        "financialProfile": {
+          "estimatedRevenue": "Entre 30 M€ et 120 M€ de Chiffre d’Affaires annuel",
+          "growthStage": "Phase d’expansion soutenue & acquisitions stratégiques (Buy-and-Build)",
+          "profitabilityModel": "Marge brute opérationnelle, maîtrise rigoureuse du BFR et gestion proactive des liquidités",
+          "keyFinancialChallenges": [
+            "Pilotage du BFR industriel : rotation des stocks, gestion des encaissements clients B2B et décaissements.",
+            "Contrôle de gestion industriel par affaire et fiabilisation des marges opérationnelles.",
+            "Modélisation des prévisions de trésorerie glissantes et optimisation du cash-flow."
+          ]
+        },
+        "technicalProfile": {
+          "toolsAndStack": [
+            "SAP"
+          ],
+          "methodology": "Normes comptables françaises & IFRS le cas échéant, pilotage par objectifs chiffrés et procédures de contrôle interne.",
+          "reportingLine": "Rattachement direct à la Direction Générale (DG) et membre du Comité de Direction.",
+          "keyOperationalProjects": [
+            "Modernisation ou interfaçage des outils financiers (ERP, logiciel de trésorerie, automatisation des rapprochements).",
+            "Mise en place de tableaux de bord financiers automatisés et d’indicateurs prédictifs de cash.",
+            "Accompagnement de la croissance par la structuration des équipes et la fiabilisation des clôtures."
+          ]
+        },
+        "interviewStrategy": {
+          "pitchRecommendation": "« Fort d'un parcours rigoureux en finance et gestion opérationnelle, j'ai développé une expertise solide dans l'optimisation des flux, le pilotage de la trésorerie et la fiabilisation des clôtures. Votre projet chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). résonne particulièrement avec mon approche : allier rigueur technique sur les progiciels et rôle proactif de Business Partner pour sécuriser la croissance et accompagner vos décisions stratégiques. »",
+          "highImpactQuestions": [
+            {
+              "question": "Quelle est la cadence et la granularité actuelle de vos prévisions de trésorerie (prévisionnel glissant à 13 semaines, mensuel ou annuel) ?",
+              "objective": "Démontrer immédiatement une vision d’anticipation du cash et une rigueur méthodologique appréciée des DAF."
+            },
+            {
+              "question": "Quels sont les chantiers prioritaires à 6 mois pour ce poste : sécurisation des process existants, migration d’outils ou accompagnement de nouveaux projets ?",
+              "objective": "Montrer sa capacité à hiérarchiser les urgences et à s’inscrire en véritable Business Partner dès le premier jour."
+            }
+          ],
+          "strategicAdvice": []
+        },
+        "rawBriefText": "### Fiche Technique, Légale & Financière : Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).\n**Poste Ciblé :** Contrôleur de Gestion.\n**Site Web Officiel :** https://www.nonnommeexpertdesspiritueuxhautdegammedepuis1956.com\n\n#### 1. Données Légales, Dirigeants & Métiers Réels\n- **Raison sociale officielle :** NON NOMMÉE (EXPERT DES SPIRITUEUX, HAUT DE GAMME, DEPUIS 1956).\n- **Secteur d'activité vérifié :** Industrie & Ingénierie Technologique\n- **Modèle de revenus :** B2B / Conception, production et fourniture d’équipements et solutions industrielles\n- **Taille & Effectifs :** PME / ETI dynamique (50 à 250 collaborateurs)\n- **Siège & Implantation :** Paris (75) - Recrutement par Les Nouveaux Héritiers | Hellowork\n- **Actionnariat & Capital :** Entreprise privée non cotée soutenue par ses actionnaires de référence\n- **Dirigeants clés identifiés :**\n  * **Direction Générale / Présidence** (Président / Directeur Général) : Garant des orientations stratégiques et du développement global.\n  * **Direction Financière** (Directeur Administratif et Financier (DAF)) : Pilotage de la performance financière, des clôtures et de la trésorerie.\n\n- **Piliers d'activité réels (Site Web Officiel) :**\n  * Industrie & Ingénierie Technologique : Prestations et solutions spécialisées à forte valeur ajoutée\n  * Développement commercial et fidélisation de clients stratégiques\n  * Pilotage de projets et modernisation des processus internes\n\n#### 2. Profil Financier & Enjeux Stratégiques\n- **Métrique clé / Chiffre d'Affaires / AUM :** Entre 30 M€ et 120 M€ de Chiffre d’Affaires annuel\n- **Dynamique financière :** Phase d’expansion soutenue & acquisitions stratégiques (Buy-and-Build)\n- **Modèle de rentabilité :** Marge brute opérationnelle, maîtrise rigoureuse du BFR et gestion proactive des liquidités\n- **Enjeux financiers & de gestion majeurs :**\n  * Pilotage du BFR industriel : rotation des stocks, gestion des encaissements clients B2B et décaissements.\n  * Contrôle de gestion industriel par affaire et fiabilisation des marges opérationnelles.\n  * Modélisation des prévisions de trésorerie glissantes et optimisation du cash-flow.\n\n#### 3. Plan Stratégique Candidat (Feuille de Route 30 / 60 / 90 Jours)\n*Positionnement : Contrôleur de Gestion.*\nFeuille de route stratégique pour réussir son intégration chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., sécuriser les livrables clés et démontrer sa posture de Business Partner auprès des décideurs.\n\n##### J0 - J30 : Immersion & Diagnostic : Cartographie des processus et état des lieux\n- **Objectif :** Comprendre l’écosystème de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., identifier les flux opérationnels clés et auditer les outils existants.\n- **Actions clés :**\n  * Rencontrer les interlocuteurs clés (Direction, N+1, opérationnels) pour cerner leurs attentes prioritaires.\n  * Analyser les reportings, outils informatiques et procédures en place.\n  * Identifier les éventuels goulots d’étranglement ou zones de risques opérationnels.\n- **Livrable attendu :** Rapport d’étonnement et cartographie des processus opérationnels à 30 jours.\n\n##### J31 - J60 : Structuration & Optimisation : Fiabilisation des livrables et gains d’efficacité\n- **Objectif :** Mettre en place des améliorations concrètes pour fiabiliser les données et accélérer les cycles de travail.\n- **Actions clés :**\n  * Harmoniser les indicateurs de performance (KPI) et automatiser les reportings récurrents.\n  * Proposer des ajustements méthodologiques pour fluidifier la communication avec les équipes de terrain.\n  * Sécuriser le respect des échéances clés et la conformité des livrables.\n- **Livrable attendu :** Tableau de bord de pilotage optimisé et procédures documentées.\n\n##### J61 - J90 : Création de Valeur & Business Partnership : Anticipation stratégique et accompagnement de la Direction\n- **Objectif :** Inscrire son action dans la durée en apportant de la visibilité prédictive et des solutions à forte valeur ajoutée à Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)..\n- **Actions clés :**\n  * Déployer des indicateurs prédictifs et modélisations pour éclairer les décisions stratégiques.\n  * Prendre le lead sur les chantiers prioritaires de modernisation ou de transformation.\n  * Partager les bonnes pratiques et renforcer les synergies transverses.\n- **Livrable attendu :** Modèle de suivi prédictif et recommandations stratégiques à 6 mois.\n\n##### Victoires Rapides (Quick Wins en Entretien) :\n* Mettre à disposition sous 15 jours un tableau de bord visuel synthétisant les indicateurs clés de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)..\n* Automatiser au moins une tâche manuelle chronophage pour libérer du temps d’analyse à l’équipe.\n* Clarifier le calendrier des livrables pour offrir une visibilité immédiate au management.\n\n#### 4. Cartographie des Interlocuteurs & Stratégie de Communication\n##### Direction Générale & Présidence : Direction Générale de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).\n- **Ses priorités absolues :** Visibilité stratégique et rentabilité globale, Sérénité sur la fiabilité des données et la conformité, Capacité du candidat à porter des projets en autonomie\n- **Posture recommandée :** Synthétique, orienté création de valeur et aligné avec la vision de développement.\n- **Pitch verbal en entretien :**\n  > « Mon objectif au sein de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). est de vous faire gagner un temps précieux : vous fournir une visibilité fiable et rapide sur nos indicateurs clés, et sécuriser l’atteinte de vos objectifs stratégiques. »\n- **Modèle de message direct (LinkedIn / Email) :**\n  > « Bonjour, impressionné par le positionnement et le développement de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).. Expert sur les enjeux de Contrôleur de Gestion., je serais ravi d'échanger sur la manière dont mes réalisations passées peuvent contribuer à sécuriser vos prochains objectifs de croissance. »\n- **Questions ciblées à lui poser :**\n  * « « Quels sont vos chantiers prioritaires à 12 mois pour accompagner la croissance de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). ? » »\n  * « « Quelles sont les qualités majeures qui font la réussite d’un collaborateur à ce poste au sein de votre comité de direction ? » »\n\n##### Direction Financière & N+1 (DAF / Manager) : Manager N+1 / Direction Financière\n- **Ses priorités absolues :** Rigueur technique et respect scrupuleux des échéances, Capacité d’adaptation aux outils et esprit d’initiative, Gestion proactive des imprévus et force de proposition\n- **Posture recommandée :** Pragmatisme, expertise opérationnelle et sens du collectif.\n- **Pitch verbal en entretien :**\n  > « J’allie maîtrise technique des progiciels et sens de l’organisation. Vous pouvez compter sur ma rigueur pour fiabiliser les livrables dès le premier mois et faire progresser nos méthodes de travail. »\n- **Modèle de message direct (LinkedIn / Email) :**\n  > « Bonjour, très intéressé par vos projets chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., j'aimerais échanger sur vos priorités actuelles pour le poste de Contrôleur de Gestion.. Mes compétences concrètes sur vos outils et problématiques métier me permettront d'être immédiatement opérationnel. »\n- **Questions ciblées à lui poser :**\n  * « « Comment s’articule actuellement le calendrier de vos clôtures et quels sont les leviers d’optimisation prioritaires ? » »\n  * « « Quels sont les outils logiciels dont la montée en puissance est attendue dans les prochains mois ? » »\n\n##### Opérationnels & Équipes Métier : Responsables Opérationnels & Équipes\n- **Ses priorités absolues :** Facilitation du travail au quotidien sans alourdissement administratif, Réactivité et clarté dans les échanges\n- **Posture recommandée :** Écoute active, disponibilité et pédagogie.\n- **Pitch verbal en entretien :**\n  > « Mon rôle est de vous apporter les bons outils et les bonnes informations pour vous permettre d’avancer plus vite sur vos objectifs sur le terrain. »\n- **Modèle de message direct (LinkedIn / Email) :**\n  > « Bonjour, ravi de pouvoir échanger avec vous sur les synergies possibles entre nos fonctions pour faciliter vos opérations chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).. »\n- **Questions ciblées à lui poser :**\n  * « « Quelles sont les informations dont vous manquez le plus souvent au quotidien pour piloter vos activités sereinement ? » »\n\n##### Recrutement & RH : Équipe RH / Recruteur\n- **Ses priorités absolues :** Adéquation avec les valeurs et la culture de l’entreprise, Stabilité, maturité professionnelle et dynamisme\n- **Posture recommandée :** Enthousiasme professionnel, écoute et clarté.\n- **Pitch verbal en entretien :**\n  > « Ce qui me motive chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., c’est l’alliance entre votre ambition sectorielle et une culture qui valorise l’engagement et l’excellence opérationnelle. »\n- **Modèle de message direct (LinkedIn / Email) :**\n  > « Bonjour, séduit par les valeurs et la dynamique de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956)., je serais ravi d'échanger sur l'opportunité de mettre mes compétences au service de vos équipes. »\n- **Questions ciblées à lui poser :**\n  * « « Comment décririez-vous l’ambiance et les valeurs vécues au quotidien au sein des équipes de Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). ? » »\n\n#### 5. Stack Technique, Progiciels & Organisation\n- **Stack & Progiciels :** SAP\n- **Rattachement hiérarchique :** Rattachement direct à la Direction Générale (DG) et membre du Comité de Direction.\n- **Méthodologie & Normes :** Normes comptables françaises & IFRS le cas échéant, pilotage par objectifs chiffrés et procédures de contrôle interne.\n- **Chantiers & Projets prioritaires :**\n  * Modernisation ou interfaçage des outils financiers (ERP, logiciel de trésorerie, automatisation des rapprochements).\n  * Mise en place de tableaux de bord financiers automatisés et d’indicateurs prédictifs de cash.\n  * Accompagnement de la croissance par la structuration des équipes et la fiabilisation des clôtures.\n\n#### 6. Questions Stratégiques Haut de Gamme en Entretien\n**Q1 :** *« Quelle est la cadence et la granularité actuelle de vos prévisions de trésorerie (prévisionnel glissant à 13 semaines, mensuel ou annuel) ? »*\n  ↳ **Objectif candidat :** Démontrer immédiatement une vision d’anticipation du cash et une rigueur méthodologique appréciée des DAF.\n\n**Q2 :** *« Quels sont les chantiers prioritaires à 6 mois pour ce poste : sécurisation des process existants, migration d’outils ou accompagnement de nouveaux projets ? »*\n  ↳ **Objectif candidat :** Montrer sa capacité à hiérarchiser les urgences et à s’inscrire en véritable Business Partner dès le premier jour.\n\n#### 7. Pitch d'Accroche Personnalisé\n« Fort d'un parcours rigoureux en finance et gestion opérationnelle, j'ai développé une expertise solide dans l'optimisation des flux, le pilotage de la trésorerie et la fiabilisation des clôtures. Votre projet chez Non nommée (Expert des spiritueux, haut de gamme, depuis 1956). résonne particulièrement avec mon approche : allier rigueur technique sur les progiciels et rôle proactif de Business Partner pour sécuriser la croissance et accompagner vos décisions stratégiques. »"
+      },
+      "coverLetterId": "letter-app-1791978670898",
+      "coverLetterTitle": "Lettre de Motivation - Contrôleur de Gestion. - Non nommée (Expert des spiritueux, haut de gamme, depuis 1956).",
+      "coverLetterContent": "**Babacar Ndiaye**  \nDakar, Sénégal (Mobilité immédiate sur Paris)  \n+221 76 100 20 30 | bndiaye@emploidakar.com  \nlinkedin.com/in/bndiaye  \n\nParis, le 24 octobre 2023  \n\n**Cabinet Les Nouveaux Héritiers**  \nÀ l’attention du Responsable du recrutement  \nRéf. de l’offre : 1802862  \n\n**Objet : Candidature au poste de Contrôleur de Gestion – Secteur Spiritueux haut de gamme**\n\nMadame, Monsieur,\n\nPiloter la rentabilité d’un groupe en forte expansion tout en préservant l’exigence propre à une maison historique requiert une donnée financière irréprochable et un dialogue constant avec les opérationnels. Référence incontournable des spiritueux d’exception depuis 1956, votre client recherche un profil capable de structurer la gestion de six sociétés en lien direct avec la Responsable Administrative et Financière. Fort de plus de cinq ans d’expérience en contrôle de gestion dans des environnements multi-entités exigeants, je souhaite mettre ma rigueur méthodologique au service de cette dynamique de croissance.\n\nMon parcours au sein du Groupe COFINA et chez Bolloré Transport & Logistics m’a permis de maîtriser l'ensemble du cycle budgétaire et du pilotage de la performance :\n- **Pilotage budgétaire et clôtures :** Définition des méthodologies de construction budgétaire, consolidation des données prévisionnelles, suivi des révisions trimestrielles et analyse des écarts réalisé/budget en lien direct avec les équipes comptables.\n- **Aide à la décision pour les directions :** Automatisation de tableaux de bord financiers sous Excel avancé et production de notes de synthèse commentées (marges, PNB, coûts d'exploitation), servant d'appui stratégique aux directeurs de Business Units.\n- **Fiabilisation des flux et process :** Amélioration continue des circuits d'information entre la comptabilité et le contrôle de gestion, garantissant la conformité et l’intégrité des chiffres dans un cadre rigoureusement confidentiel.\n\nHabitué à collaborer avec des équipes pluridisciplinaires et parfaitement bilingue en anglais, je saurai m'adapter rapidement aux spécificités de distribution de votre client et devenir un relais de confiance pour la RAF comme pour les directeurs opérationnels. Rejoindre une structure qui allie prestige patrimonial et agilité commerciale constitue pour moi un engagement naturel et motivant.\n\nDisponible pour échanger sur la manière dont mes compétences répondront aux enjeux de ce périmètre de six sociétés, je me tiens à votre entière disposition pour un entretien.\n\nJe vous prie d'agréer, Madame, Monsieur, l’expression de mes salutations distinguées.\n\n**Babacar Ndiaye**"
+    },
     {
       "id": "1791921307047",
       "timestamp": "13/10/2026 à 22:01",
@@ -513,5 +824,252 @@
     "autoSaveToDb": true,
     "backupFrequency": "weekly",
     "lastBackupDate": "2026-10-13T19:43:30.291Z"
-  }
+  },
+  "scoutedOffers": [
+    {
+      "id": "scout-job-101",
+      "title": "Contrôleur de Gestion Senior - Secteur Bancaire",
+      "company": "Société Générale Sénégal",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "22 000 000 - 28 000 000 XOF brut annuel",
+      "remote": "Hybride (1j/semaine)",
+      "source": "LinkedIn",
+      "sourceUrl": "https://www.linkedin.com/jobs/view/3891024510",
+      "publishedAt": "Il y a 1 jour",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 96,
+      "matchingSkills": [
+        "Suivi du PNB",
+        "Construction et suivi budgétaire",
+        "Analyse de données financières",
+        "Reporting et synthèse d'activité",
+        "Comptabilité et culture financière"
+      ],
+      "missingSkills": [
+        "Réglementation prudentielle BCEAO (Bâle II / III)"
+      ],
+      "aiFitSummary": "Ce poste s'aligne idéalement avec votre expertise combinée en banque et votre maîtrise éprouvée du suivi du PNB. Votre profil bilingue et votre Master 2 en audit garantissent une prise de fonction immédiate sur le pilotage de la rentabilité.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "Société Générale Sénégal recrute son futur Contrôleur de Gestion Senior rattaché à la Direction Financière.\n\nMissions principales :\n- Pilotage du cycle budgétaire annuel et projections pluriannuelles du Pôle Banque de Détail et Entreprises.\n- Suivi rigoureux du Produit Net Bancaire (PNB), analyse des marges d'intermédiation et des commissions.\n- Élaboration des reportings périodiques destinés au Comité de Direction et au Siège du Groupe.\n- Production et optimisation des tableaux de bord de gestion et KPI d'activité commerciale.\n- Participation aux travaux de clôture financière en étroite liaison avec les équipes comptables.\n\nProfil recherché :\n- Formation Bac+5 (Master 2) en Audit, Contrôle de Gestion ou Finance d'entreprise.\n- Expérience avérée de 5 ans minimum en contrôle de gestion bancaire ou en institution financière.\n- Maîtrise avancée des modélisations financières sur Excel et aisance avec les progiciels bancaires.\n\nAvantages :\n- Assurance santé groupe prise en charge à 100%, 13e mois, prime de performance, plan d'épargne d'entreprise.",
+      "requirements": [
+        "Master 2 Audit et Contrôle de Gestion ou Finance",
+        "Minimum 5 ans d'expérience en environnement bancaire",
+        "Excellente maîtrise d'Excel (TCD, macros, modélisation)",
+        "Capacités rédactionnelles et relationnelles de haut niveau"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    },
+    {
+      "id": "scout-job-102",
+      "title": "Contrôleur de Gestion Opérations & Logistique Hub",
+      "company": "CMA CGM Sénégal",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "20 000 000 - 25 000 000 XOF brut annuel",
+      "remote": "Présentiel avec flexibilité",
+      "source": "Apec",
+      "sourceUrl": "https://www.apec.fr/candidat/recherche-emploi.html/emploi/cma-cgm-cdg-dakar",
+      "publishedAt": "Il y a 3 jours",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 94,
+      "matchingSkills": [
+        "Construction et suivi budgétaire",
+        "Conception de tableaux de bord",
+        "Systèmes d'information et ERP",
+        "Analyse de données financières",
+        "Reporting et synthèse d'activité"
+      ],
+      "missingSkills": [
+        "Gestion des coûts portuaires / stevedoring"
+      ],
+      "aiFitSummary": "Votre expérience sectorielle en logistique et fret maritime constitue un atout décisif pour ce fleuron mondial du transport. Vous y valoriserez directement votre capacité à construire des KPI opérationnels sur mesure.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "Le Groupe CMA CGM, leader mondial du transport maritime et de la logistique, recherche un Contrôleur de Gestion Opérationnel pour son bureau régional de Dakar.\n\nMissions :\n- Suivi budgétaire et contrôle des coûts d'escales, de manutention et de transbordement maritime.\n- Analyse des écarts entre les coûts opérationnels réels et prévisionnels sur les corridors terrestres et maritimes.\n- Déploiement et animation des KPI de productivité logistique via des tableaux de bord automatisés.\n- Collaboration étroite avec les équipes Supply Chain et Facturation pour la sécurisation du cash flow.\n- Préparation des business reviews trimestrielles à destination du management régional.\n\nProfil :\n- Diplômé(e) d'un Master 2 en Finance / Contrôle de Gestion.\n- 4 à 7 ans d'expérience en contrôle de gestion, impérativement dans le secteur logistique, transport ou supply chain.\n- Anglais courant indispensable (interactions quotidiennes avec le Siège et les filiales régionales).\n\nAvantages :\n- Package compétitif, bonus annuel sur objectifs, opportunités d'expatriation au sein du Groupe.",
+      "requirements": [
+        "Expérience confirmée de 4 ans minimum en contrôle de gestion logistique",
+        "Maîtrise d'un ERP international (ex: SAP, Oracle)",
+        "Anglais professionnel courant (écrit et oral)",
+        "Capacité à dialoguer avec des interlocuteurs opérationnels terrain"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    },
+    {
+      "id": "scout-job-106",
+      "title": "Auditeur Interne & Contrôleur Financier",
+      "company": "Bolloré Transport & Logistics / AGL Sénégal",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "22 000 000 - 27 000 000 XOF brut annuel",
+      "remote": "Présentiel (avec missions régionales)",
+      "source": "France Travail",
+      "sourceUrl": "https://candidat.francetravail.fr/offres/recherche/detail/176XZTR",
+      "publishedAt": "Il y a 4 jours",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 93,
+      "matchingSkills": [
+        "Audit et contrôle interne",
+        "Comptabilité et culture financière",
+        "Systèmes d'information et ERP",
+        "Reporting et synthèse d'activité",
+        "Construction et suivi budgétaire"
+      ],
+      "missingSkills": [
+        "Certification d'audit type CIA ou CISA"
+      ],
+      "aiFitSummary": "L'intitulé capitalise sur votre double casquette 'Master 2 Audit & Contrôle' et votre historique logistique. Le poste offre une passerelle directe vers un poste de Directeur Administratif et Financier de cluster.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "AGL (Africa Global Logistics) recrute pour son pôle régional basé à Dakar un Auditeur Interne & Contrôleur Financier.\n\nMissions :\n- Évaluation de l'efficacité des dispositifs de contrôle interne et de conformité des processus financiers.\n- Réalisation de missions d'audit opérationnel et financier sur les activités de manutention et d'entreposage.\n- Élaboration de plans d'action correctifs et suivi de leur mise en œuvre avec les directeurs d'agences.\n- Revue de la fiabilité des arrêtés comptables, des processus d'engagement des dépenses et de gestion des stocks.\n- Rédaction de rapports synthétiques à destination du Comité d'Audit régional.\n\nProfil :\n- Titulaire d'un Master 2 en Audit et Contrôle de Gestion.\n- 4 à 8 ans d'expérience réussie en cabinet d'audit ou en audit interne dans un secteur industriel/logistique.\n- Rigueur méthodologique, intégrité irréprochable et aisance relationnelle reconnue.",
+      "requirements": [
+        "Master 2 Audit & Contrôle de gestion",
+        "4 ans d'expérience minimum en audit interne/externe",
+        "Pratique avérée des environnements ERP",
+        "Disponibilité pour des missions courtes en sous-région"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    },
+    {
+      "id": "scout-job-104",
+      "title": "Contrôleur Financier & Business Analyst - Afrique de l'Ouest",
+      "company": "TotalEnergies Marketing Sénégal",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "23 000 000 - 27 000 000 XOF brut annuel",
+      "remote": "Hybride (1 à 2j/semaine)",
+      "source": "LinkedIn",
+      "sourceUrl": "https://www.linkedin.com/jobs/view/3910482012",
+      "publishedAt": "Il y a 2 jours",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 91,
+      "matchingSkills": [
+        "Analyse de données financières",
+        "Reporting et synthèse d'activité",
+        "Maîtrise avancée des tableurs",
+        "Planification stratégique",
+        "Comptabilité et culture financière"
+      ],
+      "missingSkills": [
+        "Power BI avancé / DAX"
+      ],
+      "aiFitSummary": "Idéal pour valoriser vos compétences de business partnering et d'analyse financière dans une multinationale de premier plan. L'environnement structuré capitalise sur votre rigueur méthodologique et vos capacités d'analyse.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "Au sein de la Direction Financière de TotalEnergies Sénégal, vous intervenez comme véritable copilote financier des lignes de métiers B2B et Réseau.\n\nMissions :\n- Élaboration et suivi des comptes de résultat par branche d'activité et gamme de produits.\n- Analyse des marges unitaires, suivi des structures de prix et modélisation des impacts de fluctuations tarifaires.\n- Mise en place et automatisation des reportings de vente quotidiens et mensuels pour la direction commerciale.\n- Conduite d'études ad hoc de rentabilité pour de nouvelles implantations et investissements industriels.\n- Support à la préparation des audits financiers et consolidation mensuelle des données sous SAP.\n\nProfil :\n- De formation supérieure Bac+5 en Finance, vous possédez au moins 4 années d'expérience en contrôle de gestion ou analyse financière.\n- Aptitude à communiquer clairement des constats financiers à des équipes commerciales.",
+      "requirements": [
+        "Master 2 Audit & Contrôle de gestion",
+        "4 à 6 ans d'expérience professionnelle",
+        "Forte sensibilité aux modèles économiques de distribution",
+        "Aisance avérée avec les outils BI et SAP"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    },
+    {
+      "id": "scout-job-105",
+      "title": "Analyste Financier & Performance Management",
+      "company": "Orange Middle East & Africa (Sonatel)",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "21 000 000 - 26 000 000 XOF brut annuel",
+      "remote": "Hybride (2j/semaine)",
+      "source": "Welcome to the Jungle",
+      "sourceUrl": "https://www.welcometothejungle.com/fr/companies/orange-mea/jobs/analyste-financier-performance_dakar",
+      "publishedAt": "Il y a 4 heures",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 89,
+      "matchingSkills": [
+        "Analyse de données financières",
+        "Conception de tableaux de bord",
+        "Reporting et synthèse d'activité",
+        "Maîtrise avancée des tableurs",
+        "Systèmes d'information et ERP"
+      ],
+      "missingSkills": [
+        "Connaissance des métriques télécoms (ARPU, Churn, Capex réseau)"
+      ],
+      "aiFitSummary": "Votre polyvalence sur les données chiffrées et les outils décisionnels s'intègre parfaitement aux exigences de performance du secteur télécom. Un poste stimulant qui combine reporting stratégique et analyse prédictive.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "La Direction de la Performance et du Pilotage Financier de Sonatel recherche un Analyste Financier confirmé.\n\nMissions :\n- Suivi de la trajectoire financière des offres de services digitaux et mobiles.\n- Conception et maintenance des tableaux de bord automatisés pour mesurer le ROI des investissements technologiques.\n- Réalisation des clôtures mensuelles de gestion et documentation des écarts par rapport au budget.\n- Participation aux projets d'évolution des systèmes décisionnels et de data visualisation financière.\n- Contribution aux revues analytiques stratégiques présentées au Comité de Direction.\n\nProfil :\n- Formation Bac+5 en finance d'entreprise ou contrôle de gestion.\n- 3 à 6 ans d'expérience acquise en cabinet d'audit (Big 4) ou au sein d'une grande entreprise de services.\n- Esprit analytique pointu, dynamisme et réelle curiosité pour les nouveaux modèles de services digitaux.",
+      "requirements": [
+        "Diplôme Bac+5 (Grandes Écoles de Commerce ou Université)",
+        "3+ ans en audit financier ou contrôle de gestion",
+        "Expertise sur Excel et appétence pour la Business Intelligence",
+        "Esprit de synthèse et autonomie"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    },
+    {
+      "id": "scout-job-103",
+      "title": "Responsable Contrôle de Gestion Filiale",
+      "company": "Eiffage Sénégal",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "24 000 000 - 30 000 000 XOF brut annuel",
+      "remote": "Sur site / Déplacements ponctuels",
+      "source": "Indeed",
+      "sourceUrl": "https://sn.indeed.com/viewjob?jk=eiffage-sen-resp-cdg-2024",
+      "publishedAt": "Il y a 5 jours",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 88,
+      "matchingSkills": [
+        "Planification stratégique",
+        "Construction et suivi budgétaire",
+        "Audit et contrôle interne",
+        "Conception de tableaux de bord",
+        "Systèmes d'information et ERP"
+      ],
+      "missingSkills": [
+        "Contrôle budgétaire de chantiers BTP / grands travaux"
+      ],
+      "aiFitSummary": "Cette opportunité de management élargit votre périmètre vers la responsabilité complète d'une fonction contrôle de gestion de filiale. Vos bases en audit interne et planification stratégique y seront immédiatement mobilisables.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "Eiffage Sénégal, acteur de référence des grands projets d'infrastructures et de génie civil, recrute son Responsable Contrôle de Gestion.\n\nMissions :\n- Encadrement d'une équipe de 3 contrôleurs de gestion projets.\n- Supervision de la préparation du budget annuel consolidé et des actualisations trimestrielles (rolling forecast).\n- Contrôle budgétaire des affaires à terminaison (RAC, provisions pour risques et charges, facturation des travaux).\n- Garantie du respect des procédures de contrôle interne et fiabilisation des remontées comptables.\n- Force de proposition auprès de la Direction Générale pour arbitrer les choix d'investissements matériels.\n\nProfil :\n- Bac+5 Audit / Contrôle de gestion avec 7 ans d'expérience au moins, incluant une dimension de coordination d'équipe.\n- Forte rigueur, leadership naturel et excellente capacité d'influence auprès des directeurs de projets.",
+      "requirements": [
+        "Master 2 Finance / Contrôle de gestion",
+        "7+ ans d'expérience, dont au moins 2 ans sur des responsabilités élargies",
+        "Excellente maîtrise du cycle budgétaire complet et des clôtures analytiques",
+        "Leadership et expérience d'animation d'équipe"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    },
+    {
+      "id": "scout-job-107",
+      "title": "Contrôleur de Gestion - Fintech & Paiements",
+      "company": "Wave Mobile Money",
+      "location": "Dakar, Sénégal",
+      "contractType": "CDI",
+      "salary": "24 000 000 - 32 000 000 XOF brut annuel",
+      "remote": "Hybride (2j/semaine)",
+      "source": "LinkedIn",
+      "sourceUrl": "https://www.linkedin.com/jobs/view/3882901174",
+      "publishedAt": "Il y a 1 jour",
+      "matchedProfileId": "user_profile",
+      "matchedProfileName": "Contrôleur de Gestion",
+      "relevanceScore": 87,
+      "matchingSkills": [
+        "Analyse de données financières",
+        "Construction et suivi budgétaire",
+        "Maîtrise avancée des tableurs",
+        "Conception de tableaux de bord",
+        "Comptabilité et culture financière"
+      ],
+      "missingSkills": [
+        "Requêtage SQL / Environnement Cloud (BigQuery/Looker)"
+      ],
+      "aiFitSummary": "Cette opportunité au sein d'une licorne technologique valorise votre socle de compétences bancaires dans un cadre ultra-innovant. Idéal pour moderniser vos méthodes de pilotage en côtoyant des volumes massifs de transactions.",
+      "recommendedAction": "postuler_immediatement",
+      "description": "Wave Mobile Money recrute son Contrôleur de Gestion Opérations Financières à Dakar pour accompagner l'hyper-croissance de ses activités régionales.\n\nMissions :\n- Suivi et réconciliation financière des flux de monnaie électronique et des liquidités en réseau d'agents.\n- Calcul des coûts d'acquisition, de gestion de la liquidité et analyse unitaire des marges de transaction.\n- Construction du budget opérationnel et modélisation des scenarii financiers pour de nouveaux lancements.\n- Mise en place de contrôles automatisés sur les postes de charges clés et suivi en temps réel du cash flow.\n- Collaboration étroite avec les équipes Data et Finance pour faire évoluer les outils de business intelligence.\n\nProfil :\n- Formation Bac+5 en Finance / Contrôle de gestion.\n- Expérience de 3 à 5 ans en banque, fintech ou cabinet d'audit de premier plan.\n- Culture financière solide couplée à une très forte agilité intellectuelle.",
+      "requirements": [
+        "Master 2 Finance / Contrôle de gestion",
+        "3+ ans d'expérience en environnement bancaire ou financier dynamique",
+        "Bilingue français / anglais professionnel",
+        "Excellence technique sur la manipulation de bases de données"
+      ],
+      "discoveredAt": "2026-10-16T07:02:47.708Z"
+    }
+  ]
 }

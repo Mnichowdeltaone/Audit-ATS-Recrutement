@@ -86,6 +86,7 @@ import OptimizationFunnel from './components/OptimizationFunnel';
 import AttachLetterModal from './components/AttachLetterModal';
 import CompanyDossierModal from './components/CompanyDossierModal';
 import CvImprovementLogo from './components/CvImprovementLogo';
+import JobScoutRobotView from './components/JobScoutRobotView';
 import { parseAnalysisResult } from './utils/analysisParser';
 import { extractCompanyDossier } from './utils/companyDossierExtractor';
 import { SAMPLE_DEMO_CV, SAMPLE_DEMO_JOB } from './utils/sampleData';
@@ -107,6 +108,7 @@ import {
   EvolutionStep,
   AnalysisHistoryItem,
   CompanyFinancialTechnicalDossier,
+  ScrapedJobOffer,
 } from './types';
 import { buildEvolutionStep, detectCvChanges } from './utils/cvEvolutionHelper';
 
@@ -386,6 +388,11 @@ export default function App() {
     return localDbClient.getLocalApplications().filter((a) => !isDemoApplication(a));
   });
 
+  // Offres dénichées et scorées par le Robot Chasseur
+  const [scoutedOffers, setScoutedOffers] = useState<ScrapedJobOffer[]>(() => {
+    return localDbClient.getLocalScoutedOffers();
+  });
+
   // Mode Démonstration (100% fictif et strictement isolé des données personnelles de l'utilisateur)
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
     try {
@@ -431,14 +438,18 @@ export default function App() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('cv_move_applications');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((a: any) => !isDemoApplication(a));
-          if (cleaned.length !== parsed.length) {
-            localStorage.setItem('cv_move_applications', JSON.stringify(cleaned));
-            setApplications(cleaned);
+      if (raw && raw.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed.filter((a: any) => !isDemoApplication(a));
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem('cv_move_applications', JSON.stringify(cleaned));
+              setApplications(cleaned);
+            }
           }
+        } catch {
+          localStorage.removeItem('cv_move_applications');
         }
       }
     } catch {}
@@ -525,13 +536,14 @@ export default function App() {
   useEffect(() => {
     const initDb = async () => {
       try {
-        const [cvList, appList, analysesList, stats, profileData, profilesList] = await Promise.all([
+        const [cvList, appList, analysesList, stats, profileData, profilesList, scoutedList] = await Promise.all([
           localDbClient.getCvs(),
           localDbClient.getApplications(),
           localDbClient.getAnalyses(),
           localDbClient.fetchStats(),
           localDbClient.getProfile(),
           localDbClient.getProfiles(),
+          localDbClient.getScoutedOffers(),
         ]);
         setSavedCvs(cvList || []);
         if (cvList && cvList.length > 0) {
@@ -544,6 +556,7 @@ export default function App() {
           setSelectedCvId('');
         }
         setApplications(appList || []);
+        setScoutedOffers(scoutedList || []);
         setHistory(analysesList || []);
         setDbStats(stats || null);
         setUserProfile(profileData || null);
@@ -570,7 +583,7 @@ export default function App() {
     initDb();
   }, []);
 
-  // Écouteurs en temps réel pour actualiser la liste des CVs et Profils
+  // Écouteurs en temps réel pour actualiser la liste des CVs, Profils et Offres du Robot
   useEffect(() => {
     const handleCvsUpdated = async () => {
       try {
@@ -594,13 +607,25 @@ export default function App() {
         console.warn('Erreur synchro Profiles event:', err);
       }
     };
+    const handleScoutedUpdated = async () => {
+      try {
+        const freshOffers = await localDbClient.getScoutedOffers();
+        setScoutedOffers(freshOffers);
+        const freshStats = await localDbClient.fetchStats();
+        setDbStats(freshStats);
+      } catch (err) {
+        console.warn('Erreur synchro Scouted event:', err);
+      }
+    };
     window.addEventListener('cv_move_cvs_updated', handleCvsUpdated);
     window.addEventListener('cv_database_updated', handleCvsUpdated);
     window.addEventListener('cv_move_profile_updated', handleProfilesUpdated);
+    window.addEventListener('cv_move_scouted_offers_updated', handleScoutedUpdated);
     return () => {
       window.removeEventListener('cv_move_cvs_updated', handleCvsUpdated);
       window.removeEventListener('cv_database_updated', handleCvsUpdated);
       window.removeEventListener('cv_move_profile_updated', handleProfilesUpdated);
+      window.removeEventListener('cv_move_scouted_offers_updated', handleScoutedUpdated);
     };
   }, []);
 
@@ -610,6 +635,7 @@ export default function App() {
     setApiKey('');
     setShowApiKey(false);
     setApplications([]);
+    setScoutedOffers([]);
     setHistory([]);
     setSavedCvs([]);
     setSelectedCvId('');
@@ -630,6 +656,7 @@ export default function App() {
       analysesCount: 0,
       suggestionsCount: 0,
       coverLettersCount: 0,
+      scoutedOffersCount: 0,
       dbSizeBytes: 0,
       lastUpdated: new Date().toISOString(),
     });
@@ -932,7 +959,18 @@ export default function App() {
     analysisTitle?: string;
   } | null>(null);
 
-  const handleOpenCompanyDossier = (item: AnalysisHistoryItem) => {
+  const handleOpenCompanyDossier = (itemOrCompany: AnalysisHistoryItem | string) => {
+    if (typeof itemOrCompany === 'string') {
+      const companyName = itemOrCompany;
+      const dossier = extractCompanyDossier('', '', companyName, '');
+      setViewingCompanyDossier({
+        dossier,
+        roleTitle: 'Poste analysé',
+        analysisTitle: `Fiche Entreprise : ${companyName}`,
+      });
+      return;
+    }
+    const item = itemOrCompany;
     const dossier =
       item.companyDossier ||
       extractCompanyDossier(
@@ -946,6 +984,61 @@ export default function App() {
       roleTitle: item.role,
       analysisTitle: item.title,
     });
+  };
+
+  // Action du Robot Chasseur : Analyser une offre dénichée avec le CV
+  const handleAnalyzeScoutedOffer = (offer: ScrapedJobOffer) => {
+    setJobText(offer.description);
+    if (offer.sourceUrl) {
+      setJobUrl(offer.sourceUrl);
+    }
+    setActiveTab('app');
+    setCvSaveSuccess(`🎯 Offre « ${offer.title} » chez ${offer.company} chargée dans l'Analyseur !`);
+    setTimeout(() => setCvSaveSuccess(null), 4000);
+  };
+
+  // Action du Robot Chasseur : Ajouter directement l'offre au Suivi Kanban
+  const handleAddScoutedOfferToTracker = async (offer: ScrapedJobOffer) => {
+    const today = new Date();
+    const followUp = new Date(today);
+    followUp.setDate(today.getDate() + 7);
+
+    const newApp: ApplicationItem = {
+      id: `app-scout-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      company: offer.company,
+      role: offer.title,
+      status: 'to_apply',
+      appliedDate: today.toISOString().split('T')[0],
+      followUpDate: followUp.toISOString().split('T')[0],
+      location: offer.location,
+      contractType: offer.contractType,
+      salary: offer.salary,
+      jobUrl: offer.sourceUrl,
+      score: offer.relevanceScore,
+      notes: `[Robot Chasseur d'Offres] Détecté pour le profil : ${offer.matchedProfileName || 'Principal'}\nScore d'adéquation : ${offer.relevanceScore}%\nPoints forts : ${(offer.matchingSkills || []).join(', ')}\n\nAnalyse IA : ${offer.aiFitSummary}`,
+      checklist: {
+        cvSent: false,
+        coverLetterSent: false,
+        portfolioSent: false,
+        followUpDone: false,
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const saved = await localDbClient.saveApplication(newApp);
+    setApplications((prev) => [saved, ...prev.filter((a) => a.id !== saved.id)]);
+
+    await localDbClient.updateScoutedOffer(offer.id, { isApplied: true });
+    setScoutedOffers((prev) =>
+      prev.map((o) => (o.id === offer.id ? { ...o, isApplied: true } : o))
+    );
+
+    const stats = await localDbClient.fetchStats();
+    setDbStats(stats);
+
+    setCvSaveSuccess(`💼 « ${offer.title} » (${offer.company}) ajoutée à votre Suivi Kanban !`);
+    setTimeout(() => setCvSaveSuccess(null), 4000);
   };
 
   // Synchronisation temps réel lors du rattachement/détachement d'une lettre à un audit
@@ -1898,6 +1991,7 @@ export default function App() {
         selectedModel={selectedModel}
         applicationsCount={effectiveApplications.length}
         historyCount={effectiveAnalyses.length}
+        scoutedOffersCount={scoutedOffers.length}
         dbStats={dbStats}
         history={effectiveAnalyses}
         onLoadHistoryItem={handleLoadHistoryItem}
@@ -1944,6 +2038,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate">
                   {activeTab === 'dashboard' && '📊 Accueil : Tableau de Bord de Recherche d\'Emploi'}
+                  {activeTab === 'job-robot' && '🤖 Robot Chasseur d\'Offres & Opportunités'}
                   {activeTab === 'calendar' && '📅 Calendrier & Agenda des Démarches'}
                   {activeTab === 'app' && '🎯 Analyseur d\'Adéquation ATS (CV vs Offre)'}
                   {activeTab === 'cv-assistant' && '✍️ Aide à la Création de CV (Page Blanche & CV Brut)'}
@@ -1960,6 +2055,7 @@ export default function App() {
               </div>
               <p className="text-[11px] text-gray-500 hidden sm:block truncate">
                 {activeTab === 'dashboard' && 'Vue d\'ensemble de votre recherche d\'emploi, indicateurs clés explicatifs (KPIs) et suivi de vos démarches'}
+                {activeTab === 'job-robot' && 'Sélection automatisée et scoring d\'adéquation de postes ciblés pour vos différents profils professionnels'}
                 {activeTab === 'calendar' && 'Planifiez vos entretiens, relances, rendez-vous France Travail, salons de recrutement et démarches pro'}
                 {activeTab === 'app' && 'Comparez votre CV à l\'offre, identifiez les écarts ATS et boostez vos chances d\'entretien'}
                 {activeTab === 'cv-assistant' && 'Assistance simple pour créer un CV brut depuis une page blanche, à enrichir et améliorer par la suite'}
@@ -2127,6 +2223,30 @@ export default function App() {
           )}
 
           {/* =========================================================================
+              ONGLET : ROBOT CHASSEUR D'OFFRES D'EMPLOIS (JOB SCOUT IA)
+             ========================================================================= */}
+          {activeTab === 'job-robot' && (
+            <JobScoutRobotView
+              userProfile={effectiveProfile}
+              userProfiles={effectiveProfiles}
+              applications={effectiveApplications}
+              apiKey={apiKey}
+              hasServerKey={hasServerKey}
+              selectedModel={selectedModel}
+              onAnalyzeWithCv={handleAnalyzeScoutedOffer}
+              onAddToTracker={handleAddScoutedOfferToTracker}
+              onGenerateCoverLetter={(offer) => {
+                setJobText(offer.description);
+                setActiveTab('app');
+              }}
+              onOpenCompanyDossier={(company) => {
+                handleOpenCompanyDossier(company);
+              }}
+              isDemoMode={isDemoMode}
+            />
+          )}
+
+          {/* =========================================================================
               ONGLET : CALENDRIER & AGENDA DES DÉMARCHES (FRANCE TRAVAIL, SALONS, ENTRETIENS)
              ========================================================================= */}
           {activeTab === 'calendar' && (
@@ -2278,6 +2398,20 @@ export default function App() {
               }
             }}
             onRenameAnalysis={handleRenameAnalysis}
+            onUpdateAnalysisCoverLetter={(analysisId, letter) => {
+              setHistory((prev) =>
+                prev.map((h) =>
+                  h.id === analysisId
+                    ? {
+                        ...h,
+                        coverLetterId: letter?.id,
+                        coverLetterTitle: letter?.title,
+                        coverLetterContent: letter?.content,
+                      }
+                    : h
+                )
+              );
+            }}
             apiKey={apiKey}
             hasServerKey={hasServerKey}
           />

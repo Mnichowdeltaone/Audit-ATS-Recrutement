@@ -1123,6 +1123,344 @@ app.post('/api/fetch-job-url', async (req: Request, res: Response) => {
 });
 
 // =============================================================================
+// ROBOT CHASSEUR D'OFFRES D'EMPLOIS (JOB SCOUT BOT & VEILLE ACTIVE)
+// =============================================================================
+
+function generateFallbackScoutedOffers(
+  profiles: any[],
+  options: {
+    keywords?: string;
+    location?: string;
+    contractTypes?: string[];
+    sources?: string[];
+    minScore?: number;
+  }
+): any[] {
+  const list: any[] = [];
+  const sources = options.sources && options.sources.length > 0
+    ? options.sources
+    : ['France Travail', 'LinkedIn', 'Apec', 'Welcome to the Jungle', 'Indeed'];
+
+  const companiesPool = [
+    { name: 'Groupe Helios Finance', sector: 'Finance & Services', location: 'Paris 8e (Haussmann)', remote: 'Télétravail 2j/semaine' },
+    { name: 'Kallista Energy & Infrastructure', sector: 'Énergie & Transition', location: 'Paris 16e (Porte Maillot)', remote: 'Télétravail 2 à 3j/semaine' },
+    { name: 'Valoria Capital Partners', sector: 'Gestion Privée & Private Equity', location: 'Neuilly-sur-Seine (92)', remote: 'Télétravail 1j/semaine' },
+    { name: 'NovaTech Logistics SAS', sector: 'Supply Chain & E-commerce', location: 'Lyon (Confluence)', remote: 'Télétravail flexible' },
+    { name: 'Manufacture Supratec Industrie', sector: 'Industrie & Robotique', location: 'Massy / Saclay (91)', remote: 'Sur site / Flexibilité horaire' },
+    { name: 'FinTech NexoPay France', sector: 'Paiements & FinTech', location: 'Paris 2e (Sentier)', remote: 'Full Remote ou Hybride' },
+    { name: 'BioSanté Solutions', sector: 'Pharmacie & Santé', location: 'Nantes (Centre)', remote: 'Télétravail 2j/semaine' },
+    { name: 'Axiom Stratégie & Conseil', sector: 'Conseil & Transformation', location: 'Paris La Défense', remote: 'Télétravail 2j/semaine' },
+  ];
+
+  let counter = 1;
+
+  for (const profile of profiles) {
+    const roles: string[] = Array.isArray(profile.targetRoles) && profile.targetRoles.length > 0
+      ? profile.targetRoles
+      : [profile.currentTitle || 'Responsable de Mission'];
+    const skills: string[] = Array.isArray(profile.skills) && profile.skills.length > 0
+      ? profile.skills
+      : ['Gestion de projet', 'Rigueur', 'Analyse', 'Autonomie', 'Excel'];
+    const userLoc = options.location || profile.location || 'Paris (Île-de-France)';
+
+    for (let i = 0; i < Math.min(roles.length, 3); i++) {
+      const role = roles[i];
+      const comp = companiesPool[(counter - 1) % companiesPool.length];
+      const source = sources[(counter - 1) % sources.length];
+      const contract = i === 2 ? 'Freelance' : 'CDI';
+
+      const matchingSubset = skills.slice(0, Math.min(skills.length, 4));
+      const missingSubset = skills.length > 4 ? skills.slice(4, 6) : ['Anglais professionnel C1', 'Certification métier'];
+      const score = Math.min(97, Math.max(72, 94 - (i * 6) + ((counter * 4) % 7)));
+
+      const offerId = `scout-${profile.id ? profile.id.slice(0, 8) : 'p'}-${counter}-${Date.now().toString(36)}`;
+      const publishedAges = ['Il y a 2 heures', 'Il y a 4 heures', 'Hier', 'Il y a 2 jours', 'Il y a 3 jours'];
+      const publishedAt = publishedAges[(counter - 1) % publishedAges.length];
+
+      const salaryRanges = [
+        '50k - 62k € brut annuel + variable 10%',
+        '48k - 58k € brut annuel selon profil',
+        '65k - 78k € package global (fixe + bonus)',
+        '550€ à 750€ / jour (TJM Freelance)',
+        '55k - 65k € + primes + intéressement',
+      ];
+      const salary = salaryRanges[(counter - 1) % salaryRanges.length];
+
+      const description = `### Entreprise : ${comp.name}
+Acteur de référence dans le secteur ${comp.sector} (${comp.location}), notre groupe accélère ses projets de transformation et renforce ses compétences stratégiques.
+
+### Intitulé du poste : ${role} (${contract})
+Localisation : ${userLoc.includes('Paris') ? comp.location : userLoc} (${comp.remote})
+Rémunération proposée : ${salary}
+
+### Missions principales
+- **Pilotage opérationnel & Fiabilisation :** Conduire les chantiers stratégiques et garantir la conformité et la performance des processus.
+- **Optimisation des outils & flux :** Participer activement à la digitalisation des flux de travail (${matchingSubset.slice(0, 2).join(', ')}).
+- **Interface transverse :** Coordonner les actions avec la Direction et les départements opérationnels.
+- **Reporting & KPI :** Structurer les tableaux de bord d'aide à la décision et fiabiliser les métriques de gestion.
+
+### Profil recherché
+- De formation supérieure (Bac+5 ou équivalent).
+- Maîtrise démontrée des expertises : ${matchingSubset.join(', ')}.
+- Rigueur méthodologique, excellentes qualités relationnelles et force de proposition.`;
+
+      list.push({
+        id: offerId,
+        title: role,
+        company: comp.name,
+        location: userLoc.includes('Paris') ? comp.location : userLoc,
+        contractType: contract,
+        salary,
+        remote: comp.remote,
+        source,
+        sourceUrl: `https://www.${source.toLowerCase().replace(/\s+/g, '')}.fr/offres/${offerId}`,
+        description,
+        requirements: [
+          `Expérience sur le métier de ${role}`,
+          `Maîtrise : ${matchingSubset.join(', ')}`,
+          'Capacité de synthèse et autonomie',
+        ],
+        publishedAt,
+        matchedProfileId: profile.id,
+        matchedProfileName: profile.name || profile.currentTitle || 'Profil Candidat',
+        relevanceScore: score,
+        matchingSkills: matchingSubset,
+        missingSkills: missingSubset,
+        aiFitSummary: `Excellente adéquation (${score}%) avec le profil « ${profile.name || profile.currentTitle} ». L'offre sollicite directement vos compétences en ${matchingSubset.slice(0, 2).join(' et ')}.`,
+        recommendedAction: score >= 85 ? 'postuler_immediatement' : 'adapter_cv',
+        discoveredAt: new Date().toISOString(),
+        tags: [contract, comp.sector, comp.remote.split(' ')[0]],
+      });
+
+      counter++;
+    }
+  }
+
+  return list.sort((a, b) => b.relevanceScore - a.relevanceScore);
+}
+
+// Endpoint de recherche et de sélection d'offres par le Robot
+app.post('/api/scout-jobs', async (req: Request, res: Response) => {
+  try {
+    const {
+      profiles: requestedProfiles,
+      activeProfileId = 'all',
+      keywords = '',
+      location = '',
+      contractTypes = ['CDI', 'CDD', 'Freelance'],
+      sources = ['France Travail', 'LinkedIn', 'Apec', 'Welcome to the Jungle', 'Indeed'],
+      minScore = 65,
+      userApiKey,
+      model: requestedModel,
+    } = req.body;
+
+    let effectiveProfiles = Array.isArray(requestedProfiles) && requestedProfiles.length > 0
+      ? requestedProfiles
+      : await localDb.getProfiles();
+
+    if (effectiveProfiles.length === 0) {
+      const defaultP = await localDb.getProfile();
+      if (defaultP) effectiveProfiles = [defaultP];
+    }
+
+    if (activeProfileId !== 'all') {
+      const filtered = effectiveProfiles.filter((p: any) => p.id === activeProfileId);
+      if (filtered.length > 0) effectiveProfiles = filtered;
+    }
+
+    const keyToUse =
+      userApiKey && typeof userApiKey === 'string' && userApiKey.trim() !== ''
+        ? userApiKey.trim()
+        : process.env.GEMINI_API_KEY;
+
+    let scoutedOffers: any[] = [];
+    let methodUsed = 'heuristic';
+
+    if (keyToUse && keyToUse !== 'MY_GEMINI_API_KEY') {
+      try {
+        const ai = new GoogleGenAI({ apiKey: keyToUse });
+        const targetModel = requestedModel === 'gemini-flash-latest' ? 'gemini-flash-latest' : 'gemini-3.8-flash';
+
+        const profilesPrompt = effectiveProfiles.map((p: any, idx: number) => `
+Profil #${idx + 1} :
+- ID : ${p.id}
+- Nom / Intitulé : ${p.name || p.currentTitle || 'Profil Candidat'}
+- Titres de postes ciblés : ${(p.targetRoles || []).join(', ') || p.currentTitle || 'Non spécifié'}
+- Compétences clés : ${(p.skills || []).join(', ')}
+- Ville / Localisation préférée : ${p.location || 'France'}
+- Résumé : ${(p.bio || '').slice(0, 300)}
+`).join('\n---\n');
+
+        const prompt = `Tu es un Robot Chasseur d'Emplois ultra-pointu (ScoutBot IA).
+Ta mission est d'analyser le ou les profils professionnels du candidat et de dénicher une sélection de 6 à 8 offres d'emploi ultra-pertinentes, réalistes et attractives du marché français actuel (France Travail, LinkedIn, Apec, Welcome to the Jungle, Indeed).
+
+${profilesPrompt}
+
+Critères additionnels du candidat :
+- Mots-clés prioritaires : ${keywords || 'Automatique selon profils'}
+- Zone géographique : ${location || 'Selon profils'}
+- Contrats souhaités : ${contractTypes.join(', ')}
+- Sources de recrutement autorisées : ${sources.join(', ')}
+- Seuil minimum de pertinence : ${minScore}%
+
+Pour CHAQUE offre proposée :
+- Associe-la impérativement au profil (matchedProfileId & matchedProfileName) qui présente la meilleure compatibilité.
+- Calcule un score de pertinence réaliste entre ${minScore} et 98.
+- Identifie les compétences communes exactes (matchingSkills) et les compétences secondaires ou axes d'amélioration (missingSkills).
+- Explique en 2 phrases percutantes pourquoi le Robot conseille cette offre à ce profil précis (aiFitSummary).
+- Rédige une description complète et professionnelle (entreprise, missions, profil attendu, avantages).
+
+Réponds STRICTEMENT par un tableau JSON valide au format suivant :
+[
+  {
+    "id": "scout-job-xxx",
+    "title": "Intitulé précis du poste",
+    "company": "Nom de l'entreprise",
+    "location": "Ville",
+    "contractType": "CDI",
+    "salary": "ex: 48k - 58k € brut annuel",
+    "remote": "ex: Télétravail 2j/semaine",
+    "source": "France Travail" | "LinkedIn" | "Apec" | "Welcome to the Jungle" | "Indeed",
+    "sourceUrl": "https://www.linkedin.com/jobs/view/123456",
+    "publishedAt": "Il y a 2 heures",
+    "matchedProfileId": "ID du profil cible",
+    "matchedProfileName": "Nom du profil cible",
+    "relevanceScore": 92,
+    "matchingSkills": ["Compétence 1", "Compétence 2"],
+    "missingSkills": ["Compétence 3"],
+    "aiFitSummary": "Excellente adéquation avec votre profil...",
+    "recommendedAction": "postuler_immediatement",
+    "description": "Texte complet de l'offre...",
+    "requirements": ["Bac+5", "3 ans d'expérience"]
+  }
+]`;
+
+        const response = await ai.models.generateContent({
+          model: targetModel,
+          contents: prompt,
+        });
+
+        const replyText = response.text?.trim() || '';
+        const jsonMatch = replyText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            scoutedOffers = parsed;
+            methodUsed = 'gemini';
+          }
+        }
+      } catch (geminiErr) {
+        console.warn('Erreur appel Gemini scout-jobs, bascule sur générateur heuristique :', geminiErr);
+      }
+    }
+
+    if (scoutedOffers.length === 0) {
+      scoutedOffers = generateFallbackScoutedOffers(effectiveProfiles, {
+        keywords,
+        location,
+        contractTypes,
+        sources,
+        minScore,
+      });
+      methodUsed = 'heuristic';
+    }
+
+    // Sauvegarder dans la base locale
+    await localDb.saveScoutedOffers(scoutedOffers);
+
+    res.json({
+      success: true,
+      method: methodUsed,
+      offers: scoutedOffers,
+      total: scoutedOffers.length,
+    });
+  } catch (err: unknown) {
+    console.error('Erreur in /api/scout-jobs :', err);
+    res.status(500).json({
+      error: `Erreur lors de la recherche du robot : ${err instanceof Error ? err.message : 'Erreur interne'}`,
+    });
+  }
+});
+
+// Évaluation d'une offre externe par rapport aux profils
+app.post('/api/evaluate-offer-match', async (req: Request, res: Response) => {
+  try {
+    const { jobText, profiles = [] } = req.body;
+    if (!jobText || typeof jobText !== 'string') {
+      res.status(400).json({ error: "Texte de l'offre requis pour l'évaluation." });
+      return;
+    }
+
+    let targetProfiles = Array.isArray(profiles) && profiles.length > 0
+      ? profiles
+      : await localDb.getProfiles();
+
+    if (targetProfiles.length === 0) {
+      const defaultP = await localDb.getProfile();
+      if (defaultP) targetProfiles = [defaultP];
+    }
+
+    const cleanJobText = jobText.toLowerCase();
+
+    const evaluations = targetProfiles.map((p: any) => {
+      const profileSkills: string[] = Array.isArray(p.skills) ? p.skills : [];
+      const profileRoles: string[] = Array.isArray(p.targetRoles) ? p.targetRoles : [];
+
+      const matchingSkills: string[] = [];
+      const missingSkills: string[] = [];
+
+      for (const skill of profileSkills) {
+        const normalized = skill.toLowerCase().trim();
+        if (normalized.length >= 3 && cleanJobText.includes(normalized)) {
+          matchingSkills.push(skill);
+        } else {
+          missingSkills.push(skill);
+        }
+      }
+
+      let roleBonus = 0;
+      for (const role of [p.currentTitle, ...profileRoles]) {
+        if (!role) continue;
+        const words = role.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+        const matchCount = words.filter((w: string) => cleanJobText.includes(w)).length;
+        if (words.length > 0 && matchCount / words.length >= 0.5) {
+          roleBonus = Math.max(roleBonus, 20);
+        }
+      }
+
+      const skillRatio = profileSkills.length > 0 ? matchingSkills.length / profileSkills.length : 0.6;
+      let calculatedScore = Math.round(45 + skillRatio * 45 + roleBonus);
+      calculatedScore = Math.min(98, Math.max(40, calculatedScore));
+
+      return {
+        profileId: p.id,
+        profileName: p.name || p.currentTitle || 'Profil',
+        score: calculatedScore,
+        matchingSkills: matchingSkills.slice(0, 8),
+        missingSkills: missingSkills.slice(0, 4),
+      };
+    });
+
+    evaluations.sort((a: any, b: any) => b.score - a.score);
+    const top = evaluations[0] || {
+      profileId: 'default',
+      profileName: 'Profil',
+      score: 70,
+      matchingSkills: [],
+      missingSkills: [],
+    };
+
+    res.json({
+      success: true,
+      bestMatch: top,
+      allEvaluations: evaluations,
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+// =============================================================================
 // API REST BASE DE DONNÉES LOCALE (STOCKAGE FICHIER / SQLITE-READY ATOMIQUE)
 // =============================================================================
 
@@ -1454,6 +1792,61 @@ app.delete('/api/db/calendar-events/:id', async (req: Request, res: Response) =>
   try {
     const deleted = await localDb.deleteCalendarEvent(req.params.id);
     res.json({ success: deleted });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+// Offres dénichées par le Robot Chasseur (Job Scout)
+app.get('/api/db/scouted-offers', async (_req: Request, res: Response) => {
+  try {
+    const offers = localDb.getScoutedOffers();
+    res.json(offers);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.post('/api/db/scouted-offers', async (req: Request, res: Response) => {
+  try {
+    const saved = await localDb.saveScoutedOffer(req.body);
+    res.json({ success: true, offer: saved });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.patch('/api/db/scouted-offers/:id', async (req: Request, res: Response) => {
+  try {
+    const updated = await localDb.updateScoutedOffer(req.params.id, req.body);
+    res.json({ success: Boolean(updated), offer: updated });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.delete('/api/db/scouted-offers/:id', async (req: Request, res: Response) => {
+  try {
+    const deleted = await localDb.deleteScoutedOffer(req.params.id);
+    res.json({ success: deleted });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.get('/api/db/scout-config', async (_req: Request, res: Response) => {
+  try {
+    const config = localDb.getJobScoutConfig();
+    res.json(config);
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
+  }
+});
+
+app.post('/api/db/scout-config', async (req: Request, res: Response) => {
+  try {
+    const updated = await localDb.updateJobScoutConfig(req.body);
+    res.json({ success: true, config: updated });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Erreur interne' });
   }

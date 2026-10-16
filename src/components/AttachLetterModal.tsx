@@ -84,18 +84,38 @@ export default function AttachLetterModal({
     }
   }, [isOpen, analysisCompany, analysisRole]);
 
-  // Filtrage temps-réel des lettres disponibles
+  // Filtrage temps-réel des lettres disponibles avec tri intelligent par pertinence d'entreprise
   const filteredLetters = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return availableLetters;
-    return availableLetters.filter(
-      (l) =>
+    const targetCompClean = (analysisCompany || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const list = availableLetters.filter((l) => {
+      if (!q) return true;
+      return (
         (l.company && l.company.toLowerCase().includes(q)) ||
         (l.role && l.role.toLowerCase().includes(q)) ||
         (l.title && l.title.toLowerCase().includes(q)) ||
         (l.content && l.content.toLowerCase().includes(q))
-    );
-  }, [availableLetters, searchQuery]);
+      );
+    });
+
+    // Tri : 1. Correspondance exacte d'entreprise en premier, 2. Déjà rattachée, 3. Autres
+    return list.sort((a, b) => {
+      const aCompClean = (a.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const bCompClean = (b.company || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const aMatch = targetCompClean && aCompClean === targetCompClean;
+      const bMatch = targetCompClean && bCompClean === targetCompClean;
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+
+      const aAttached = a.id === currentAttachedLetterId || a.analysisId === analysisId;
+      const bAttached = b.id === currentAttachedLetterId || b.analysisId === analysisId;
+      if (aAttached && !bAttached) return -1;
+      if (!aAttached && bAttached) return 1;
+
+      return 0;
+    });
+  }, [availableLetters, searchQuery, analysisCompany, currentAttachedLetterId, analysisId]);
 
   if (!isOpen) return null;
 
@@ -376,7 +396,20 @@ export default function AttachLetterModal({
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
                           <div className="min-w-0 space-y-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {letter.company && (
+                              {analysisCompany && letter.company && (
+                                letter.company.toLowerCase().replace(/[^a-z0-9]/g, '') === analysisCompany.toLowerCase().replace(/[^a-z0-9]/g, '') ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 text-[10px] font-black border border-emerald-300">
+                                    <Check className="w-2.5 h-2.5 text-emerald-700" />
+                                    ✨ Entreprise ciblée ({letter.company})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-bold border border-amber-300" title={`Cette lettre a été conçue pour ${letter.company}, alors que ce dossier est pour ${analysisCompany}`}>
+                                    <AlertCircle className="w-2.5 h-2.5 text-amber-700" />
+                                    Pour : {letter.company}
+                                  </span>
+                                )
+                              )}
+                              {!analysisCompany && letter.company && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 text-[10px] font-extrabold border border-blue-200">
                                   <Building className="w-2.5 h-2.5" />
                                   {letter.company}

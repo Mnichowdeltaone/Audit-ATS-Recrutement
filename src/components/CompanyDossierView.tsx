@@ -45,6 +45,7 @@ import {
   FileCheck,
   CheckCircle,
   SearchCheck,
+  Paperclip,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type {
@@ -66,10 +67,13 @@ import {
   ParsedAdHocResult,
 } from '../utils/adHocCompanyParser';
 import { localDbClient } from '../services/localDbClient';
+import AttachLetterModal from './AttachLetterModal';
 
 interface CompanyDossierViewProps {
   dossier: CompanyFinancialTechnicalDossier;
   roleTitle?: string;
+  appId?: string;
+  application?: ApplicationItem;
   onRefreshWithAi?: () => void;
   isRefreshing?: boolean;
   className?: string;
@@ -82,6 +86,8 @@ type TabType = 'strategy' | 'stakeholders' | 'legal' | 'tracking' | 'interview' 
 export default function CompanyDossierView({
   dossier,
   roleTitle,
+  appId,
+  application,
   onRefreshWithAi,
   isRefreshing = false,
   className = '',
@@ -91,6 +97,9 @@ export default function CompanyDossierView({
   const [activeTab, setActiveTab] = useState<TabType>('strategy');
   const [selectedStakeholderIndex, setSelectedStakeholderIndex] = useState<number>(0);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isAttachLetterModalOpen, setIsAttachLetterModalOpen] = useState(false);
+  const [coverLetterCopied, setCoverLetterCopied] = useState(false);
+  const [isLetterExpanded, setIsLetterExpanded] = useState(false);
 
   // Auto-enrichissement initial
   const initialEnriched = useMemo<CompanyFinancialTechnicalDossier>(() => {
@@ -193,20 +202,33 @@ export default function CompanyDossierView({
   const [noteContent, setNoteContent] = useState('');
   const [noteDate, setNoteDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Chargement de la candidature correspondante
+  // Chargement de la candidature correspondante (par appId prioritaire ou correspondance exacte d'entreprise)
   useEffect(() => {
     let isMounted = true;
     const fetchApp = async () => {
       setIsLoadingApp(true);
       try {
         const apps = await localDbClient.getApplications();
-        const targetName = activeDossier.companyName.toLowerCase().trim();
-        const match = apps.find(
-          (a) =>
-            a.company.toLowerCase().trim() === targetName ||
-            a.company.toLowerCase().includes(targetName) ||
-            targetName.includes(a.company.toLowerCase())
-        );
+        let match: ApplicationItem | undefined;
+
+        if (application) {
+          match = application;
+        } else if (appId) {
+          match = apps.find((a) => a.id === appId);
+        }
+
+        if (!match) {
+          const targetClean = activeDossier.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          match = apps.find((a) => {
+            const aClean = a.company.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (aClean === targetClean) return true;
+            if (aClean.length >= 6 && targetClean.length >= 6 && (aClean.startsWith(targetClean) || targetClean.startsWith(aClean))) {
+              return true;
+            }
+            return false;
+          });
+        }
+
         if (isMounted) {
           setLinkedApp(match || null);
         }
@@ -220,7 +242,7 @@ export default function CompanyDossierView({
     return () => {
       isMounted = false;
     };
-  }, [activeDossier.companyName]);
+  }, [activeDossier.companyName, appId, application]);
 
   // Mise à jour et persistance centrale du dossier d'entreprise
   const handleSaveUpdatedDossier = async (updated: CompanyFinancialTechnicalDossier) => {
@@ -1870,6 +1892,166 @@ export default function CompanyDossierView({
                   )}
                 </div>
 
+                {/* Section Lettre de Motivation Rattachée au Dossier */}
+                <div className="p-5 bg-white border border-gray-200 rounded-3xl space-y-4 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 bg-rose-600 text-white rounded-lg">
+                        <Mail className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-sm text-gray-900">
+                            Lettre de Motivation Rattachée à ce Dossier
+                          </h4>
+                          {linkedApp.coverLetter ? (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              Rattachée
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+                              Non définie
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-500">
+                          Lettre ciblée pour {enrichedDossier.companyName} ({linkedApp.role}).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {linkedApp.coverLetter && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!linkedApp.coverLetter) return;
+                              navigator.clipboard.writeText(linkedApp.coverLetter);
+                              setCoverLetterCopied(true);
+                              setTimeout(() => setCoverLetterCopied(false), 2000);
+                            }}
+                            className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                            title="Copier le texte de la lettre"
+                          >
+                            {coverLetterCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{coverLetterCopied ? 'Copié !' : 'Copier'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!linkedApp.coverLetter) return;
+                              const blob = new Blob([linkedApp.coverLetter], { type: 'application/msword;charset=utf-8' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `Lettre_Motivation_${enrichedDossier.companyName.replace(/\s+/g, '_')}.doc`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                            className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                            title="Télécharger en document Word"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Word (.doc)</span>
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setIsAttachLetterModalOpen(true)}
+                        className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Rattacher ou changer la lettre"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <span>{linkedApp.coverLetter ? 'Changer de lettre' : 'Rattacher une lettre'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Alerte si le contenu de la lettre mentionne une autre entreprise */}
+                  {linkedApp.coverLetter && (() => {
+                    const letterLower = linkedApp.coverLetter.toLowerCase();
+                    const dossierComp = enrichedDossier.companyName.toLowerCase().trim();
+                    const hasFaiencerieOrGien = (letterLower.includes('faiencerie') || letterLower.includes('gien')) && !dossierComp.includes('gien');
+
+                    if (hasFaiencerieOrGien) {
+                      return (
+                        <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900 animate-fade-in">
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="font-extrabold block">
+                              ⚠️ Discordance d&apos;entreprise détectée dans la lettre
+                            </span>
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                              Le texte de cette lettre mentionne des éléments d&apos;une autre entreprise (ex: Faïencerie de Gien) alors que ce dossier est dédié à <strong>{enrichedDossier.companyName}</strong>. Cliquez sur « Changer de lettre » pour rattacher ou générer la lettre propre à {enrichedDossier.companyName}.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Contenu de la lettre */}
+                  {linkedApp.coverLetter ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+                        <span className="font-bold text-gray-800">
+                          {linkedApp.coverLetterTitle || `Lettre - ${enrichedDossier.companyName}`}
+                        </span>
+                        <span>{linkedApp.coverLetter.split(/\s+/).filter(Boolean).length} mots</span>
+                      </div>
+
+                      <div className={`p-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs text-gray-800 font-sans leading-relaxed whitespace-pre-wrap ${
+                        isLetterExpanded ? '' : 'max-h-36 overflow-hidden relative'
+                      }`}>
+                        {linkedApp.coverLetter}
+                        {!isLetterExpanded && (
+                          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-gray-50 to-transparent flex items-end justify-center pb-2">
+                            <button
+                              type="button"
+                              onClick={() => setIsLetterExpanded(true)}
+                              className="px-3 py-1 bg-white hover:bg-gray-100 text-gray-700 font-bold text-[11px] rounded-lg border border-gray-300 shadow-2xs cursor-pointer"
+                            >
+                              Lire la suite ▼
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isLetterExpanded && (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setIsLetterExpanded(false)}
+                            className="text-[11px] font-bold text-gray-500 hover:text-gray-700 underline cursor-pointer"
+                          >
+                            ▲ Réduire la lecture
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-center space-y-2">
+                      <p className="text-xs text-gray-500">
+                        Aucune lettre de motivation n&apos;est actuellement rattachée à cette candidature.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAttachLetterModalOpen(true)}
+                        className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <span>Rattacher ou rédiger une lettre pour {enrichedDossier.companyName}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Section Journal de Bord & Annotations */}
                 <div className="p-5 bg-white border border-gray-200 rounded-3xl space-y-4 shadow-2xs">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2759,6 +2941,53 @@ export default function CompanyDossierView({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de sélection et rattachement de lettre pour ce dossier d'entreprise */}
+      {isAttachLetterModalOpen && (
+        <AttachLetterModal
+          isOpen={isAttachLetterModalOpen}
+          onClose={() => setIsAttachLetterModalOpen(false)}
+          analysisCompany={enrichedDossier.companyName}
+          analysisRole={roleTitle || linkedApp?.role}
+          currentAttachedLetterTitle={linkedApp?.coverLetterTitle}
+          onLetterAttached={async (letter) => {
+            if (linkedApp) {
+              const updatedApp: ApplicationItem = {
+                ...linkedApp,
+                coverLetter: letter.content,
+                coverLetterTitle: letter.title,
+                checklist: {
+                  ...linkedApp.checklist,
+                  coverLetterSent: true,
+                },
+                updatedAt: new Date().toISOString(),
+              };
+              setLinkedApp(updatedApp);
+              await localDbClient.saveApplication(updatedApp);
+              onApplicationUpdated?.(updatedApp);
+            }
+            setIsAttachLetterModalOpen(false);
+          }}
+          onLetterDetached={async () => {
+            if (linkedApp) {
+              const updatedApp: ApplicationItem = {
+                ...linkedApp,
+                coverLetter: undefined,
+                coverLetterTitle: undefined,
+                checklist: {
+                  ...linkedApp.checklist,
+                  coverLetterSent: false,
+                },
+                updatedAt: new Date().toISOString(),
+              };
+              setLinkedApp(updatedApp);
+              await localDbClient.saveApplication(updatedApp);
+              onApplicationUpdated?.(updatedApp);
+            }
+            setIsAttachLetterModalOpen(false);
+          }}
+        />
       )}
     </div>
   );

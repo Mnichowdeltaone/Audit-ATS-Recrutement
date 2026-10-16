@@ -30,8 +30,10 @@ import {
   Plus,
   Paperclip,
   Mail,
+  Eye,
+  X,
 } from 'lucide-react';
-import type { ApplicationItem, ApplicationStatus, AnalysisHistoryItem, UserProfile } from '../types';
+import type { ApplicationItem, ApplicationStatus, AnalysisHistoryItem, UserProfile, SavedCoverLetter } from '../types';
 import CompanyDossierModal from './CompanyDossierModal';
 import AttachLetterModal from './AttachLetterModal';
 import { extractCompanyDossier } from '../utils/companyDossierExtractor';
@@ -47,6 +49,7 @@ interface JobSearchAnalyticsReportProps {
   onNavigateToTab: (tab: 'app' | 'tracker' | 'cv-assistant' | 'database' | 'history' | 'reports') => void;
   onOpenAnalysis?: (analysisId: string) => void;
   onRenameAnalysis?: (id: string, newTitle: string) => Promise<void> | void;
+  onUpdateAnalysisCoverLetter?: (analysisId: string, letter: SavedCoverLetter | null) => void;
   apiKey?: string;
   hasServerKey?: boolean;
 }
@@ -192,6 +195,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
   onNavigateToTab,
   onOpenAnalysis,
   onRenameAnalysis,
+  onUpdateAnalysisCoverLetter,
   apiKey,
   hasServerKey,
 }) => {
@@ -201,6 +205,42 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
   const [isCopied, setIsCopied] = useState(false);
   const [isGeneratingAiReport, setIsGeneratingAiReport] = useState(false);
   const [aiReportText, setAiReportText] = useState<string | null>(null);
+
+  // Synchronisation dynamique des analyses avec la BDD et les événements de rattachement
+  const [analysesList, setAnalysesList] = useState<AnalysisHistoryItem[]>(analyses);
+
+  // Modal de consultation / lecture intégrale de lettre rattachée
+  const [viewingLetter, setViewingLetter] = useState<{ id?: string; title: string; company?: string; role?: string; content: string } | null>(null);
+  const [viewingLetterCopied, setViewingLetterCopied] = useState(false);
+
+  // Synchroniser quand les props changent
+  React.useEffect(() => {
+    setAnalysesList(analyses);
+  }, [analyses]);
+
+  // Écouteur en direct des mises à jour d'analyses et de lettres
+  React.useEffect(() => {
+    const handleUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ analysisId: string; letter: any }>;
+      const { analysisId, letter } = customEvent.detail || {};
+      if (analysisId) {
+        setAnalysesList((prev) =>
+          prev.map((a) =>
+            a.id === analysisId
+              ? {
+                  ...a,
+                  coverLetterId: letter?.id,
+                  coverLetterTitle: letter?.title,
+                  coverLetterContent: letter?.content,
+                }
+              : a
+          )
+        );
+      }
+    };
+    window.addEventListener('cv_move_analysis_updated', handleUpdate);
+    return () => window.removeEventListener('cv_move_analysis_updated', handleUpdate);
+  }, []);
 
   // États pour le sous-onglet de progression des audits
   const [auditSearch, setAuditSearch] = useState('');
@@ -212,7 +252,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
 
   // Audits filtrés
   const filteredAnalyses = useMemo(() => {
-    return analyses.filter((a) => {
+    return analysesList.filter((a) => {
       if (auditFilterType === 'company' && !a.company) return false;
       if (auditFilterType === 'cabinet' && !a.cabinet) return false;
       if (auditFilterType === 'horodated' && (a.company || a.cabinet)) return false;
@@ -229,7 +269,7 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
 
       return true;
     });
-  }, [analyses, auditFilterType, auditSearch]);
+  }, [analysesList, auditFilterType, auditSearch]);
 
   // Métriques spécifiques des audits
   const auditMetrics = useMemo(() => {
@@ -1403,43 +1443,67 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
                       </p>
 
                       {/* Statut explicite de la lettre de motivation & Fiche Entreprise */}
-                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                        {audit.coverLetterTitle || audit.coverLetterContent || audit.coverLetterId ? (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span>✉️ Lettre rattachée : « {audit.coverLetterTitle || 'Lettre sur-mesure'} »</span>
+                      {(() => {
+                        const resolvedLetter = (audit.coverLetterTitle || audit.coverLetterContent || audit.coverLetterId)
+                          ? {
+                              id: audit.coverLetterId || `letter-${audit.id}`,
+                              title: audit.coverLetterTitle || `Lettre - ${audit.company || audit.title}`,
+                              content: audit.coverLetterContent || '',
+                              company: audit.company,
+                              role: audit.role,
+                            }
+                          : localDbClient.getCoverLetterForAnalysis(audit.id, audit.company);
+
+                        return (
+                          <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                            {resolvedLetter ? (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="truncate max-w-[200px] sm:max-w-[280px]">✉️ Lettre : « {resolvedLetter.title} »</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingLetter(resolvedLetter)}
+                                  className="ml-1 text-[11px] underline text-emerald-700 hover:text-emerald-900 cursor-pointer font-semibold flex items-center gap-1"
+                                  title="Consulter et lire la lettre de motivation complète"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Consulter</span>
+                                </button>
+                                <span className="text-emerald-300">•</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAttachLetterAnalysis(audit)}
+                                  className="text-[11px] underline text-emerald-700 hover:text-emerald-900 cursor-pointer font-semibold"
+                                  title="Changer ou détacher la lettre de motivation"
+                                >
+                                  Gérer
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAttachLetterAnalysis(audit)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+                                title="Rattacher une lettre de motivation à cet audit"
+                              >
+                                <Paperclip className="w-3 h-3 text-purple-600" />
+                                <span>📎 Rattacher une lettre</span>
+                              </button>
+                            )}
+
+                            {/* Bouton Fiche Entreprise & Entretien */}
                             <button
                               type="button"
-                              onClick={() => setSelectedAttachLetterAnalysis(audit)}
-                              className="ml-1 text-[11px] underline text-emerald-700 hover:text-emerald-900 cursor-pointer font-semibold"
-                              title="Gérer la lettre rattachée"
+                              onClick={() => setSelectedDossierAnalysis(audit)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+                              title="Consulter la fiche technique et financière de l'entreprise recruteuse pour préparer l'entretien"
                             >
-                              Gérer
+                              <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                              <span>🏛️ Fiche Entreprise (Entretien)</span>
                             </button>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAttachLetterAnalysis(audit)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
-                            title="Rattacher une lettre de motivation à cet audit"
-                          >
-                            <Paperclip className="w-3 h-3 text-purple-600" />
-                            <span>📎 Rattacher une lettre</span>
-                          </button>
-                        )}
-
-                        {/* Bouton Fiche Entreprise & Entretien */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDossierAnalysis(audit)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
-                          title="Consulter la fiche technique et financière de l'entreprise recruteuse pour préparer l'entretien"
-                        >
-                          <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                          <span>🏛️ Fiche Entreprise (Entretien)</span>
-                        </button>
-                      </div>
+                        );
+                      })()}
 
                       {/* Évolution des scores si multi-versions */}
                       {hasMultipleVersions && pointsGain !== null && (
@@ -1817,26 +1881,109 @@ export const JobSearchAnalyticsReport: React.FC<JobSearchAnalyticsReportProps> =
           currentAttachedLetterId={selectedAttachLetterAnalysis.coverLetterId}
           currentAttachedLetterTitle={selectedAttachLetterAnalysis.coverLetterTitle}
           onLetterAttached={(letter) => {
-            const updated = {
+            const updated: AnalysisHistoryItem = {
               ...selectedAttachLetterAnalysis,
               coverLetterId: letter.id,
               coverLetterTitle: letter.title,
               coverLetterContent: letter.content,
             };
+            setAnalysesList((prev) =>
+              prev.map((a) => (a.id === updated.id ? updated : a))
+            );
             localDbClient.saveAnalysis(updated).catch(() => {});
+            onUpdateAnalysisCoverLetter?.(updated.id, letter);
             setSelectedAttachLetterAnalysis(null);
           }}
           onLetterDetached={() => {
-            const updated = {
+            const updated: AnalysisHistoryItem = {
               ...selectedAttachLetterAnalysis,
               coverLetterId: undefined,
               coverLetterTitle: undefined,
               coverLetterContent: undefined,
             };
+            setAnalysesList((prev) =>
+              prev.map((a) => (a.id === updated.id ? updated : a))
+            );
             localDbClient.saveAnalysis(updated).catch(() => {});
+            onUpdateAnalysisCoverLetter?.(selectedAttachLetterAnalysis.id, null);
             setSelectedAttachLetterAnalysis(null);
           }}
         />
+      )}
+
+      {/* Modal de lecture intégrale de la lettre de motivation rattachée */}
+      {viewingLetter && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 w-full max-w-2xl overflow-hidden my-auto flex flex-col max-h-[90vh]">
+            {/* En-tête du modal */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-purple-700 via-indigo-700 to-rose-600 text-white flex items-start justify-between gap-3 shrink-0">
+              <div className="space-y-1 min-w-0">
+                <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 text-white px-2.5 py-0.5 rounded-full border border-white/30 inline-flex items-center gap-1">
+                  <Mail className="w-3 h-3 text-amber-300" />
+                  Lettre de Motivation Rattachée
+                </span>
+                <h3 className="text-base sm:text-lg font-black truncate">{viewingLetter.title}</h3>
+                <p className="text-xs text-purple-100 line-clamp-1">
+                  {viewingLetter.company ? `Entreprise : ${viewingLetter.company}` : ''}
+                  {viewingLetter.role ? ` • Poste : ${viewingLetter.role}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingLetter(null)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/25 text-white transition-colors cursor-pointer shrink-0"
+                title="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Corps déroulant avec le texte complet */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs sm:text-sm text-gray-800 font-sans leading-relaxed whitespace-pre-wrap selection:bg-purple-100">
+                {viewingLetter.content || 'Texte de la lettre vide ou en cours de rédaction.'}
+              </div>
+            </div>
+
+            {/* Pied de page avec actions rapides : Copier, Télécharger .doc */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-gray-500 font-medium">
+                {viewingLetter.content ? `${viewingLetter.content.split(/\s+/).filter(Boolean).length} mots` : '0 mot'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(viewingLetter.content);
+                    setViewingLetterCopied(true);
+                    setTimeout(() => setViewingLetterCopied(false), 2000);
+                  }}
+                  className="px-3.5 py-2 bg-white hover:bg-gray-100 text-gray-800 rounded-xl text-xs font-bold border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  {viewingLetterCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{viewingLetterCopied ? 'Copié !' : 'Copier'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([viewingLetter.content], { type: 'application/msword;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${(viewingLetter.title || 'Lettre_Motivation').replace(/\s+/g, '_')}.doc`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Word (.doc)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

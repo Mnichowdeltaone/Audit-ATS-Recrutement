@@ -10,6 +10,8 @@ import type {
   SavedSuggestion,
   SavedCoverLetter,
   CustomCalendarEvent,
+  ScrapedJobOffer,
+  JobScoutConfig,
   UserSettings,
   DatabaseStats,
 } from '../src/types';
@@ -51,6 +53,16 @@ const DEFAULT_DATABASE: DatabaseSchema = {
   suggestions: [],
   coverLetters: [],
   calendarEvents: [],
+  scoutedOffers: [],
+  jobScoutConfig: {
+    autoScanEnabled: true,
+    targetProfileIds: ['all'],
+    keywords: [],
+    locations: [],
+    contractTypes: ['CDI', 'CDD', 'Freelance'],
+    minMatchScore: 65,
+    sources: ['France Travail', 'LinkedIn', 'Apec', 'Welcome to the Jungle', 'Indeed'],
+  },
   settings: {
     selectedModel: 'gemini-3.8-flash',
     autoSaveToDb: true,
@@ -92,21 +104,61 @@ function ensureDbExists(): void {
   if (!fs.existsSync(BACKUP_DIR)) {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
   }
+
+  let needInit = false;
   if (!fs.existsSync(DB_FILE_PATH)) {
-    if (DB_FILE_PATH !== BUNDLED_DB_FILE_PATH && fs.existsSync(BUNDLED_DB_FILE_PATH)) {
-      fs.copyFileSync(BUNDLED_DB_FILE_PATH, DB_FILE_PATH);
-    } else {
-      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
+    needInit = true;
+  } else {
+    try {
+      const stats = fs.statSync(DB_FILE_PATH);
+      if (stats.size === 0) {
+        needInit = true;
+      }
+    } catch {
+      needInit = true;
     }
+  }
+
+  if (needInit) {
+    if (DB_FILE_PATH !== BUNDLED_DB_FILE_PATH && fs.existsSync(BUNDLED_DB_FILE_PATH)) {
+      try {
+        const bundledContent = fs.readFileSync(BUNDLED_DB_FILE_PATH, 'utf-8');
+        if (bundledContent && bundledContent.trim().length > 0) {
+          JSON.parse(bundledContent); // vérification de validité
+          fs.writeFileSync(DB_FILE_PATH, bundledContent, 'utf-8');
+          return;
+        }
+      } catch {}
+    }
+    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
   }
 }
 
-// Lecture de la base de données
+// Lecture sécurisée et robuste de la base de données locale
 export function getDatabase(): DatabaseSchema {
   ensureDbExists();
   try {
     const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-    const parsed = JSON.parse(raw) as DatabaseSchema;
+    if (!raw || !raw.trim()) {
+      // Fichier vide : réparation immédiate sur le disque avec les données par défaut
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
+      return { ...DEFAULT_DATABASE };
+    }
+
+    let parsed: DatabaseSchema;
+    try {
+      parsed = JSON.parse(raw) as DatabaseSchema;
+    } catch (parseErr) {
+      console.warn('Fichier BDD corrompu détecté, réparation automatique :', parseErr);
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
+      return { ...DEFAULT_DATABASE };
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
+      return { ...DEFAULT_DATABASE };
+    }
+
     const profile = normalizeProfile(parsed.profile);
 
     let profiles: UserProfile[] = Array.isArray(parsed.profiles) && parsed.profiles.length > 0
@@ -124,7 +176,7 @@ export function getDatabase(): DatabaseSchema {
       ];
     }
 
-    // Rétrocompatibilité et fusion avec les champs manquants
+    // Rétrocompatibilité et fusion avec tous les champs (y compris scoutedOffers et jobScoutConfig)
     return {
       version: parsed.version || 1,
       lastUpdated: parsed.lastUpdated || new Date().toISOString(),
@@ -136,23 +188,50 @@ export function getDatabase(): DatabaseSchema {
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : DEFAULT_DATABASE.suggestions,
       coverLetters: Array.isArray(parsed.coverLetters) ? parsed.coverLetters : (DEFAULT_DATABASE.coverLetters || []),
       calendarEvents: Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [],
+      scoutedOffers: Array.isArray(parsed.scoutedOffers) ? parsed.scoutedOffers : [],
+      jobScoutConfig: parsed.jobScoutConfig || DEFAULT_DATABASE.jobScoutConfig,
       settings: { ...DEFAULT_DATABASE.settings, ...(parsed.settings || {}) },
     };
   } catch (err) {
-    console.error('Erreur lecture BDD locale, réinitialisation sécurisée :', err);
-    return DEFAULT_DATABASE;
+    console.warn('Erreur lecture BDD locale, réinitialisation sécurisée :', err);
+    try {
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(DEFAULT_DATABASE, null, 2), 'utf-8');
+    } catch {}
+    return { ...DEFAULT_DATABASE };
   }
 }
 
-// Écriture atomique avec fichier temporaire pour zéro corruption
-export async function saveDatabase(data: DatabaseSchema): Promise<void> {
-  ensureDbExists();
-  data.lastUpdated = new Date().toISOString();
-  const tempPath = `${DB_FILE_PATH}.tmp`;
-  const jsonStr = JSON.stringify(data, null, 2);
+// Chaîne de promesses pour sérialiser les écritures concurrentes
+let saveDatabaseQueue = Promise.resolve();
 
-  await fs.promises.writeFile(tempPath, jsonStr, 'utf-8');
-  await fs.promises.rename(tempPath, DB_FILE_PATH);
+// Écriture atomique avec nom de fichier unique et file d'attente pour zéro corruption
+export async function saveDatabase(data: DatabaseSchema): Promise<void> {
+  saveDatabaseQueue = saveDatabaseQueue.then(async () => {
+    ensureDbExists();
+    data.lastUpdated = new Date().toISOString();
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const tempPath = `${DB_FILE_PATH}.${uniqueId}.tmp`;
+    const jsonStr = JSON.stringify(data, null, 2);
+
+    try {
+      await fs.promises.writeFile(tempPath, jsonStr, 'utf-8');
+      await fs.promises.rename(tempPath, DB_FILE_PATH);
+    } catch (writeErr) {
+      console.warn('Erreur renommage atomique BDD, fallback direct :', writeErr);
+      try {
+        await fs.promises.writeFile(DB_FILE_PATH, jsonStr, 'utf-8');
+      } catch {}
+      try {
+        if (fs.existsSync(tempPath)) {
+          await fs.promises.unlink(tempPath);
+        }
+      } catch {}
+    }
+  }).catch((err) => {
+    console.warn('Erreur dans saveDatabaseQueue :', err);
+  });
+
+  return saveDatabaseQueue;
 }
 
 // =============================================================================
@@ -592,6 +671,111 @@ export async function deleteCalendarEvent(id: string): Promise<boolean> {
 }
 
 // =============================================================================
+// GESTION DU ROBOT CHASSEUR D'OFFRES (JOB SCOUT)
+// =============================================================================
+export function getScoutedOffers(): ScrapedJobOffer[] {
+  const db = getDatabase();
+  return db.scoutedOffers || [];
+}
+
+export async function saveScoutedOffer(offer: ScrapedJobOffer): Promise<ScrapedJobOffer> {
+  const db = getDatabase();
+  if (!db.scoutedOffers) db.scoutedOffers = [];
+
+  const existingIndex = db.scoutedOffers.findIndex((o) => o.id === offer.id);
+  const offerToSave: ScrapedJobOffer = {
+    ...offer,
+    discoveredAt: offer.discoveredAt || new Date().toISOString(),
+  };
+
+  if (existingIndex >= 0) {
+    db.scoutedOffers[existingIndex] = offerToSave;
+  } else {
+    db.scoutedOffers.unshift(offerToSave);
+  }
+
+  await saveDatabase(db);
+  return offerToSave;
+}
+
+export async function saveScoutedOffers(offers: ScrapedJobOffer[]): Promise<ScrapedJobOffer[]> {
+  const db = getDatabase();
+  if (!db.scoutedOffers) db.scoutedOffers = [];
+
+  const existingMap = new Map<string, ScrapedJobOffer>();
+  for (const o of db.scoutedOffers) {
+    existingMap.set(o.id, o);
+  }
+
+  for (const offer of offers) {
+    existingMap.set(offer.id, {
+      ...offer,
+      discoveredAt: offer.discoveredAt || new Date().toISOString(),
+    });
+  }
+
+  db.scoutedOffers = Array.from(existingMap.values()).sort(
+    (a, b) => b.relevanceScore - a.relevanceScore
+  );
+
+  await saveDatabase(db);
+  return db.scoutedOffers;
+}
+
+export async function updateScoutedOffer(id: string, updates: Partial<ScrapedJobOffer>): Promise<ScrapedJobOffer | null> {
+  const db = getDatabase();
+  if (!db.scoutedOffers) return null;
+
+  const index = db.scoutedOffers.findIndex((o) => o.id === id);
+  if (index === -1) return null;
+
+  db.scoutedOffers[index] = {
+    ...db.scoutedOffers[index],
+    ...updates,
+  };
+
+  await saveDatabase(db);
+  return db.scoutedOffers[index];
+}
+
+export async function deleteScoutedOffer(id: string): Promise<boolean> {
+  const db = getDatabase();
+  if (!db.scoutedOffers) return false;
+  const initialLen = db.scoutedOffers.length;
+  db.scoutedOffers = db.scoutedOffers.filter((o) => o.id !== id);
+  if (db.scoutedOffers.length < initialLen) {
+    await saveDatabase(db);
+    return true;
+  }
+  return false;
+}
+
+export function getJobScoutConfig(): JobScoutConfig {
+  const db = getDatabase();
+  return (
+    db.jobScoutConfig || {
+      autoScanEnabled: true,
+      targetProfileIds: ['all'],
+      keywords: [],
+      locations: [],
+      contractTypes: ['CDI', 'CDD', 'Freelance'],
+      minMatchScore: 65,
+      sources: ['France Travail', 'LinkedIn', 'Apec', 'Welcome to the Jungle', 'Indeed'],
+    }
+  );
+}
+
+export async function updateJobScoutConfig(config: Partial<JobScoutConfig>): Promise<JobScoutConfig> {
+  const db = getDatabase();
+  db.jobScoutConfig = {
+    ...getJobScoutConfig(),
+    ...config,
+  };
+  await saveDatabase(db);
+  return db.jobScoutConfig;
+}
+
+// =============================================================================
 // GESTION DES PARAMÈTRES (SETTINGS)
 // =============================================================================
 export async function getSettings(): Promise<UserSettings> {
@@ -630,6 +814,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     suggestionsCount: db.suggestions.length,
     coverLettersCount: (db.coverLetters || []).length,
     calendarEventsCount: (db.calendarEvents || []).length,
+    scoutedOffersCount: (db.scoutedOffers || []).length,
     dbSizeBytes: fileSize,
     lastUpdated: db.lastUpdated,
   };
@@ -648,6 +833,9 @@ export async function importDatabase(importedData: Partial<DatabaseSchema>): Pro
     analyses: Array.isArray(importedData.analyses) ? importedData.analyses : currentDb.analyses,
     suggestions: Array.isArray(importedData.suggestions) ? importedData.suggestions : currentDb.suggestions,
     coverLetters: Array.isArray(importedData.coverLetters) ? importedData.coverLetters : (currentDb.coverLetters || []),
+    calendarEvents: Array.isArray(importedData.calendarEvents) ? importedData.calendarEvents : (currentDb.calendarEvents || []),
+    scoutedOffers: Array.isArray(importedData.scoutedOffers) ? importedData.scoutedOffers : (currentDb.scoutedOffers || []),
+    jobScoutConfig: importedData.jobScoutConfig || currentDb.jobScoutConfig,
     settings: importedData.settings ? { ...currentDb.settings, ...importedData.settings } : currentDb.settings,
   };
 
@@ -682,6 +870,17 @@ export async function resetDatabase(): Promise<DatabaseSchema> {
     analyses: [],
     suggestions: [],
     coverLetters: [],
+    calendarEvents: [],
+    scoutedOffers: [],
+    jobScoutConfig: {
+      autoScanEnabled: true,
+      targetProfileIds: ['all'],
+      keywords: [],
+      locations: [],
+      contractTypes: ['CDI', 'CDD', 'Freelance'],
+      minMatchScore: 65,
+      sources: ['France Travail', 'LinkedIn', 'Apec', 'Welcome to the Jungle', 'Indeed'],
+    },
     settings: {
       selectedModel: 'gemini-3.8-flash',
       autoSaveToDb: true,
@@ -692,3 +891,4 @@ export async function resetDatabase(): Promise<DatabaseSchema> {
   await saveDatabase(freshDb);
   return freshDb;
 }
+

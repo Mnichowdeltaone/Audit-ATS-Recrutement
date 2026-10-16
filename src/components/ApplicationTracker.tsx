@@ -2978,6 +2978,7 @@ export default function ApplicationTracker({
           onClose={() => setViewingCompanyDossier(null)}
           dossier={viewingCompanyDossier.dossier}
           roleTitle={viewingCompanyDossier.roleTitle}
+          appId={viewingCompanyDossier.appId}
           onApplicationUpdated={(updatedApp) => {
             setApplications((prev) =>
               prev.map((item) => (item.id === updatedApp.id ? updatedApp : item))

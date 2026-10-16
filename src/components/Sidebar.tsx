@@ -22,11 +22,24 @@ import {
   TrendingUp,
   Calendar,
   Key,
+  Bot,
 } from 'lucide-react';
 import { UserProfile, DatabaseStats, AnalysisHistoryItem } from '../types';
 import CvImprovementLogo from './CvImprovementLogo';
 
-export type SidebarTabType = 'dashboard' | 'calendar' | 'app' | 'tracker' | 'reports' | 'cv-assistant' | 'database' | 'history' | 'code' | 'guide' | 'settings';
+export type SidebarTabType =
+  | 'dashboard'
+  | 'job-robot'
+  | 'calendar'
+  | 'app'
+  | 'tracker'
+  | 'reports'
+  | 'cv-assistant'
+  | 'database'
+  | 'history'
+  | 'code'
+  | 'guide'
+  | 'settings';
 
 export interface NavItem {
   id: SidebarTabType;
@@ -57,6 +70,7 @@ interface SidebarProps {
   selectedModel: string;
   applicationsCount: number;
   historyCount: number;
+  scoutedOffersCount?: number;
   dbStats: DatabaseStats | null;
   history?: AnalysisHistoryItem[];
   onLoadHistoryItem?: (item: AnalysisHistoryItem) => void;
@@ -81,6 +95,7 @@ export default function Sidebar({
   selectedModel,
   applicationsCount,
   historyCount,
+  scoutedOffersCount = 0,
   dbStats,
   history = [],
   onLoadHistoryItem,
@@ -127,6 +142,15 @@ export default function Sidebar({
           activeBg: 'bg-blue-50 text-blue-700 border-blue-200',
           badge: 'Vue globale',
           badgeColor: 'bg-blue-100 text-blue-800 font-bold',
+        },
+        {
+          id: 'job-robot' as const,
+          label: "Robot Chasseur d'Offres",
+          icon: Bot,
+          color: 'text-cyan-600',
+          activeBg: 'bg-cyan-50 text-cyan-800 border-cyan-200 font-bold',
+          badge: scoutedOffersCount > 0 ? `${scoutedOffersCount} offres` : 'IA',
+          badgeColor: 'bg-cyan-100 text-cyan-800 font-bold',
         },
         {
           id: 'app' as const,

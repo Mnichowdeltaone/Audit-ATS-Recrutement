@@ -278,6 +278,15 @@ export default function OptimizationFunnel({
         setFinalCoverLetter(matchedLetter.content);
         setCoverLetterTitle(matchedLetter.title);
         setAttachedLetterId(matchedLetter.id);
+      } else {
+        // Nettoyage impératif pour éviter toute confusion entre dossiers (ex: lettre Faiencerie de Gien pour Sodial Candia)
+        setFinalCoverLetter('');
+        setCoverLetterTitle(
+          parsedAnalysis?.targetCompany
+            ? `Lettre - ${parsedAnalysis.targetCompany}`
+            : 'Lettre de Motivation Sur-Mesure'
+        );
+        setAttachedLetterId(null);
       }
     };
 

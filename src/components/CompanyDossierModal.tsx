@@ -9,6 +9,8 @@ interface CompanyDossierModalProps {
   dossier: CompanyFinancialTechnicalDossier | null | undefined;
   roleTitle?: string;
   analysisTitle?: string;
+  appId?: string;
+  application?: ApplicationItem;
   onApplicationUpdated?: (updatedApp: ApplicationItem) => void;
   onDossierUpdated?: (updatedDossier: CompanyFinancialTechnicalDossier) => void;
 }
@@ -19,6 +21,8 @@ export default function CompanyDossierModal({
   dossier,
   roleTitle,
   analysisTitle,
+  appId,
+  application,
   onApplicationUpdated,
   onDossierUpdated,
 }: CompanyDossierModalProps) {
@@ -58,6 +62,8 @@ export default function CompanyDossierModal({
           <CompanyDossierView
             dossier={dossier}
             roleTitle={roleTitle}
+            appId={appId}
+            application={application}
             onApplicationUpdated={onApplicationUpdated}
             onDossierUpdated={onDossierUpdated}
           />

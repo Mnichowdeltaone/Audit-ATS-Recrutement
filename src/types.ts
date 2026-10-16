@@ -314,6 +314,56 @@ export interface CustomCalendarEvent {
   updatedAt: string;
 }
 
+export type JobOfferSource =
+  | 'France Travail'
+  | 'LinkedIn'
+  | 'Apec'
+  | 'Welcome to the Jungle'
+  | 'Indeed'
+  | 'Cadremploi'
+  | 'Web'
+  | 'Manuel';
+
+export interface ScrapedJobOffer {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  contractType: 'CDI' | 'CDD' | 'Freelance' | 'Alternance' | 'Stage' | 'Autre';
+  salary?: string;
+  remote?: string; // ex: "Télétravail 2j/semaine", "Full Remote", "Sur site"
+  source: JobOfferSource;
+  sourceUrl?: string;
+  description: string;
+  requirements?: string[];
+  publishedAt: string; // ex: "Il y a 3 heures", "Hier", "2026-10-14"
+  matchedProfileId?: string; // ID du profil candidat associé
+  matchedProfileName?: string; // Nom du profil (ex: "Trésorier Opérationnel")
+  relevanceScore: number; // Score d'adéquation de 0 à 100 calculé par le Robot
+  matchingSkills: string[]; // Compétences du profil retrouvées dans l'offre
+  missingSkills: string[]; // Compétences demandées absentes ou à valoriser
+  aiFitSummary: string; // Explication concise de la pertinence par l'IA
+  recommendedAction?: 'postuler_immediatement' | 'adapter_cv' | 'candidature_spontanee' | 'veille';
+  contactEmail?: string;
+  contactName?: string;
+  isFavorite?: boolean;
+  isApplied?: boolean; // Marqué si déjà ajoutée au Suivi des candidatures
+  isIgnored?: boolean;
+  discoveredAt: string; // Date de découverte par le Robot
+  tags?: string[];
+}
+
+export interface JobScoutConfig {
+  autoScanEnabled: boolean;
+  targetProfileIds: string[]; // ['all'] ou liste des IDs de profils
+  keywords: string[];
+  locations: string[];
+  contractTypes: ('CDI' | 'CDD' | 'Freelance' | 'Alternance' | 'Stage' | 'Autre')[];
+  minMatchScore: number; // Seuil minimum d'adéquation (ex: 65%)
+  sources: string[];
+  lastScanDate?: string;
+}
+
 export interface UserSettings {
   customApiKey?: string;
   selectedModel: string;
@@ -333,6 +383,8 @@ export interface DatabaseSchema {
   suggestions: SavedSuggestion[];
   coverLetters?: SavedCoverLetter[]; // Lettres de motivation enregistrées
   calendarEvents?: CustomCalendarEvent[]; // Rendez-vous et événements du calendrier (France Travail, Salons...)
+  scoutedOffers?: ScrapedJobOffer[]; // Offres dénichées et scorées par le robot pour le/les profils
+  jobScoutConfig?: JobScoutConfig; // Configuration de veille et de scan du robot
   settings: UserSettings;
 }
 
@@ -343,6 +395,7 @@ export interface DatabaseStats {
   suggestionsCount: number;
   coverLettersCount: number;
   calendarEventsCount?: number;
+  scoutedOffersCount?: number;
   dbSizeBytes: number;
   lastUpdated: string;
 }
